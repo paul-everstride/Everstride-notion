@@ -1,32 +1,32 @@
 {
-  "name": "activity-planner-dashboard",
+  "name": "everstride",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "version": "0.1.0",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
   "dependencies": {
-    "@radix-ui/react-avatar": "^1.1.11",
-    "@radix-ui/react-slot": "^1.2.4",
-    "class-variance-authority": "^0.7.1",
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.57.4",
     "clsx": "^2.1.1",
     "lucide-react": "^0.577.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "next": "^14.2.32",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.15.4",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.1",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.0.0",
+    "@types/node": "^22.18.6",
+    "@types/react": "^18.3.24",
+    "@types/react-dom": "^18.3.7",
     "autoprefixer": "^10.4.27",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.1",
-    "typescript": "^5.9.3",
-    "vite": "^7.0.0"
+    "typescript": "^5.9.3"
   }
 }

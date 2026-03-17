@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: #ffffff;
+  --color-surface: #fbfbfa;
+  --color-surfaceStrong: #f1f1ef;
+  --color-line: #e9e9e7;
+  --color-ink: #37352f;
+  --color-muted: #9b9a97;
+  --color-brand: #e16b2b;
+  --color-brandInk: #c45e20;
+  --color-brandSoft: #fdf3ed;
+  --color-blue: #3b82f6;
+  --color-blueSoft: #eff6ff;
+  --color-success: #059669;
+  --color-successSoft: #ecfdf5;
+  --color-warning: #d97706;
+  --color-warningSoft: #fffbeb;
+  --color-danger: #dc2626;
+  --color-dangerSoft: #fef2f2;
+}
+
+:root {
+  --background: #ffffff;
+  --surface: #fbfbfa;
+  --surface-strong: #f1f1ef;
+  --line: #e9e9e7;
+  --text: #37352f;
+  --muted: #9b9a97;
+  --brand: #e16b2b;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--text);
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", ui-sans-serif, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+input,
+select {
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+::selection {
+  background: rgba(225, 107, 43, 0.12);
+}
+
+th {
+  font-weight: 500;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
