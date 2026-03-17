@@ -32,6 +32,17 @@ function genTrend(seed: number, base: number, labels: string[], variance = 0.07)
   });
 }
 
+/** TSB-specific: signed trend that can cross zero, drifts around a center value */
+function genTsbTrend(seed: number, center: number, labels: string[], swing = 12): TrendPoint[] {
+  const rng = lcg(seed);
+  let val = center;
+  return labels.map(label => {
+    val += (rng() - 0.5) * swing;
+    val += (center - val) * 0.12; // mean-revert toward center
+    return { label, value: Math.round(val * 10) / 10 };
+  });
+}
+
 // ── Label builders ───────────────────────────────────────────────────────────
 
 const MS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -158,6 +169,85 @@ function SectionChart({ title, data, color, height = 200, sub }: { title: string
   );
 }
 
+// ── TSB chart (signed, green above 0, red below) ─────────────────────────────
+
+function TsbChart({ data, height = 220 }: { data: TrendPoint[]; height?: number }) {
+  const vals = data.map(d => d.value);
+  const raw_min = Math.min(...vals, 0);
+  const raw_max = Math.max(...vals, 0);
+  const pad = Math.max((raw_max - raw_min) * 0.18, 5);
+  const dm: [number, number] = [Math.floor(raw_min - pad), Math.ceil(raw_max + pad)];
+
+  // pct of y=0 from top of chart (recharts: max at top, min at bottom)
+  const zeroFrac = (dm[1] - 0) / (dm[1] - dm[0]);
+  const zeroPct  = `${Math.round(Math.max(0, Math.min(1, zeroFrac)) * 100)}%`;
+
+  const latest = vals[vals.length - 1] ?? 0;
+  const avg    = vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
+  const maxVal = Math.max(...vals);
+
+  const positiveData = data.map(d => ({ ...d, pos: Math.max(0, d.value), neg: Math.min(0, d.value) }));
+
+  return (
+    <div className="border border-line rounded-lg bg-canvas overflow-hidden">
+      <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+        <div>
+          <span className="text-sm font-medium text-ink">TSB — Form (positive = fresh, negative = fatigued)</span>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-[10px] text-muted">Now <span className="font-semibold ml-0.5" style={{ color: latest >= 0 ? "#059669" : "#dc2626" }}>{formatSignedNumber(Math.round(latest))}</span></span>
+          <span className="text-[10px] text-muted">Avg <span className="ml-0.5">{formatSignedNumber(Math.round(avg))}</span></span>
+          <span className="text-[10px] text-muted">Max <span className="ml-0.5">{tfmt(maxVal)}</span></span>
+        </div>
+      </div>
+      <div style={{ height }} className="px-1 pt-2 pb-1">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={positiveData} margin={{ top: 4, right: 10, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="tsb-pos" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#059669" stopOpacity={0.18} />
+                <stop offset="100%" stopColor="#059669" stopOpacity={0.02} />
+              </linearGradient>
+              <linearGradient id="tsb-neg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#dc2626" stopOpacity={0.02} />
+                <stop offset="100%" stopColor="#dc2626" stopOpacity={0.16} />
+              </linearGradient>
+              <linearGradient id="tsb-line" x1="0" y1="0" x2="0" y2="1">
+                <stop offset={zeroPct} stopColor="#059669" stopOpacity={1} />
+                <stop offset={zeroPct} stopColor="#dc2626" stopOpacity={1} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} stroke="#e9e9e7" />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }} />
+            <YAxis domain={dm} tickFormatter={v => formatSignedNumber(v)} tickCount={5} tickLine={false} axisLine={false} tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }} width={36} />
+            <ReferenceLine y={0} stroke="#9b9a97" strokeWidth={1.5} strokeOpacity={0.6} />
+            <ReferenceLine y={avg} stroke="#9b9a97" strokeOpacity={0.2} strokeDasharray="4 3" strokeWidth={1} />
+            <Tooltip contentStyle={TS} labelStyle={TL} formatter={(v: number, name: string) => {
+              if (name === "pos") return [v > 0 ? `+${Math.round(v)}` : null, null];
+              if (name === "neg") return [v < 0 ? Math.round(v) : null, null];
+              return [null, null];
+            }} />
+            {/* Positive fill */}
+            <Area type="monotone" dataKey="pos" stroke="none" fill="url(#tsb-pos)" baseValue={0} isAnimationActive={false} dot={false} />
+            {/* Negative fill */}
+            <Area type="monotone" dataKey="neg" stroke="none" fill="url(#tsb-neg)" baseValue={0} isAnimationActive={false} dot={false} />
+            {/* Line using value for dots */}
+            <Area type="monotone" dataKey="value" stroke="url(#tsb-line)" strokeWidth={2} fill="none"
+              dot={(props: { cx: number; cy: number; payload: { value: number } }) => {
+                const c = props.payload.value >= 0 ? "#059669" : "#dc2626";
+                return <circle key={`${props.cx}-${props.cy}`} cx={props.cx} cy={props.cy} r={2.5} fill={c} stroke="#ffffff" strokeWidth={1.5} />;
+              }}
+              activeDot={(props: { cx: number; cy: number; payload: { value: number } }) => {
+                const c = props.payload.value >= 0 ? "#059669" : "#dc2626";
+                return <circle key={`active-${props.cx}`} cx={props.cx} cy={props.cy} r={4} fill={c} stroke="#ffffff" strokeWidth={1.5} />;
+              }} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
 // ── Main export ──────────────────────────────────────────────────────────────
 
 type Tab = "readiness" | "performance" | "load" | "power" | "profile";
@@ -200,7 +290,7 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
       tss:      g(athlete.tss,           "tss",    0.12),
       atl:      g(athlete.atl,           "atl",    0.08),
       ctl:      g(athlete.ctl,           "ctl",    0.05),
-      tsb:      g(Math.abs(athlete.tsb) + 10, "tsb", 0.10),
+      tsb:      genTsbTrend(strHash(athlete.id + "tsb" + seed), athlete.tsb, labels),
     };
   }, [athlete, timeframe, customStart, customEnd]);
 
@@ -456,8 +546,7 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
             <SectionChart title="ATL — Acute Training Load"   data={trendData.atl} color="#e16b2b" />
             <SectionChart title="CTL — Chronic Training Load" data={trendData.ctl} color="#3b82f6" />
           </div>
-          <SectionChart title="TSB — Form (positive = fresh, negative = fatigued)"
-            data={trendData.tsb} color={athlete.tsb >= 0 ? "#059669" : "#dc2626"} height={220} />
+          <TsbChart data={trendData.tsb} height={220} />
 
           <div className="border border-line rounded-lg overflow-hidden bg-canvas">
             <div className="border-b border-line px-4 py-2.5">

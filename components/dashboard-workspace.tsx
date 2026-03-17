@@ -47,11 +47,101 @@ const columnOptions: Array<{ key: AthleteColumnKey; label: string }> = [
 
 // ── Stat strip cell ───────────────────────────────────────────────────────────
 
-function StatCell({ label, value, valueClass = "text-ink" }: { label: string; value: string; valueClass?: string }) {
+// ── Team stat strip components ────────────────────────────────────────────────
+
+function StatDonut({ pct, color, value, label }: { pct: number; color: string; value: string; label: string }) {
+  const size = 34, stroke = 4, r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const filled = Math.max(0, Math.min(1, pct / 100)) * circ;
+  const cx = size / 2, cy = size / 2;
   return (
-    <div className="px-4 py-3 border-r border-line last:border-r-0">
-      <p className="text-xs text-muted mb-0.5">{label}</p>
-      <p className={`text-sm font-semibold tabular ${valueClass}`}>{value}</p>
+    <div className="flex items-center gap-2 px-3 py-1.5 border-r border-line last:border-r-0">
+      <div className="relative shrink-0">
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)" }}>
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e9e9e7" strokeWidth={stroke} />
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={stroke}
+            strokeDasharray={`${filled} ${circ}`} strokeLinecap="round" />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-[9px] font-bold tabular leading-none" style={{ color }}>{value}</span>
+        </div>
+      </div>
+      <div>
+        <p className="text-[10px] text-muted leading-none mb-0.5 uppercase tracking-wide">{label}</p>
+        <p className="text-[11px] font-semibold text-ink tabular">{pct >= 70 ? "Good" : pct >= 40 ? "Fair" : "Low"}</p>
+      </div>
+    </div>
+  );
+}
+
+function StatGradientLine({
+  values, avg, min, max, label, unit, avgLabel
+}: {
+  values: number[]; avg: number; min: number; max: number;
+  label: string; unit: string; avgLabel?: string;
+}) {
+  const W = 120, trackY = 10, trackH = 2;
+  const toX = (v: number) => ((Math.min(Math.max(v, min), max) - min) / (max - min)) * W;
+  const gradId = `sg-${label.replace(/\s/g, "")}`;
+  return (
+    <div className="flex items-center gap-3 px-3 py-1.5 border-r border-line last:border-r-0 flex-1 min-w-0">
+      <div>
+        <p className="text-[10px] text-muted leading-none mb-0.5 uppercase tracking-wide whitespace-nowrap">{label}</p>
+        <p className="text-xs font-semibold text-ink tabular">{avg}<span className="text-[10px] text-muted font-normal ml-0.5">{unit}</span></p>
+        {avgLabel && <p className="text-[10px] text-muted leading-none mt-0.5">{avgLabel}</p>}
+      </div>
+      <div className="flex-1 min-w-[80px]">
+        <svg width="100%" viewBox={`0 0 ${W} 18`} preserveAspectRatio="none" style={{ overflow: "visible", display: "block", minWidth: 80 }}>
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="0" gradientUnits="objectBoundingBox">
+              <stop offset="0%"   stopColor="#0ea5e9" />
+              <stop offset="50%"  stopColor="#6366f1" />
+              <stop offset="100%" stopColor="#a855f7" />
+            </linearGradient>
+          </defs>
+          {/* track */}
+          <rect x="0" y={trackY} width={W} height={trackH} rx="1" fill="#e9e9e7" />
+          <rect x="0" y={trackY} width={W} height={trackH} rx="1" fill={`url(#${gradId})`} opacity="0.5" />
+          {/* athlete ticks */}
+          {values.map((v, i) => {
+            const x = toX(v);
+            return <line key={i} x1={x} y1={trackY - 3} x2={x} y2={trackY + trackH + 1}
+              stroke="#9b9a97" strokeWidth="1" strokeLinecap="round" opacity="0.55" />;
+          })}
+          {/* avg marker */}
+          {(() => {
+            const mx = toX(avg);
+            return (
+              <g>
+                <line x1={mx} y1={trackY - 5} x2={mx} y2={trackY + trackH + 3} stroke="#37352f" strokeWidth="1.5" strokeLinecap="round" />
+                <circle cx={mx} cy={trackY + 1} r="2.5" fill="#37352f" />
+                <circle cx={mx} cy={trackY + 1} r="1" fill="white" />
+              </g>
+            );
+          })()}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function StatFlagged({ flagged, total }: { flagged: number; total: number }) {
+  const color = flagged === 0 ? "#6366f1" : "#e16b2b";
+  return (
+    <div className="flex items-center gap-2.5 px-3 py-1.5 border-r border-line last:border-r-0">
+      <div>
+        <p className="text-[10px] text-muted leading-none mb-0.5 uppercase tracking-wide">Flagged</p>
+        <p className="text-xs font-semibold tabular" style={{ color }}>
+          {flagged}<span className="text-muted font-normal text-[10px]"> / {total}</span>
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-[3px] max-w-[48px]">
+        {Array.from({ length: Math.min(total, 12) }).map((_, i) => (
+          <div key={i} className="w-1.5 h-1.5 rounded-full"
+            style={{ backgroundColor: i < flagged ? color : "#e9e9e7" }} />
+        ))}
+        {total > 12 && <span className="text-[9px] text-muted">+{total - 12}</span>}
+      </div>
     </div>
   );
 }
@@ -747,17 +837,34 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
         </div>
 
         {/* Team stats strip */}
-        <div className="flex flex-wrap gap-0 mt-4 border border-line rounded-lg overflow-hidden">
-          <StatCell label="Team avg recovery"
-            value={`${dashboard.teamAverageRecovery}`}
-            valueClass={dashboard.teamAverageRecovery >= 70 ? "text-success" : dashboard.teamAverageRecovery >= 40 ? "text-warning" : "text-danger"} />
-          <StatCell label="Team avg sleep" value={`${dashboard.teamAverageSleep}`} />
-          <StatCell label="Team avg HRV" value={`${dashboard.teamAverageHrv} ms`} />
-          <StatCell label="Flagged"
-            value={`${dashboard.attentionAthletes.length}`}
-            valueClass={dashboard.attentionAthletes.length > 0 ? "text-danger" : "text-success"} />
-          <StatCell label="Athletes" value={`${dashboard.athletes.length}`} />
-        </div>
+        {(() => {
+          const athletes = dashboard.athletes;
+          const n = athletes.length || 1;
+          const avgRhr = Math.round(athletes.reduce((s, a) => s + a.restHr, 0) / n);
+          const avgVo2 = Math.round(athletes.reduce((s, a) => s + a.vo2Max, 0) / n);
+          const flagged = dashboard.attentionAthletes.length;
+          return (
+            <div className="flex flex-wrap mt-4 border border-line rounded-lg overflow-hidden bg-canvas">
+              <StatDonut pct={dashboard.teamAverageRecovery} color="#e16b2b"
+                value={String(dashboard.teamAverageRecovery)} label="Recovery" />
+              <StatDonut pct={dashboard.teamAverageSleep} color="#6366f1"
+                value={String(dashboard.teamAverageSleep)} label="Sleep" />
+              <StatGradientLine
+                values={athletes.map(a => a.hrv)}
+                avg={dashboard.teamAverageHrv} min={20} max={120}
+                label="HRV" unit="ms" />
+              <StatGradientLine
+                values={athletes.map(a => a.restHr)}
+                avg={avgRhr} min={35} max={90}
+                label="Resting HR" unit="bpm" />
+              <StatGradientLine
+                values={athletes.map(a => a.vo2Max)}
+                avg={avgVo2} min={30} max={80}
+                label="VO2 max" unit="" />
+              <StatFlagged flagged={flagged} total={athletes.length} />
+            </div>
+          );
+        })()}
       </div>
 
       <div className="px-6 py-5 space-y-5">

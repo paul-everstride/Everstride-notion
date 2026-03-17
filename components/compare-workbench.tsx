@@ -291,20 +291,17 @@ function genPerfSeries(bv: (a: AthleteSummary) => number, key: string) {
     if (type === "yearly") {
       return genTrend(strHash(athlete.id + key + "5year"), base, LABELS_5YEAR, 0.16);
     }
-    if (type === "custom" && p2 && p3) {
-      // p2 = YYYY-MM start, p3 = YYYY-MM end — month granularity only
-      const s = parseMonthStr(p2);
-      const e = parseMonthStr(p3);
-      const total = Math.max(1, (e.year - s.year) * 12 + (e.month - s.month) + 1);
-      const labels: string[] = [];
-      for (let i = 0; i < total; i++) {
-        const d = new Date(s.year, s.month - 1 + i, 1);
-        labels.push(s.year === e.year
-          ? MONTH_SHORT[d.getMonth()]
-          : `${MONTH_SHORT[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`
-        );
-      }
-      return genTrend(strHash(athlete.id + key + p2 + p3), base, labels, 0.1);
+    if (type === "months" && p2) {
+      // p2 = comma-separated YYYY-MM months, e.g. "2025-03,2024-03,2025-02"
+      const monthList = p2.split(",").filter(Boolean);
+      if (!monthList.length) return genTrend(strHash(athlete.id + key + timeframe), base, LABELS_BIWEEKLY, 0.05);
+      const years = monthList.map(m => parseMonthStr(m).year);
+      const allSameYear = years.every(y => y === years[0]);
+      const labels = monthList.map(m => {
+        const { year, month } = parseMonthStr(m);
+        return allSameYear ? MONTH_SHORT[month - 1] : `${MONTH_SHORT[month - 1]} '${String(year).slice(2)}`;
+      });
+      return genTrend(strHash(athlete.id + key + p2), base, labels, 0.1);
     }
     return genTrend(strHash(athlete.id + key + timeframe), base, LABELS_BIWEEKLY, 0.05);
   };
@@ -813,76 +810,34 @@ function parseMonthStr(s: string): { year: number; month: number } {
   return { year: y, month: m };
 }
 
-function monthCount(start: string, end: string): number {
-  const s = parseMonthStr(start);
-  const e = parseMonthStr(end);
-  return (e.year - s.year) * 12 + (e.month - s.month) + 1;
-}
 
-function formatCustomRangeLabel(start: string, end: string): string {
-  const s = parseMonthStr(start);
-  const e = parseMonthStr(end);
-  const abbr = (y: number, m: number) => `${MONTH_SHORT[m - 1]} '${String(y).slice(2)}`;
-  if (s.year === e.year) return `${MONTH_SHORT[s.month - 1]} – ${MONTH_SHORT[e.month - 1]} ${s.year}`;
-  return `${abbr(s.year, s.month)} – ${abbr(e.year, e.month)}`;
-}
+// ── MonthPickerModal ──────────────────────────────────────────────────────────
 
-// ── CustomRangeModal ──────────────────────────────────────────────────────────
+const MAX_MONTHS = 10;
 
-function CustomRangeModal({
+function MonthPickerModal({
   value,
   onChange,
   onClose,
 }: {
-  value: [string, string];
-  onChange: (start: string, end: string) => void;
+  value: string[];
+  onChange: (months: string[]) => void;
   onClose: () => void;
 }) {
-  const [draftStart, setDraftStart] = useState(value[0]);
-  const [draftEnd,   setDraftEnd]   = useState(value[1]);
-
   const now = new Date();
+  const [draft, setDraft] = useState<string[]>(value);
+  const [viewYear, setViewYear] = useState(now.getFullYear());
   const thisMonthStr = toMonthStr(now);
 
-  const count = monthCount(draftStart, draftEnd);
-  const inverted = count < 1;
-  const tooShort = count === 1;
+  const toggle = (m: string) => {
+    setDraft(prev => {
+      if (prev.includes(m)) return prev.filter(x => x !== m);
+      if (prev.length >= MAX_MONTHS) return prev;
+      return [...prev, m];
+    });
+  };
 
-  type Preset = { label: string; start: string; end: string };
-  const presets: Preset[] = [
-    {
-      label: "Last 3 months",
-      start: toMonthStr(new Date(now.getFullYear(), now.getMonth() - 2, 1)),
-      end: thisMonthStr,
-    },
-    {
-      label: "Last 6 months",
-      start: toMonthStr(new Date(now.getFullYear(), now.getMonth() - 5, 1)),
-      end: thisMonthStr,
-    },
-    {
-      label: "Last 12 months",
-      start: toMonthStr(new Date(now.getFullYear(), now.getMonth() - 11, 1)),
-      end: thisMonthStr,
-    },
-    {
-      label: "This year",
-      start: toMonthStr(new Date(now.getFullYear(), 0, 1)),
-      end: thisMonthStr,
-    },
-    {
-      label: "Last year",
-      start: toMonthStr(new Date(now.getFullYear() - 1, 0, 1)),
-      end: toMonthStr(new Date(now.getFullYear() - 1, 11, 1)),
-    },
-    {
-      label: "Last 2 years",
-      start: toMonthStr(new Date(now.getFullYear() - 1, now.getMonth(), 1)),
-      end: thisMonthStr,
-    },
-  ];
-
-  const isActivePreset = (p: Preset) => p.start === draftStart && p.end === draftEnd;
+  const canApply = draft.length >= 2;
 
   return (
     <div
@@ -890,74 +845,100 @@ function CustomRangeModal({
       onClick={onClose}
     >
       <div
-        className="bg-canvas border border-line rounded-xl shadow-xl p-5 w-[340px]"
+        className="bg-canvas border border-line rounded-xl shadow-xl p-5 w-[380px]"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-ink">Custom time range</h3>
+          <div>
+            <h3 className="text-sm font-semibold text-ink">Compare months</h3>
+            <p className="text-xs text-muted mt-0.5">Pick up to {MAX_MONTHS} months from any year</p>
+          </div>
           <button type="button" onClick={onClose}
             className="text-muted hover:text-ink transition-colors text-sm leading-none">✕</button>
         </div>
 
-        {/* Presets */}
-        <p className="text-xs text-muted mb-2">Quick select</p>
-        <div className="flex flex-wrap gap-1.5 mb-4">
-          {presets.map(p => (
-            <button key={p.label} type="button"
-              onClick={() => { setDraftStart(p.start); setDraftEnd(p.end); }}
-              className={cn(
-                "text-xs rounded-md px-2.5 py-1 border transition-colors duration-100",
-                isActivePreset(p)
-                  ? "border-brand/30 bg-brandSoft text-brand"
-                  : "border-line text-muted hover:text-ink hover:border-ink/30 hover:bg-surfaceStrong"
-              )}>
-              {p.label}
-            </button>
-          ))}
+        {/* Selected months pills */}
+        <div className="mb-4 min-h-[32px]">
+          {draft.length === 0 ? (
+            <p className="text-xs text-muted italic">No months selected</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {draft.map(m => {
+                const { year, month } = parseMonthStr(m);
+                return (
+                  <button key={m} type="button" onClick={() => toggle(m)}
+                    className="inline-flex items-center gap-1 text-xs border border-brand/30 bg-brandSoft text-brand rounded-md px-2 py-0.5 hover:bg-brand/10 transition-colors">
+                    {MONTH_SHORT[month - 1]} '{String(year).slice(2)}
+                    <span className="opacity-60 text-[10px]">✕</span>
+                  </button>
+                );
+              })}
+              {draft.length > 0 && (
+                <button type="button" onClick={() => setDraft([])}
+                  className="text-xs text-muted hover:text-ink transition-colors px-1">
+                  Clear all
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Month pickers */}
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <p className="text-xs text-muted mb-1.5">From</p>
-            <input type="month" value={draftStart}
-              max={draftEnd || thisMonthStr}
-              onChange={e => setDraftStart(e.target.value)}
-              className="w-full border border-line rounded-md px-2.5 py-1.5 text-sm text-ink bg-surface outline-none focus:border-brand/50 focus:ring-2 focus:ring-brand/10 transition-all" />
+        {/* Count indicator */}
+        <div className="flex items-center justify-between mb-3">
+          {/* Year navigator */}
+          <div className="inline-flex items-center gap-0 border border-line rounded-md overflow-hidden">
+            <button type="button" onClick={() => setViewYear(y => y - 1)}
+              className="px-2 py-1 text-xs text-muted hover:text-ink hover:bg-surfaceStrong border-r border-line transition-colors duration-100">‹</button>
+            <span className="px-3 py-1 text-sm text-ink font-medium">{viewYear}</span>
+            <button type="button" onClick={() => setViewYear(y => y + 1)}
+              disabled={viewYear >= now.getFullYear()}
+              className={cn("px-2 py-1 text-xs border-l border-line transition-colors duration-100",
+                viewYear >= now.getFullYear()
+                  ? "text-muted opacity-30 cursor-not-allowed"
+                  : "text-muted hover:text-ink hover:bg-surfaceStrong")}>›</button>
           </div>
-          <div>
-            <p className="text-xs text-muted mb-1.5">To</p>
-            <input type="month" value={draftEnd}
-              min={draftStart} max={thisMonthStr}
-              onChange={e => setDraftEnd(e.target.value)}
-              className="w-full border border-line rounded-md px-2.5 py-1.5 text-sm text-ink bg-surface outline-none focus:border-brand/50 focus:ring-2 focus:ring-brand/10 transition-all" />
-          </div>
+          <span className={cn("text-xs font-medium tabular", draft.length >= MAX_MONTHS ? "text-warning" : "text-muted")}>
+            {draft.length}/{MAX_MONTHS}
+          </span>
+        </div>
+
+        {/* Month grid */}
+        <div className="grid grid-cols-4 gap-1.5 mb-4">
+          {MONTH_SHORT.map((name, i) => {
+            const monthStr = `${viewYear}-${String(i + 1).padStart(2, "0")}`;
+            const isFuture = monthStr > thisMonthStr;
+            const isSelected = draft.includes(monthStr);
+            const isDisabled = isFuture || (!isSelected && draft.length >= MAX_MONTHS);
+            return (
+              <button key={name} type="button"
+                onClick={() => !isDisabled && toggle(monthStr)}
+                disabled={isDisabled}
+                className={cn(
+                  "rounded-md py-1.5 text-xs font-medium transition-colors duration-100",
+                  isSelected
+                    ? "bg-brand text-white border border-brand"
+                    : isDisabled
+                    ? "text-muted opacity-30 cursor-not-allowed border border-transparent"
+                    : "border border-line text-ink hover:border-brand/40 hover:bg-brandSoft hover:text-brand"
+                )}>
+                {name}
+              </button>
+            );
+          })}
         </div>
 
         {/* Status */}
-        {inverted ? (
-          <div className="rounded-md px-3 py-2 mb-3 text-xs bg-dangerSoft text-danger border border-danger/20">
-            End must be after start
-          </div>
-        ) : (
-          <div className={cn(
-            "rounded-md px-3 py-2 mb-3 text-xs border",
-            tooShort
-              ? "bg-warningSoft text-warning border-warning/20"
-              : "bg-surface text-muted border-line"
-          )}>
-            {tooShort
-              ? "Select at least 2 months for meaningful trends"
-              : `${count} month${count !== 1 ? "s" : ""} · monthly resolution · ${formatCustomRangeLabel(draftStart, draftEnd)}`
-            }
+        {!canApply && draft.length > 0 && (
+          <div className="rounded-md px-3 py-2 mb-3 text-xs bg-warningSoft text-warning border border-warning/20">
+            Select at least 2 months to compare
           </div>
         )}
-
-        {/* Note */}
-        <p className="text-[11px] text-muted mb-4 leading-snug">
-          Performance metrics use monthly aggregates. Single-day resolution is unavailable — power data is aggregated across workouts, not individual sessions.
-        </p>
+        {canApply && (
+          <div className="rounded-md px-3 py-2 mb-3 text-xs bg-surface text-muted border border-line">
+            {draft.length} months selected · each shown as a separate data point
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex justify-end gap-2">
@@ -966,11 +947,11 @@ function CustomRangeModal({
             Cancel
           </button>
           <button type="button"
-            disabled={inverted || tooShort}
-            onClick={() => { onChange(draftStart, draftEnd); onClose(); }}
+            disabled={!canApply}
+            onClick={() => { onChange(draft); onClose(); }}
             className={cn(
               "text-sm rounded-md px-3 py-1.5 font-medium transition-colors duration-100",
-              inverted || tooShort
+              !canApply
                 ? "text-muted border border-line cursor-not-allowed opacity-50"
                 : "text-brand border border-brand/30 hover:bg-brandSoft"
             )}>
@@ -1016,11 +997,15 @@ export function CompareWorkbench({
   const [timeframeOffset, setTimeframeOffset] = useState(0);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [perfPageOffset, setPerfPageOffset] = useState(0);
-  // Custom perf month range
+  // Custom perf month selection
   const _now = new Date();
-  const [customStart, setCustomStart] = useState(() => toMonthStr(new Date(_now.getFullYear(), _now.getMonth() - 5, 1)));
-  const [customEnd,   setCustomEnd]   = useState(() => toMonthStr(_now));
-  const [showCustomPicker, setShowCustomPicker] = useState(false);
+  const [selectedMonths, setSelectedMonths] = useState<string[]>(() => {
+    // Default: last 6 months
+    return Array.from({ length: 6 }, (_, i) =>
+      toMonthStr(new Date(_now.getFullYear(), _now.getMonth() - (5 - i), 1))
+    );
+  });
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
 
   const timeframeTypeOptions = section === "readiness"
     ? ["week", "month", "year"] : ["biweekly", "monthly", "yearly", "custom"];
@@ -1028,10 +1013,10 @@ export function CompareWorkbench({
   const accentColor = section === "readiness" ? "#3b82f6" : "#e16b2b";
 
   const activeTimeframe = useMemo(() => {
-    if (timeframeType === "custom") return `custom:${customStart}:${customEnd}`;
+    if (timeframeType === "custom") return `months:${selectedMonths.join(",")}`;
     if (section === "performance" && (timeframeType === "biweekly" || timeframeType === "monthly")) return `${timeframeType}:${perfPageOffset}`;
     return `${timeframeType}:${timeframeOffset}`;
-  }, [timeframeType, timeframeOffset, perfPageOffset, customStart, customEnd, section]);
+  }, [timeframeType, timeframeOffset, perfPageOffset, selectedMonths, section]);
 
   const snapshotWindow = useMemo((): SnapshotWindow => {
     if (section === "readiness" && mode === "snapshot") {
@@ -1269,7 +1254,7 @@ export function CompareWorkbench({
                       ))
                     : timeframeTypeOptions.map(type => (
                         <button key={type} type="button"
-                          onClick={() => { setTimeframeType(type); setTimeframeOffset(0); setPerfPageOffset(0); if (type === "custom") setShowCustomPicker(true); }}
+                          onClick={() => { setTimeframeType(type); setTimeframeOffset(0); setPerfPageOffset(0); if (type === "custom") setShowMonthPicker(true); }}
                           className={cn(
                             "px-3 py-1 text-sm rounded-[5px] transition-colors duration-100 font-medium",
                             timeframeType === type
@@ -1320,12 +1305,12 @@ export function CompareWorkbench({
               />
             )}
 
-            {/* Custom range label — click to re-open picker */}
+            {/* Custom month label — click to re-open picker */}
             {mode === "timeframe" && section === "performance" && timeframeType === "custom" && (
-              <button type="button" onClick={() => setShowCustomPicker(true)}
+              <button type="button" onClick={() => setShowMonthPicker(true)}
                 className="inline-flex items-center gap-1.5 border border-brand/30 bg-brandSoft text-brand rounded-md px-3 py-1 text-sm font-medium hover:bg-brand/10 transition-colors duration-100">
                 <Calendar size={13} />
-                {formatCustomRangeLabel(customStart, customEnd)}
+                {selectedMonths.length} month{selectedMonths.length !== 1 ? "s" : ""} selected
               </button>
             )}
 
@@ -1398,12 +1383,12 @@ export function CompareWorkbench({
 
       {renderContent()}
 
-      {/* Custom range picker modal */}
-      {showCustomPicker && (
-        <CustomRangeModal
-          value={[customStart, customEnd]}
-          onChange={(s, e) => { setCustomStart(s); setCustomEnd(e); }}
-          onClose={() => setShowCustomPicker(false)}
+      {/* Month picker modal */}
+      {showMonthPicker && (
+        <MonthPickerModal
+          value={selectedMonths}
+          onChange={months => setSelectedMonths(months)}
+          onClose={() => setShowMonthPicker(false)}
         />
       )}
     </div>
