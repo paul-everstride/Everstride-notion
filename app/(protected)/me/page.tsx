@@ -1,4 +1,4 @@
-import { getAthleteByUserId } from "@/lib/data";
+import { getDashboardData } from "@/lib/data";
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { MetricCard } from "@/components/metric-card";
 import { TrendChart } from "@/components/trend-chart";
@@ -6,8 +6,19 @@ import { RecoveryBadge } from "@/components/recovery-badge";
 import { formatSleepDuration } from "@/lib/utils";
 
 export default async function MePage() {
-  const user = await requireAuthenticatedUser();
-  const athlete = await getAthleteByUserId(user.id);
+  await requireAuthenticatedUser();
+  const { athletes } = await getDashboardData();
+
+  if (!athletes.length) {
+    return (
+      <div className="px-6 py-12 text-center">
+        <p className="text-muted text-sm">No wearable data found. Connect a device to get started.</p>
+      </div>
+    );
+  }
+
+  // Show the first athlete (most relevant by recovery score)
+  const athlete = athletes[0];
 
   return (
     <div>

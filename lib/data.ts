@@ -1,37 +1,104 @@
-import { mockAthletes, mockDashboardData } from "@/lib/mock-data";
-import type { AthleteMetricRow, AthleteSummary, DashboardData } from "@/lib/types";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+/**
+ * Data layer for Everstride.
+ * Pulls all athlete data from the Open Wearables API on Railway.
+ */
 
-const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const performanceLabels = ["Wk 1", "Wk 2", "Wk 3", "Wk 4", "Wk 5", "Wk 6"];
+import type { AthleteSummary, DashboardData, TrendPoint } from "@/lib/types";
+import {
+  owGetUsers,
+  owGetRecovery,
+  owGetSleep,
+  owGetBody,
+  type OWRecoverySummary,
+  type OWSleepSummary,
+  type OWBodySummary,
+} from "@/lib/ow-client";
 
-function buildTrend(labels: string[], values: number[]) {
-  return labels.map((label, index) => ({
-    label,
-    value: values[index] ?? values[values.length - 1]
-  }));
-}
+// ─── Trend helpers ─────────────────────────────────────────────────────────────
 
-function buildSyntheticSeries(base: number, drift = 0, clampZero = true) {
-  return Array.from({ length: 7 }, (_, index) => {
-    const value = Math.round((base - 3 + index) * 10 + drift) / 10;
-    return clampZero ? Math.max(0, value) : value;
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WEEK_LABELS = ["Wk 1", "Wk 2", "Wk 3", "Wk 4", "Wk 5", "Wk 6"];
+
+/** Build a 7-point trend from the last 7 items (items are newest-first) */
+function trendFromItems<T>(
+  items: T[],
+  getValue: (item: T) => number | null,
+  fallback: number
+): TrendPoint[] {
+  const last7 = items.slice(0, 7).reverse();
+  if (last7.length === 0) {
+    return DAY_LABELS.map((label) => ({ label, value: fallback }));
+  }
+  return DAY_LABELS.map((label, i) => {
+    const item = last7[i] ?? last7[last7.length - 1];
+    return { label, value: getValue(item) ?? fallback };
   });
 }
 
-function buildPerformanceSeries(base: number) {
-  return Array.from({ length: 6 }, (_, index) => Math.max(0, Math.round((base - 6 + index * 2) * 10) / 10));
+/** Synthesise a 6-week performance trend from a single current value */
+function syntheticWeekTrend(current: number): TrendPoint[] {
+  return WEEK_LABELS.map((label, i) => ({
+    label,
+    value: Math.max(0, Math.round((current - 10 + i * 2) * 10) / 10),
+  }));
 }
 
-function toAthleteSummary(row: AthleteMetricRow): AthleteSummary {
-  const firstName = row.First_name?.trim() || "Unknown";
-  const lastName = row.Last_name?.trim() || "Athlete";
-  const name = `${firstName} ${lastName}`.trim();
-  const recoveryScore = row.recoveryscore ?? 0;
-  const sleepScore = row.Sleep_score ?? 0;
-  const hrv = row.HRV ?? 0;
-  const restHr = row.rest_hr ?? 0;
-  const sleepEfficiency = row.sleep_efficiency ?? 0;
+/** Capitalise the first letter of a name part */
+function capitalize(s: string | null): string | null {
+  if (!s) return null;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// ─── Mapping ───────────────────────────────────────────────────────────────────
+
+function toAthleteSummary(
+  userId: string,
+  firstName: string | null,
+  lastName: string | null,
+  email: string | null,
+  createdAt: string,
+  recovery: OWRecoverySummary[],
+  sleep: OWSleepSummary[],
+  body: OWBodySummary | null
+): AthleteSummary {
+  const latestRecovery = recovery[0];
+  const latestSleep = sleep[0];
+
+  const name =
+    [capitalize(firstName), capitalize(lastName)].filter(Boolean).join(" ") ||
+    "Unnamed Athlete";
+
+  // ── Core metrics ──────────────────────────────────────────────────────────
+  const recoveryScore = latestRecovery?.recovery_score ?? 0;
+  const hrv = latestRecovery?.avg_hrv_sdnn_ms ?? latestSleep?.avg_hrv_sdnn_ms ?? 0;
+  const restHr = latestRecovery?.resting_heart_rate_bpm ?? latestSleep?.avg_heart_rate_bpm ?? 0;
+  const spo2 = latestRecovery?.avg_spo2_percent ?? latestSleep?.avg_spo2_percent ?? 0;
+  const respirationRate = latestSleep?.avg_respiratory_rate ?? 0;
+  const sleepEfficiency = latestSleep?.efficiency_percent ?? latestRecovery?.sleep_efficiency_percent ?? 0;
+
+  // Sleep score: blend of efficiency and normalised duration (8h = 100)
+  const durationMinutes = latestSleep?.duration_minutes ?? 0;
+  const sleepDurationScore = Math.min(100, Math.round((durationMinutes / 480) * 100));
+  const sleepScore = sleepEfficiency > 0
+    ? Math.round((sleepEfficiency + sleepDurationScore) / 2)
+    : sleepDurationScore;
+  const sleepConsistency = Math.min(100, Math.round(sleepScore * 0.95));
+
+  // Sleep stages (OW stores minutes, Everstride uses milliseconds)
+  const stages = latestSleep?.stages;
+  const totalBedMs = (latestSleep?.time_in_bed_minutes ?? durationMinutes) * 60_000;
+  const totalRemMs = (stages?.rem_minutes ?? 0) * 60_000;
+  const totalSlowWaveMs = (stages?.deep_minutes ?? 0) * 60_000;
+  const totalLightMs = (stages?.light_minutes ?? 0) * 60_000;
+  const totalAwakeMs = (stages?.awake_minutes ?? 0) * 60_000;
+
+  // Body data
+  const weightKg = body?.slow_changing.weight_kg ?? 68;
+  const age = body?.slow_changing.age ?? 28;
+  const skinTempRaw = body?.latest.skin_temperature_celsius ?? null;
+  const skinTemp = skinTempRaw != null ? Math.round((skinTempRaw - 36.5) * 10) / 10 : 0;
+
+  // ── Derived training metrics ───────────────────────────────────────────────
   const tss = Math.max(35, Math.round((sleepScore + recoveryScore) / 2));
   const atl = Math.max(40, Math.round(tss * 0.9));
   const ctl = Math.max(45, Math.round((tss + recoveryScore) / 1.7));
@@ -39,31 +106,55 @@ function toAthleteSummary(row: AthleteMetricRow): AthleteSummary {
   const vo2Max = Math.max(42, Math.round(48 + hrv / 4));
   const ftp = Math.max(210, Math.round(220 + hrv));
   const powerMax = Math.max(800, Math.round(ftp * 3.8));
-  const readinessTrend = buildTrend(dayLabels, buildSyntheticSeries(recoveryScore));
-  const sleepTrend = buildTrend(dayLabels, buildSyntheticSeries(sleepScore));
-  const hrvTrend = buildTrend(dayLabels, buildSyntheticSeries(hrv));
-  const rhrTrend = buildTrend(dayLabels, buildSyntheticSeries(restHr, -10));
-  const tssTrend = buildTrend(dayLabels, buildSyntheticSeries(tss));
-  const sleepEfficiencyTrend = buildTrend(dayLabels, buildSyntheticSeries(sleepEfficiency));
-  const atlTrend = buildTrend(dayLabels, buildSyntheticSeries(atl));
-  const ctlTrend = buildTrend(dayLabels, buildSyntheticSeries(ctl));
-  const tsbTrend = buildTrend(dayLabels, buildSyntheticSeries(tsb, 0, false));
-  const powerTrend = buildTrend(performanceLabels, buildPerformanceSeries(powerMax));
-  const ftpTrend = buildTrend(performanceLabels, buildPerformanceSeries(ftp));
-  const vo2MaxTrend = buildTrend(performanceLabels, buildPerformanceSeries(vo2Max));
+
+  // ── 7-day trends ──────────────────────────────────────────────────────────
+  const readinessTrend = trendFromItems(recovery, (r) => r.recovery_score, recoveryScore);
+  const hrvTrend = trendFromItems(recovery, (r) => r.avg_hrv_sdnn_ms, hrv);
+  const rhrTrend = trendFromItems(recovery, (r) => r.resting_heart_rate_bpm, restHr);
+  const sleepTrend = trendFromItems(sleep, (s) => s.efficiency_percent, sleepScore);
+  const sleepEfficiencyTrend = trendFromItems(sleep, (s) => s.efficiency_percent, sleepEfficiency);
+
+  const tssTrend = readinessTrend.map((p) => ({
+    label: p.label,
+    value: Math.max(35, Math.round((p.value + sleepScore) / 2)),
+  }));
+  const atlTrend = tssTrend.map((p) => ({ ...p, value: Math.round(p.value * 0.9) }));
+  const ctlTrend = tssTrend.map((p) => ({
+    ...p,
+    value: Math.round((p.value + recoveryScore) / 1.7),
+  }));
+  const tsbTrend = ctlTrend.map((c, i) => ({
+    label: c.label,
+    value: c.value - atlTrend[i].value,
+  }));
+
+  // ── 6-week performance trends ──────────────────────────────────────────────
+  const powerTrend = syntheticWeekTrend(powerMax);
+  const ftpTrend = syntheticWeekTrend(ftp);
+  const vo2MaxTrend = syntheticWeekTrend(vo2Max);
+
+  const creationDate =
+    latestRecovery?.date ?? latestSleep?.date ?? createdAt.split("T")[0];
+
+  const statusNote =
+    recoveryScore >= 67
+      ? "Good recovery. Ready for training."
+      : recoveryScore >= 34
+      ? "Moderate recovery. Manageable load today."
+      : "Low recovery. Reduce training load.";
 
   return {
-    id: row.id,
-    userId: row.user_id,
+    id: userId,
+    userId,
     name,
-    email: row.Email ?? `${firstName.toLowerCase()}.${lastName.toLowerCase()}@everstride.ai`,
-    age: 28,
-    weightKg: 68,
-    team: "Everstride Development",
+    email: email ?? `${name.toLowerCase().replace(/\s+/g, ".")}@everstride.ai`,
+    age,
+    weightKg,
+    team: "Everstride",
     recoveryScore,
-    hrv,
     sleepScore,
     restHr,
+    hrv,
     tss,
     atl,
     ctl,
@@ -72,19 +163,19 @@ function toAthleteSummary(row: AthleteMetricRow): AthleteSummary {
     ftp,
     powerMax,
     polarizedZones: { low: 70, moderate: 18, high: 12 },
-    spo2: row.SP02 ?? 0,
-    sleepConsistency: row.sleep_consistency ?? 0,
+    spo2,
+    sleepConsistency,
     sleepEfficiency,
-    respirationRate: row.Resp_rate ?? 0,
-    skinTemp: row.skin_temp ?? 0,
-    totalBedMs: row.total_bed_mil ?? 0,
-    totalRemMs: row.total_rem_mil ?? 0,
-    totalSlowWaveMs: row.total_slow_wave_mil ?? 0,
-    totalLightMs: row.total_light_mil ?? 0,
-    totalAwakeMs: row.total_awake_mil ?? 0,
-    creationDate: row.creation_date ?? row.created_at,
-    createdAt: row.created_at,
-    statusNote: "Pulled from latest wearable sync.",
+    respirationRate,
+    skinTemp,
+    totalBedMs,
+    totalRemMs,
+    totalSlowWaveMs,
+    totalLightMs,
+    totalAwakeMs,
+    creationDate,
+    createdAt,
+    statusNote,
     readinessTrend,
     sleepTrend,
     hrvTrend,
@@ -98,84 +189,97 @@ function toAthleteSummary(row: AthleteMetricRow): AthleteSummary {
     ftpTrend,
     vo2MaxTrend,
     powerCurve: [
-      { label: "5 sec", value: Math.round(powerMax * 0.94) },
+      { label: "5 sec",  value: Math.round(powerMax * 0.94) },
       { label: "30 sec", value: Math.round(powerMax * 0.65) },
-      { label: "1 min", value: Math.round(powerMax * 0.47) },
-      { label: "5 min", value: Math.round(powerMax * 0.34) },
+      { label: "1 min",  value: Math.round(powerMax * 0.47) },
+      { label: "5 min",  value: Math.round(powerMax * 0.34) },
       { label: "30 min", value: Math.round(powerMax * 0.22) },
-      { label: "FTP", value: ftp }
-    ]
+      { label: "FTP",    value: ftp },
+    ],
   };
 }
 
-function pickLatestRows(rows: AthleteMetricRow[]) {
-  const latestByUser = new Map<string, AthleteMetricRow>();
+// ─── Empty state ────────────────────────────────────────────────────────────────
 
-  for (const row of rows) {
-    const key = row.user_id;
-    const current = latestByUser.get(key);
+const emptyDashboard: DashboardData = {
+  athletes: [],
+  teamAverageRecovery: 0,
+  teamAverageSleep: 0,
+  teamAverageHrv: 0,
+  attentionAthletes: [],
+};
 
-    if (!current) {
-      latestByUser.set(key, row);
-      continue;
-    }
-
-    const currentDate = current.creation_date ?? "";
-    const nextDate = row.creation_date ?? "";
-
-    if (nextDate > currentDate) {
-      latestByUser.set(key, row);
-      continue;
-    }
-
-    if (nextDate === currentDate && row.created_at > current.created_at) {
-      latestByUser.set(key, row);
-    }
-  }
-
-  return Array.from(latestByUser.values());
-}
+// ─── Public API ────────────────────────────────────────────────────────────────
 
 export async function getDashboardData(): Promise<DashboardData> {
-  const supabase = createSupabaseServerClient();
+  try {
+    const users = await owGetUsers();
+    if (!users.length) return emptyDashboard;
 
-  if (!supabase) {
-    return mockDashboardData;
+    const athletes = (
+      await Promise.all(
+        users.map(async (user) => {
+          try {
+            const [recovery, sleep, body] = await Promise.all([
+              owGetRecovery(user.id),
+              owGetSleep(user.id),
+              owGetBody(user.id),
+            ]);
+
+            // Skip users with no wearable data at all
+            if (!recovery.length && !sleep.length) return null;
+
+            return toAthleteSummary(
+              user.id,
+              user.first_name,
+              user.last_name,
+              user.email,
+              user.created_at,
+              recovery,
+              sleep,
+              body
+            );
+          } catch {
+            return null;
+          }
+        })
+      )
+    )
+      .filter((a): a is AthleteSummary => a !== null)
+      .sort((a, b) => b.recoveryScore - a.recoveryScore);
+
+    if (!athletes.length) return emptyDashboard;
+
+    const teamAverageRecovery = Math.round(
+      athletes.reduce((s, a) => s + a.recoveryScore, 0) / athletes.length
+    );
+    const teamAverageSleep = Math.round(
+      athletes.reduce((s, a) => s + a.sleepScore, 0) / athletes.length
+    );
+    const teamAverageHrv = Math.round(
+      athletes.reduce((s, a) => s + a.hrv, 0) / athletes.length
+    );
+
+    return {
+      athletes,
+      teamAverageRecovery,
+      teamAverageSleep,
+      teamAverageHrv,
+      attentionAthletes: athletes.filter(
+        (a) => a.recoveryScore < 60 || a.sleepScore < 65
+      ),
+    };
+  } catch {
+    return emptyDashboard;
   }
-
-  const { data, error } = await supabase.from("athlete_data").select("*");
-
-  if (error || !data?.length) {
-    return mockDashboardData;
-  }
-
-  const athletes = pickLatestRows(data as AthleteMetricRow[])
-    .map(toAthleteSummary)
-    .sort((left, right) => right.recoveryScore - left.recoveryScore);
-
-  if (!athletes.length) {
-    return mockDashboardData;
-  }
-
-  const teamAverageRecovery = Math.round(athletes.reduce((sum, athlete) => sum + athlete.recoveryScore, 0) / athletes.length);
-  const teamAverageSleep = Math.round(athletes.reduce((sum, athlete) => sum + athlete.sleepScore, 0) / athletes.length);
-  const teamAverageHrv = Math.round(athletes.reduce((sum, athlete) => sum + athlete.hrv, 0) / athletes.length);
-
-  return {
-    athletes,
-    teamAverageRecovery,
-    teamAverageSleep,
-    teamAverageHrv,
-    attentionAthletes: athletes.filter((athlete) => athlete.recoveryScore < 60 || athlete.sleepScore < 65)
-  };
 }
 
-export async function getAthleteById(id: string) {
+export async function getAthleteById(id: string): Promise<AthleteSummary | null> {
   const dashboard = await getDashboardData();
-  return dashboard.athletes.find((athlete) => athlete.id === id || athlete.userId === id) ?? null;
+  return dashboard.athletes.find((a) => a.id === id || a.userId === id) ?? null;
 }
 
-export async function getAthleteByUserId(userId: string) {
+export async function getAthleteByUserId(userId: string): Promise<AthleteSummary | null> {
   const dashboard = await getDashboardData();
-  return dashboard.athletes.find((athlete) => athlete.userId === userId) ?? mockAthletes[0];
+  return dashboard.athletes.find((a) => a.userId === userId) ?? null;
 }
