@@ -40,6 +40,18 @@ export type AthleteMetricRow = {
   skin_temp: number | null;
 };
 
+/** One day of full recovery data sourced from the OW timeseries endpoint. */
+export type RecoveryHistoryDay = {
+  date: string;             // YYYY-MM-DD
+  label: string;            // "Thu, Nov 6"  (for table display)
+  shortLabel: string;       // "Nov 6"       (for chart X-axis)
+  recoveryScore: number | null;
+  hrv: number | null;       // HRV RMSSD in ms
+  restHr: number | null;    // Resting HR in bpm
+  spo2: number | null;      // SpO₂ in %
+  skinTempC: number | null; // Raw skin temperature in °C
+};
+
 export type AthleteSummary = {
   id: string;
   userId: string;
@@ -87,6 +99,8 @@ export type AthleteSummary = {
   ftpTrend: TrendPoint[];
   vo2MaxTrend: TrendPoint[];
   powerCurve: PowerCurvePoint[];
+  /** Full daily recovery history (all available data, oldest → newest). */
+  recoveryHistory: RecoveryHistoryDay[];
 };
 
 export type DashboardData = {

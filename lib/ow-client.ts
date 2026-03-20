@@ -201,7 +201,7 @@ export interface OWTimeseriesPoint {
 const RECOVERY_TIMESERIES_TYPES = [
   "recovery_score",
   "resting_heart_rate",
-  "heart_rate_variability_sdnn",
+  "heart_rate_variability_rmssd",  // WHOOP uses RMSSD (not SDNN)
   "oxygen_saturation",
   "respiratory_rate",
   "skin_temperature",

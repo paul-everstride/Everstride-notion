@@ -3,7 +3,7 @@
  * Pulls all athlete data from the Open Wearables API on Railway.
  */
 
-import type { AthleteSummary, DashboardData, TrendPoint } from "@/lib/types";
+import type { AthleteSummary, DashboardData, RecoveryHistoryDay, TrendPoint } from "@/lib/types";
 import {
   owGetUsers,
   owGetRecovery,
@@ -19,11 +19,24 @@ import {
 // ─── Trend helpers ─────────────────────────────────────────────────────────────
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DAY_ABBR    = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
-/** Convert "YYYY-MM-DD" → "1 Mar" */
+/** Convert "YYYY-MM-DD" → "1 Mar" (for trend chart X-axis) */
 function dateLabel(dateStr: string): string {
   const parts = dateStr.split("-");
   return `${parseInt(parts[2])} ${MONTH_SHORT[parseInt(parts[1]) - 1]}`;
+}
+
+/** Convert "YYYY-MM-DD" → "Nov 6" (short, for recovery chart) */
+function shortLabel(dateStr: string): string {
+  const parts = dateStr.split("-");
+  return `${MONTH_SHORT[parseInt(parts[1]) - 1]} ${parseInt(parts[2])}`;
+}
+
+/** Convert "YYYY-MM-DD" → "Thu, Nov 6" (full, for table display) */
+function fullDayLabel(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00Z");
+  return `${DAY_ABBR[d.getUTCDay()]}, ${MONTH_SHORT[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
 
 /**
@@ -84,12 +97,12 @@ function toAthleteSummary(
     "Unnamed Athlete";
 
   // ── Timeseries-sourced metrics (real WHOOP data) ───────────────────────────
-  const ts_recovery = timeseries["recovery_score"]                  ?? [];
-  const ts_rhr      = timeseries["resting_heart_rate"]              ?? [];
-  const ts_hrv      = timeseries["heart_rate_variability_sdnn"]     ?? [];
-  const ts_spo2     = timeseries["oxygen_saturation"]               ?? [];
-  const ts_resp     = timeseries["respiratory_rate"]                ?? [];
-  const ts_skin     = timeseries["skin_temperature"]                ?? [];
+  const ts_recovery = timeseries["recovery_score"]                ?? [];
+  const ts_rhr      = timeseries["resting_heart_rate"]            ?? [];
+  const ts_hrv      = timeseries["heart_rate_variability_rmssd"]  ?? []; // WHOOP uses RMSSD
+  const ts_spo2     = timeseries["oxygen_saturation"]             ?? [];
+  const ts_resp     = timeseries["respiratory_rate"]              ?? [];
+  const ts_skin     = timeseries["skin_temperature"]              ?? [];
 
   const recoveryScore: number | null =
     ts_recovery[0]?.value != null ? Math.round(ts_recovery[0].value) : null;
@@ -98,7 +111,7 @@ function toAthleteSummary(
     ts_rhr[0]?.value != null ? Math.round(ts_rhr[0].value) : null;
 
   const hrv: number | null =
-    ts_hrv[0]?.value != null ? Math.round(ts_hrv[0].value * 10) / 10 : null;
+    ts_hrv[0]?.value != null ? Math.round(ts_hrv[0].value) : null;
 
   const spo2: number | null =
     ts_spo2[0]?.value != null ? Math.round(ts_spo2[0].value * 10) / 10 : null;
@@ -116,9 +129,35 @@ function toAthleteSummary(
         Math.min(7, ts_skin.length);
       skinTemp = Math.round((skinTempRaw - baseline) * 10) / 10;
     } else {
-      skinTemp = 0; // only one reading; no baseline to compare against
+      skinTemp = 0;
     }
   }
+
+  // ── Full recovery history (all days, oldest → newest) ─────────────────────
+  const recMap  = Object.fromEntries(ts_recovery.map(p => [p.date, p.value]));
+  const rhrMap  = Object.fromEntries(ts_rhr.map(p => [p.date, p.value]));
+  const hrvMap  = Object.fromEntries(ts_hrv.map(p => [p.date, p.value]));
+  const spo2Map = Object.fromEntries(ts_spo2.map(p => [p.date, p.value]));
+  const skinMap = Object.fromEntries(ts_skin.map(p => [p.date, p.value]));
+
+  const allHistoryDates = Array.from(new Set([
+    ...ts_recovery.map(p => p.date),
+    ...ts_rhr.map(p => p.date),
+    ...ts_hrv.map(p => p.date),
+    ...ts_spo2.map(p => p.date),
+    ...ts_skin.map(p => p.date),
+  ])).sort(); // ascending — oldest first
+
+  const recoveryHistory: RecoveryHistoryDay[] = allHistoryDates.map(date => ({
+    date,
+    label:      fullDayLabel(date),
+    shortLabel: shortLabel(date),
+    recoveryScore: recMap[date] != null  ? Math.round(recMap[date])            : null,
+    hrv:           hrvMap[date] != null  ? Math.round(hrvMap[date])            : null,
+    restHr:        rhrMap[date] != null  ? Math.round(rhrMap[date])            : null,
+    spo2:          spo2Map[date] != null ? Math.round(spo2Map[date] * 10) / 10 : null,
+    skinTempC:     skinMap[date] != null ? Math.round(skinMap[date] * 10) / 10 : null,
+  }));
 
   // ── Sleep metrics — real WHOOP data ───────────────────────────────────────
   const sleepEfficiency = latestSleep?.efficiency_percent ?? 0;
@@ -232,6 +271,7 @@ function toAthleteSummary(
     ftpTrend,
     vo2MaxTrend,
     powerCurve: [],
+    recoveryHistory,
   };
 }
 

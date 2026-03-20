@@ -113,7 +113,8 @@ function buildAthlete(seed: MockAthleteSeed): AthleteSummary {
     powerTrend: buildTrend(performanceLabels, seed.powerTrend),
     ftpTrend: buildTrend(performanceLabels, seed.ftpTrend),
     vo2MaxTrend: buildTrend(performanceLabels, seed.vo2MaxTrend),
-    powerCurve: buildPowerCurve(seed.powerCurve)
+    powerCurve: buildPowerCurve(seed.powerCurve),
+    recoveryHistory: [],
   };
 }
 

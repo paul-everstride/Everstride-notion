@@ -7,7 +7,7 @@ import {
 } from "recharts";
 import { Calendar } from "lucide-react";
 import type { AthleteSummary, TrendPoint } from "@/lib/types";
-import { cn, formatSleepDuration, formatSignedNumber, formatWeight } from "@/lib/utils";
+import { cn, formatSleepDuration, formatSignedNumber, formatWeight, getRecoveryTone } from "@/lib/utils";
 
 // ── Null-safe display helper ─────────────────────────────────────────────────
 
@@ -188,8 +188,9 @@ function SectionChart({ title, data, color, height = 200, sub, tickInterval = 0 
 
 // ── Main export ──────────────────────────────────────────────────────────────
 
-type Tab = "readiness" | "performance" | "load" | "power" | "profile";
-type TF  = "7d" | "30d" | "3m" | "6m" | "1y" | "custom";
+type Tab   = "readiness" | "recovery" | "performance" | "load" | "power" | "profile";
+type TF    = "7d" | "30d" | "3m" | "6m" | "1y" | "custom";
+type RecTF = "7d" | "30d" | "90d" | "365d" | "all";
 
 export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
   const todayStr   = new Date().toISOString().slice(0, 10);
@@ -198,6 +199,7 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
   const [tab,         setTab]         = useState<Tab>("readiness");
   const [dayOffset,   setDayOffset]   = useState(0);
   const [timeframe,   setTimeframe]   = useState<TF>("30d");
+  const [recTf,       setRecTf]       = useState<RecTF>("all");
   const [customStart, setCustomStart] = useState(thirtyAgo);
   const [customEnd,   setCustomEnd]   = useState(todayStr);
 
@@ -290,11 +292,56 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
 
   const TABS: { key: Tab; label: string }[] = [
     { key: "readiness",   label: "Readiness" },
+    { key: "recovery",    label: "Recovery" },
     { key: "performance", label: "Performance" },
     { key: "load",        label: "Training Load" },
     { key: "power",       label: "Power" },
     { key: "profile",     label: "Profile" },
   ];
+
+  // ── Recovery tab data ──
+  const recHistory = athlete.recoveryHistory; // oldest → newest
+
+  const filteredRecHistory = useMemo(() => {
+    if (recTf === "all" || !recHistory.length) return recHistory;
+    const days = ({ "7d": 7, "30d": 30, "90d": 90, "365d": 365 } as Record<RecTF, number>)[recTf];
+    const lastDate = recHistory[recHistory.length - 1].date;
+    const cutoff = new Date(lastDate + "T12:00:00Z");
+    cutoff.setUTCDate(cutoff.getUTCDate() - days);
+    const cutoffStr = cutoff.toISOString().split("T")[0];
+    return recHistory.filter(d => d.date >= cutoffStr);
+  }, [recHistory, recTf]);
+
+  const recStats = useMemo(() => {
+    const h = recHistory;
+    const withRec  = h.filter(d => d.recoveryScore != null);
+    const withHrv  = h.filter(d => d.hrv != null);
+    const withRhr  = h.filter(d => d.restHr != null);
+    const withSpo2 = h.filter(d => d.spo2 != null);
+    const avg = (arr: number[]) =>
+      arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : null;
+    const avgSpo2Raw = withSpo2.length
+      ? withSpo2.reduce((s, d) => s + (d.spo2 ?? 0), 0) / withSpo2.length : null;
+    return {
+      avgRec:       avg(withRec.map(d => d.recoveryScore!)),
+      avgHrv:       avg(withHrv.map(d => d.hrv!)),
+      avgRhr:       avg(withRhr.map(d => d.restHr!)),
+      avgSpo2:      avgSpo2Raw != null ? Math.round(avgSpo2Raw * 10) / 10 : null,
+      daysTracked:  h.length,
+      greenCount:   withRec.filter(d => (d.recoveryScore ?? 0) >= 67).length,
+      yellowCount:  withRec.filter(d => (d.recoveryScore ?? 0) >= 34 && (d.recoveryScore ?? 0) < 67).length,
+      redCount:     withRec.filter(d => (d.recoveryScore ?? 0) < 34).length,
+    };
+  }, [recHistory]);
+
+  const recChartTickInterval = useMemo(() => {
+    const n = filteredRecHistory.length;
+    if (n <= 7)   return 0;
+    if (n <= 30)  return 4;
+    if (n <= 90)  return 9;
+    if (n <= 180) return 13;
+    return 20;
+  }, [filteredRecHistory.length]);
 
   // ── Shared controls ──
   const TimeframeBar = () => (
@@ -458,6 +505,190 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
             {trendData.spo2     && <SectionChart title="SpO₂"            data={trendData.spo2}     color="#8b5cf6" sub="%" tickInterval={trendData.tickInterval} />}
             {trendData.sleepEff && <SectionChart title="Sleep efficiency" data={trendData.sleepEff} color="#06b6d4" sub="%" tickInterval={trendData.tickInterval} />}
           </div>
+        </div>
+      )}
+
+      {/* ── RECOVERY ── */}
+      {tab === "recovery" && (
+        <div className="px-6 py-5 space-y-5">
+
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              {
+                label: "Avg Recovery Score",
+                value: recStats.avgRec != null ? `${recStats.avgRec}%` : "N/A",
+                color: recStats.avgRec != null
+                  ? (recStats.avgRec >= 67 ? "#059669" : recStats.avgRec >= 34 ? "#d97706" : "#dc2626")
+                  : "#9b9a97",
+              },
+              {
+                label: "Avg HRV (RMSSD)",
+                value: recStats.avgHrv != null ? `${recStats.avgHrv} ms` : "N/A",
+                color: "#059669",
+              },
+              {
+                label: "Avg Resting HR",
+                value: recStats.avgRhr != null ? `${recStats.avgRhr} bpm` : "N/A",
+                color: "#d97706",
+              },
+              {
+                label: "Days Tracked",
+                value: String(recStats.daysTracked),
+                color: "#6366f1",
+              },
+            ].map(card => (
+              <div key={card.label} className="border border-line rounded-lg bg-canvas px-4 py-4 space-y-1">
+                <p className="text-xs text-muted">{card.label}</p>
+                <p className="text-2xl font-bold tabular leading-tight" style={{ color: card.color }}>{card.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Distribution + SpO2 */}
+          <div className="flex flex-wrap items-center gap-5 text-sm">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-success inline-block" />
+              <span className="text-muted">{recStats.greenCount} green</span>
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-warning inline-block" />
+              <span className="text-muted">{recStats.yellowCount} yellow</span>
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-danger inline-block" />
+              <span className="text-muted">{recStats.redCount} red</span>
+            </span>
+            {recStats.avgSpo2 != null && (
+              <span className="text-muted flex items-center gap-1">
+                Avg SpO₂ <span className="font-semibold text-ink ml-0.5">{recStats.avgSpo2}%</span>
+              </span>
+            )}
+          </div>
+
+          {/* Full recovery timeline chart */}
+          <div className="border border-line rounded-lg bg-canvas overflow-hidden">
+            <div className="flex items-center justify-between border-b border-line px-4 py-2.5 flex-wrap gap-2">
+              <span className="text-sm font-medium text-ink">Daily Recovery Score</span>
+              <div className="inline-flex items-center bg-surfaceStrong rounded-md p-0.5 gap-0.5">
+                {(["7d","30d","90d","365d","all"] as RecTF[]).map(tf => (
+                  <button key={tf} type="button" onClick={() => setRecTf(tf)}
+                    className={cn(
+                      "px-2.5 py-1 text-xs rounded-[5px] transition-colors duration-100 font-medium",
+                      recTf === tf ? "bg-canvas text-ink shadow-sm" : "text-muted hover:text-ink"
+                    )}>
+                    {tf === "all" ? "All" : tf}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ height: 220 }} className="px-1 pt-2 pb-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={filteredRecHistory.map(d => ({
+                    xLabel:       d.shortLabel,
+                    tooltipLabel: d.label,
+                    recoveryScore: d.recoveryScore,
+                  }))}
+                  margin={{ top: 4, right: 10, left: 0, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="rec-hist-grad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%"   stopColor="#e16b2b" stopOpacity={0.15} />
+                      <stop offset="100%" stopColor="#e16b2b" stopOpacity={0.01} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="#e9e9e7" />
+                  <XAxis
+                    dataKey="xLabel"
+                    interval={recChartTickInterval}
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }}
+                  />
+                  <YAxis
+                    domain={[0, 100]}
+                    tickFormatter={(v: number) => `${v}%`}
+                    tickCount={5}
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }}
+                    width={36}
+                  />
+                  <ReferenceLine y={67} stroke="#059669" strokeOpacity={0.25} strokeDasharray="4 3" strokeWidth={1} />
+                  <ReferenceLine y={33} stroke="#dc2626" strokeOpacity={0.25} strokeDasharray="4 3" strokeWidth={1} />
+                  <Tooltip
+                    contentStyle={TS}
+                    labelStyle={TL}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    labelFormatter={(_: any, payload: any[]) =>
+                      (payload?.[0]?.payload?.tooltipLabel as string) ?? ""}
+                    formatter={(v: number) => [`${Math.round(v)}%`, "Recovery"]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="recoveryScore"
+                    stroke="#e16b2b"
+                    strokeWidth={1.5}
+                    fill="url(#rec-hist-grad)"
+                    dot={false}
+                    activeDot={{ r: 3, fill: "#e16b2b", stroke: "#ffffff", strokeWidth: 1.5 }}
+                    connectNulls
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Daily breakdown table */}
+          <div>
+            <h3 className="text-sm font-semibold text-ink mb-3">Daily Breakdown</h3>
+            <div className="border border-line rounded-lg overflow-hidden">
+              <div className="overflow-x-auto" style={{ maxHeight: 480, overflowY: "auto" }}>
+                <table className="min-w-full divide-y divide-line text-sm">
+                  <thead className="bg-surface" style={{ position: "sticky", top: 0, zIndex: 1 }}>
+                    <tr>
+                      {["Date","Recovery","HRV (ms)","Resting HR","SpO₂","Skin Temp"].map((h, i) => (
+                        <th key={h}
+                          className={`px-4 py-2.5 text-xs font-medium text-muted whitespace-nowrap ${i === 0 ? "text-left" : "text-right"}`}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line bg-canvas">
+                    {[...filteredRecHistory].reverse().map(day => {
+                      const tone = day.recoveryScore != null ? getRecoveryTone(day.recoveryScore) : null;
+                      const recColor = tone === "success" ? "#059669" : tone === "warning" ? "#d97706" : tone === "danger" ? "#dc2626" : undefined;
+                      return (
+                        <tr key={day.date} className="hover:bg-surface/60 transition-colors duration-75">
+                          <td className="px-4 py-2.5 text-sm text-muted whitespace-nowrap">{day.label}</td>
+                          <td className="px-4 py-2.5 text-right tabular">
+                            {day.recoveryScore != null
+                              ? <span className="font-semibold" style={{ color: recColor }}>{day.recoveryScore}%</span>
+                              : <span className="text-muted">—</span>}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular text-ink">
+                            {day.hrv != null ? day.hrv : <span className="text-muted">—</span>}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular text-ink">
+                            {day.restHr != null ? `${day.restHr} bpm` : <span className="text-muted">—</span>}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular text-ink">
+                            {day.spo2 != null ? `${day.spo2}%` : <span className="text-muted">—</span>}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular text-ink">
+                            {day.skinTempC != null ? `${day.skinTempC}°C` : <span className="text-muted">—</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
         </div>
       )}
 
