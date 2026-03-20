@@ -195,54 +195,54 @@ const QUICK_METRICS: QuickMetricDef[] = [
     label: "Highest Recovery",
     icon: <Activity size={16} />,
     accentColor: "#3b82f6",
-    pick: athletes => [...athletes].sort((a, b) => b.recoveryScore - a.recoveryScore)[0],
-    value: a => `${a.recoveryScore}`,
-    secondary: a => `HRV ${a.hrv} ms · RHR ${a.restHr}`,
+    pick: athletes => [...athletes].filter(a => a.recoveryScore != null).sort((a, b) => (b.recoveryScore ?? 0) - (a.recoveryScore ?? 0))[0],
+    value: a => a.recoveryScore != null ? `${a.recoveryScore}` : "N/A",
+    secondary: a => `HRV ${a.hrv != null ? `${a.hrv} ms` : "N/A"} · RHR ${a.restHr ?? "N/A"}`,
   },
   {
     key: "lowest_recovery",
     label: "Lowest Recovery",
     icon: <TrendingDown size={16} />,
     accentColor: "#dc2626",
-    pick: athletes => [...athletes].sort((a, b) => a.recoveryScore - b.recoveryScore)[0],
-    value: a => `${a.recoveryScore}`,
-    secondary: a => `HRV ${a.hrv} ms · RHR ${a.restHr}`,
+    pick: athletes => [...athletes].filter(a => a.recoveryScore != null).sort((a, b) => (a.recoveryScore ?? 0) - (b.recoveryScore ?? 0))[0],
+    value: a => a.recoveryScore != null ? `${a.recoveryScore}` : "N/A",
+    secondary: a => `HRV ${a.hrv != null ? `${a.hrv} ms` : "N/A"} · RHR ${a.restHr ?? "N/A"}`,
   },
   {
     key: "highest_tss",
     label: "Highest TSS",
     icon: <Zap size={16} />,
     accentColor: "#d97706",
-    pick: athletes => [...athletes].sort((a, b) => b.tss - a.tss)[0],
-    value: a => `${a.tss}`,
-    secondary: a => `ATL ${a.atl} · CTL ${a.ctl}`,
+    pick: athletes => [...athletes].filter(a => a.tss != null).sort((a, b) => (b.tss ?? 0) - (a.tss ?? 0))[0],
+    value: a => a.tss != null ? `${a.tss}` : "N/A",
+    secondary: a => `ATL ${a.atl ?? "N/A"} · CTL ${a.ctl ?? "N/A"}`,
   },
   {
     key: "lowest_rhr",
     label: "Lowest RHR",
     icon: <Heart size={16} />,
     accentColor: "#059669",
-    pick: athletes => [...athletes].sort((a, b) => a.restHr - b.restHr)[0],
-    value: a => `${a.restHr} bpm`,
-    secondary: a => `REC ${a.recoveryScore} · HRV ${a.hrv} ms`,
+    pick: athletes => [...athletes].filter(a => a.restHr != null).sort((a, b) => (a.restHr ?? 0) - (b.restHr ?? 0))[0],
+    value: a => a.restHr != null ? `${a.restHr} bpm` : "N/A",
+    secondary: a => `REC ${a.recoveryScore ?? "N/A"} · HRV ${a.hrv != null ? `${a.hrv} ms` : "N/A"}`,
   },
   {
     key: "highest_hrv",
     label: "Highest HRV",
     icon: <Activity size={16} />,
     accentColor: "#059669",
-    pick: athletes => [...athletes].sort((a, b) => b.hrv - a.hrv)[0],
-    value: a => `${a.hrv} ms`,
-    secondary: a => `REC ${a.recoveryScore} · RHR ${a.restHr}`,
+    pick: athletes => [...athletes].filter(a => a.hrv != null).sort((a, b) => (b.hrv ?? 0) - (a.hrv ?? 0))[0],
+    value: a => a.hrv != null ? `${a.hrv} ms` : "N/A",
+    secondary: a => `REC ${a.recoveryScore ?? "N/A"} · RHR ${a.restHr ?? "N/A"}`,
   },
   {
     key: "lowest_hrv",
     label: "Lowest HRV",
     icon: <TrendingDown size={16} />,
     accentColor: "#dc2626",
-    pick: athletes => [...athletes].sort((a, b) => a.hrv - b.hrv)[0],
-    value: a => `${a.hrv} ms`,
-    secondary: a => `REC ${a.recoveryScore} · RHR ${a.restHr}`,
+    pick: athletes => [...athletes].filter(a => a.hrv != null).sort((a, b) => (a.hrv ?? 0) - (b.hrv ?? 0))[0],
+    value: a => a.hrv != null ? `${a.hrv} ms` : "N/A",
+    secondary: a => `REC ${a.recoveryScore ?? "N/A"} · RHR ${a.restHr ?? "N/A"}`,
   },
   {
     key: "highest_sleep",
@@ -251,7 +251,7 @@ const QUICK_METRICS: QuickMetricDef[] = [
     accentColor: "#8b5cf6",
     pick: athletes => [...athletes].sort((a, b) => b.sleepScore - a.sleepScore)[0],
     value: a => `${a.sleepScore}`,
-    secondary: a => `Eff ${a.sleepEfficiency}% · HRV ${a.hrv} ms`,
+    secondary: a => `Eff ${a.sleepEfficiency}% · HRV ${a.hrv != null ? `${a.hrv} ms` : "N/A"}`,
   },
   {
     key: "lowest_sleep",
@@ -260,79 +260,79 @@ const QUICK_METRICS: QuickMetricDef[] = [
     accentColor: "#dc2626",
     pick: athletes => [...athletes].sort((a, b) => a.sleepScore - b.sleepScore)[0],
     value: a => `${a.sleepScore}`,
-    secondary: a => `Eff ${a.sleepEfficiency}% · HRV ${a.hrv} ms`,
+    secondary: a => `Eff ${a.sleepEfficiency}% · HRV ${a.hrv != null ? `${a.hrv} ms` : "N/A"}`,
   },
   {
     key: "highest_ctl",
     label: "Highest CTL",
     icon: <TrendingUp size={16} />,
     accentColor: "#3b82f6",
-    pick: athletes => [...athletes].sort((a, b) => b.ctl - a.ctl)[0],
-    value: a => `${a.ctl}`,
-    secondary: a => `ATL ${a.atl} · TSB ${formatSignedNumber(a.tsb)}`,
+    pick: athletes => [...athletes].filter(a => a.ctl != null).sort((a, b) => (b.ctl ?? 0) - (a.ctl ?? 0))[0],
+    value: a => a.ctl != null ? `${a.ctl}` : "N/A",
+    secondary: a => `ATL ${a.atl ?? "N/A"} · TSB ${a.tsb != null ? formatSignedNumber(a.tsb) : "N/A"}`,
   },
   {
     key: "lowest_ctl",
     label: "Lowest CTL",
     icon: <TrendingDown size={16} />,
     accentColor: "#e16b2b",
-    pick: athletes => [...athletes].sort((a, b) => a.ctl - b.ctl)[0],
-    value: a => `${a.ctl}`,
-    secondary: a => `ATL ${a.atl} · TSB ${formatSignedNumber(a.tsb)}`,
+    pick: athletes => [...athletes].filter(a => a.ctl != null).sort((a, b) => (a.ctl ?? 0) - (b.ctl ?? 0))[0],
+    value: a => a.ctl != null ? `${a.ctl}` : "N/A",
+    secondary: a => `ATL ${a.atl ?? "N/A"} · TSB ${a.tsb != null ? formatSignedNumber(a.tsb) : "N/A"}`,
   },
   {
     key: "freshest_tsb",
     label: "Freshest (TSB)",
     icon: <Flame size={16} />,
     accentColor: "#059669",
-    pick: athletes => [...athletes].sort((a, b) => b.tsb - a.tsb)[0],
-    value: a => formatSignedNumber(a.tsb),
-    secondary: a => `ATL ${a.atl} · CTL ${a.ctl}`,
+    pick: athletes => [...athletes].filter(a => a.tsb != null).sort((a, b) => (b.tsb ?? 0) - (a.tsb ?? 0))[0],
+    value: a => a.tsb != null ? formatSignedNumber(a.tsb) : "N/A",
+    secondary: a => `ATL ${a.atl ?? "N/A"} · CTL ${a.ctl ?? "N/A"}`,
   },
   {
     key: "most_fatigued_tsb",
     label: "Most Fatigued (TSB)",
     icon: <Flame size={16} />,
     accentColor: "#dc2626",
-    pick: athletes => [...athletes].sort((a, b) => a.tsb - b.tsb)[0],
-    value: a => formatSignedNumber(a.tsb),
-    secondary: a => `ATL ${a.atl} · CTL ${a.ctl}`,
+    pick: athletes => [...athletes].filter(a => a.tsb != null).sort((a, b) => (a.tsb ?? 0) - (b.tsb ?? 0))[0],
+    value: a => a.tsb != null ? formatSignedNumber(a.tsb) : "N/A",
+    secondary: a => `ATL ${a.atl ?? "N/A"} · CTL ${a.ctl ?? "N/A"}`,
   },
   {
     key: "highest_ftp",
     label: "Highest FTP",
     icon: <Dumbbell size={16} />,
     accentColor: "#e16b2b",
-    pick: athletes => [...athletes].sort((a, b) => b.ftp - a.ftp)[0],
-    value: a => `${a.ftp}w`,
-    secondary: a => `VO2 ${a.vo2Max} · Power ${a.powerMax}w`,
+    pick: athletes => [...athletes].filter(a => a.ftp != null).sort((a, b) => (b.ftp ?? 0) - (a.ftp ?? 0))[0],
+    value: a => a.ftp != null ? `${a.ftp}w` : "N/A",
+    secondary: a => `VO2 ${a.vo2Max ?? "N/A"} · Power ${a.powerMax != null ? `${a.powerMax}w` : "N/A"}`,
   },
   {
     key: "highest_vo2",
     label: "Highest VO2 max",
     icon: <Wind size={16} />,
     accentColor: "#06b6d4",
-    pick: athletes => [...athletes].sort((a, b) => b.vo2Max - a.vo2Max)[0],
-    value: a => `${a.vo2Max}`,
-    secondary: a => `FTP ${a.ftp}w · REC ${a.recoveryScore}`,
+    pick: athletes => [...athletes].filter(a => a.vo2Max != null).sort((a, b) => (b.vo2Max ?? 0) - (a.vo2Max ?? 0))[0],
+    value: a => a.vo2Max != null ? `${a.vo2Max}` : "N/A",
+    secondary: a => `FTP ${a.ftp != null ? `${a.ftp}w` : "N/A"} · REC ${a.recoveryScore ?? "N/A"}`,
   },
   {
     key: "highest_power",
     label: "Highest Power Max",
     icon: <Zap size={16} />,
     accentColor: "#d97706",
-    pick: athletes => [...athletes].sort((a, b) => b.powerMax - a.powerMax)[0],
-    value: a => `${a.powerMax}w`,
-    secondary: a => `FTP ${a.ftp}w · VO2 ${a.vo2Max}`,
+    pick: athletes => [...athletes].filter(a => a.powerMax != null).sort((a, b) => (b.powerMax ?? 0) - (a.powerMax ?? 0))[0],
+    value: a => a.powerMax != null ? `${a.powerMax}w` : "N/A",
+    secondary: a => `FTP ${a.ftp != null ? `${a.ftp}w` : "N/A"} · VO2 ${a.vo2Max ?? "N/A"}`,
   },
   {
     key: "highest_atl",
     label: "Highest ATL",
     icon: <BarChart2 size={16} />,
     accentColor: "#dc2626",
-    pick: athletes => [...athletes].sort((a, b) => b.atl - a.atl)[0],
-    value: a => `${a.atl}`,
-    secondary: a => `CTL ${a.ctl} · TSB ${formatSignedNumber(a.tsb)}`,
+    pick: athletes => [...athletes].filter(a => a.atl != null).sort((a, b) => (b.atl ?? 0) - (a.atl ?? 0))[0],
+    value: a => a.atl != null ? `${a.atl}` : "N/A",
+    secondary: a => `CTL ${a.ctl ?? "N/A"} · TSB ${a.tsb != null ? formatSignedNumber(a.tsb) : "N/A"}`,
   },
 ];
 
@@ -356,13 +356,13 @@ const DEFAULT_ATTENTION_METRICS: AttentionMetricKey[] = ["recovery", "tsb"];
 
 function athleteNeedsAttention(a: AthleteSummary, metrics: AttentionMetricKey[]): boolean {
   return metrics.some(m => {
-    if (m === "recovery") return a.recoveryScore < 60;
-    if (m === "tsb")      return a.tsb < -10;
-    if (m === "hrv")      return a.hrv < 50;
-    if (m === "rhr")      return a.restHr > 65;
+    if (m === "recovery") return a.recoveryScore != null && a.recoveryScore < 60;
+    if (m === "tsb")      return a.tsb != null && a.tsb < -10;
+    if (m === "hrv")      return a.hrv != null && a.hrv < 50;
+    if (m === "rhr")      return a.restHr != null && a.restHr > 65;
     if (m === "sleep")    return a.sleepScore < 60;
-    if (m === "spo2")     return a.spo2 < 95;
-    if (m === "atl")      return a.atl > 100;
+    if (m === "spo2")     return a.spo2 != null && a.spo2 < 95;
+    if (m === "atl")      return a.atl != null && a.atl > 100;
     return false;
   });
 }
@@ -607,9 +607,11 @@ function AttentionMonitor({ athletes }: { athletes: AthleteSummary[] }) {
                 {athlete.name}
               </span>
               <span className="text-xs tabular text-muted mr-2">
-                TSB {formatSignedNumber(athlete.tsb)}
+                TSB {athlete.tsb != null ? formatSignedNumber(athlete.tsb) : "N/A"}
               </span>
-              <RecoveryBadge score={athlete.recoveryScore} />
+              {athlete.recoveryScore != null
+                ? <RecoveryBadge score={athlete.recoveryScore} />
+                : <span className="text-xs text-muted">N/A</span>}
             </Link>
           ))
         )}
@@ -631,29 +633,37 @@ function AttentionMonitor({ athletes }: { athletes: AthleteSummary[] }) {
 
 function AiSummaryCard({ data, summaryMetrics }: { data: DashboardData; summaryMetrics: SummaryMetricKey[] }) {
   const flagCount = data.attentionAthletes.length;
-  const avgAtl = Math.round(data.athletes.reduce((s, a) => s + a.atl, 0) / (data.athletes.length || 1));
-  const avgCtl = Math.round(data.athletes.reduce((s, a) => s + a.ctl, 0) / (data.athletes.length || 1));
-  const avgFtp = Math.round(data.athletes.reduce((s, a) => s + a.ftp, 0) / (data.athletes.length || 1));
-  const avgVo2 = Math.round(data.athletes.reduce((s, a) => s + a.vo2Max, 0) / (data.athletes.length || 1));
+  const atlAthletes = data.athletes.filter(a => a.atl != null);
+  const ctlAthletes = data.athletes.filter(a => a.ctl != null);
+  const ftpAthletes = data.athletes.filter(a => a.ftp != null);
+  const vo2Athletes = data.athletes.filter(a => a.vo2Max != null);
+  const avgAtl = atlAthletes.length ? Math.round(atlAthletes.reduce((s, a) => s + (a.atl ?? 0), 0) / atlAthletes.length) : null;
+  const avgCtl = ctlAthletes.length ? Math.round(ctlAthletes.reduce((s, a) => s + (a.ctl ?? 0), 0) / ctlAthletes.length) : null;
+  const avgFtp = ftpAthletes.length ? Math.round(ftpAthletes.reduce((s, a) => s + (a.ftp ?? 0), 0) / ftpAthletes.length) : null;
+  const avgVo2 = vo2Athletes.length ? Math.round(vo2Athletes.reduce((s, a) => s + (a.vo2Max ?? 0), 0) / vo2Athletes.length) : null;
 
   const sentences: string[] = [];
   if (summaryMetrics.includes("recovery")) {
-    const ok = data.teamAverageRecovery >= 70;
-    sentences.push(ok
-      ? `Team recovery is strong at ${data.teamAverageRecovery}.`
-      : `Team recovery is below target at ${data.teamAverageRecovery} — consider reducing load.`);
+    if (data.teamAverageRecovery > 0) {
+      const ok = data.teamAverageRecovery >= 70;
+      sentences.push(ok
+        ? `Team recovery is strong at ${data.teamAverageRecovery}.`
+        : `Team recovery is below target at ${data.teamAverageRecovery} — consider reducing load.`);
+    } else {
+      sentences.push("Team recovery data not yet available.");
+    }
   }
   if (summaryMetrics.includes("flagCount")) {
     sentences.push(flagCount > 0
       ? `${flagCount} athlete${flagCount > 1 ? "s" : ""} flagged for attention.`
       : "No athletes flagged.");
   }
-  if (summaryMetrics.includes("hrv"))  sentences.push(`Team HRV avg ${data.teamAverageHrv} ms.`);
+  if (summaryMetrics.includes("hrv"))  sentences.push(data.teamAverageHrv > 0 ? `Team HRV avg ${data.teamAverageHrv} ms.` : "Team HRV data not yet available.");
   if (summaryMetrics.includes("sleep")) sentences.push(`Team sleep avg ${data.teamAverageSleep}.`);
-  if (summaryMetrics.includes("atl"))  sentences.push(`Team ATL avg ${avgAtl}.`);
-  if (summaryMetrics.includes("ctl"))  sentences.push(`Team CTL avg ${avgCtl}.`);
-  if (summaryMetrics.includes("ftp"))  sentences.push(`Team FTP avg ${avgFtp}w.`);
-  if (summaryMetrics.includes("vo2"))  sentences.push(`Team VO2 avg ${avgVo2}.`);
+  if (summaryMetrics.includes("atl"))  sentences.push(avgAtl != null ? `Team ATL avg ${avgAtl}.` : "Team ATL data not yet available.");
+  if (summaryMetrics.includes("ctl"))  sentences.push(avgCtl != null ? `Team CTL avg ${avgCtl}.` : "Team CTL data not yet available.");
+  if (summaryMetrics.includes("ftp"))  sentences.push(avgFtp != null ? `Team FTP avg ${avgFtp}w.` : "Team FTP data not yet available.");
+  if (summaryMetrics.includes("vo2"))  sentences.push(avgVo2 != null ? `Team VO2 avg ${avgVo2}.` : "Team VO2 data not yet available.");
 
   return (
     <div className="border border-warning/20 rounded-lg flex flex-col flex-1 overflow-hidden">
@@ -774,7 +784,7 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
   }, [attentionIds, dashboard.athletes, flaggedOnly, search]);
 
   const lowestRecAthlete = useMemo(
-    () => [...dashboard.athletes].sort((a, b) => a.recoveryScore - b.recoveryScore)[0],
+    () => [...dashboard.athletes].filter(a => a.recoveryScore != null).sort((a, b) => (a.recoveryScore ?? 0) - (b.recoveryScore ?? 0))[0],
     [dashboard.athletes]
   );
 
@@ -839,26 +849,28 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
         {/* Team stats strip */}
         {(() => {
           const athletes = dashboard.athletes;
-          const n = athletes.length || 1;
-          const avgRhr = Math.round(athletes.reduce((s, a) => s + a.restHr, 0) / n);
-          const avgVo2 = Math.round(athletes.reduce((s, a) => s + a.vo2Max, 0) / n);
+          const rhrAthletes = athletes.filter(a => a.restHr != null);
+          const vo2Athletes = athletes.filter(a => a.vo2Max != null);
+          const hrvAthletes = athletes.filter(a => a.hrv != null);
+          const avgRhr = rhrAthletes.length ? Math.round(rhrAthletes.reduce((s, a) => s + (a.restHr ?? 0), 0) / rhrAthletes.length) : 0;
+          const avgVo2 = vo2Athletes.length ? Math.round(vo2Athletes.reduce((s, a) => s + (a.vo2Max ?? 0), 0) / vo2Athletes.length) : 0;
           const flagged = dashboard.attentionAthletes.length;
           return (
             <div className="flex flex-wrap mt-4 border border-line rounded-lg overflow-hidden bg-canvas">
               <StatDonut pct={dashboard.teamAverageRecovery} color="#e16b2b"
-                value={String(dashboard.teamAverageRecovery)} label="Recovery" />
+                value={dashboard.teamAverageRecovery > 0 ? String(dashboard.teamAverageRecovery) : "N/A"} label="Recovery" />
               <StatDonut pct={dashboard.teamAverageSleep} color="#6366f1"
                 value={String(dashboard.teamAverageSleep)} label="Sleep" />
               <StatGradientLine
-                values={athletes.map(a => a.hrv)}
-                avg={dashboard.teamAverageHrv} min={20} max={120}
+                values={hrvAthletes.map(a => a.hrv as number)}
+                avg={dashboard.teamAverageHrv > 0 ? dashboard.teamAverageHrv : avgRhr} min={20} max={120}
                 label="HRV" unit="ms" />
               <StatGradientLine
-                values={athletes.map(a => a.restHr)}
+                values={rhrAthletes.map(a => a.restHr as number)}
                 avg={avgRhr} min={35} max={90}
                 label="Resting HR" unit="bpm" />
               <StatGradientLine
-                values={athletes.map(a => a.vo2Max)}
+                values={vo2Athletes.map(a => a.vo2Max as number)}
                 avg={avgVo2} min={30} max={80}
                 label="VO2 max" unit="" />
               <StatFlagged flagged={flagged} total={athletes.length} />
@@ -978,7 +990,10 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
             <div>
               <span className="text-sm font-medium text-ink">Coach note — </span>
               <span className="text-sm text-ink">
-                {lowestRecAthlete.name} has the lowest readiness. TSS {lowestRecAthlete.tss} · TSB {formatSignedNumber(lowestRecAthlete.tsb)} — consider reducing load before next session.
+                {lowestRecAthlete.name} has the lowest readiness.
+                {lowestRecAthlete.tss != null ? ` TSS ${lowestRecAthlete.tss}` : ""}
+                {lowestRecAthlete.tsb != null ? ` · TSB ${formatSignedNumber(lowestRecAthlete.tsb)}` : ""}
+                {" "}— consider reducing load before next session.
               </span>
             </div>
           </div>

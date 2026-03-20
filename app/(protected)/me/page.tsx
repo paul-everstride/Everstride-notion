@@ -29,24 +29,24 @@ export default async function MePage() {
             <h1 className="text-xl font-semibold text-ink">My Metrics</h1>
             <p className="text-sm text-muted mt-0.5">Athlete view · Latest wearable sync</p>
           </div>
-          <RecoveryBadge score={athlete.recoveryScore} />
+          {athlete.recoveryScore != null && <RecoveryBadge score={athlete.recoveryScore} />}
         </div>
       </div>
 
       <div className="px-6 py-5 space-y-5">
         {/* Key metrics */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <MetricCard title="Recovery" value={`${athlete.recoveryScore}`} detail={athlete.statusNote} accent />
-          <MetricCard title="HRV" value={`${athlete.hrv} ms`} detail="Latest sync" />
+          <MetricCard title="Recovery" value={athlete.recoveryScore != null ? `${athlete.recoveryScore}` : "N/A"} detail={athlete.statusNote} accent />
+          <MetricCard title="HRV" value={athlete.hrv != null ? `${athlete.hrv} ms` : "N/A"} detail="Latest sync" />
           <MetricCard title="Sleep score" value={`${athlete.sleepScore}`} detail={`Efficiency ${athlete.sleepEfficiency}%`} />
-          <MetricCard title="Time in bed" value={formatSleepDuration(athlete.totalBedMs)} detail={`RHR ${athlete.restHr} bpm`} />
+          <MetricCard title="Time in bed" value={formatSleepDuration(athlete.totalBedMs)} detail={`RHR ${athlete.restHr != null ? `${athlete.restHr} bpm` : "N/A"}`} />
         </div>
 
         {/* Readiness summary row */}
         <div className="border border-line rounded-lg overflow-hidden flex flex-wrap divide-x divide-line">
           {[
-            { label: "SpO2",      value: `${athlete.spo2}%` },
-            { label: "Resp rate", value: `${athlete.respirationRate} rpm` },
+            { label: "SpO2",      value: athlete.spo2 != null ? `${athlete.spo2}%` : "N/A" },
+            { label: "Resp rate", value: athlete.respirationRate != null ? `${athlete.respirationRate} rpm` : "N/A" },
             { label: "Sleep eff", value: `${athlete.sleepEfficiency}%` },
             { label: "Consistency", value: `${athlete.sleepConsistency}%` },
             { label: "REM",       value: formatSleepDuration(athlete.totalRemMs) },
@@ -92,14 +92,14 @@ export default async function MePage() {
             </thead>
             <tbody>
               <tr>
-                <td className="px-4 py-3 tabular text-ink border-r border-line">{athlete.tss}</td>
-                <td className="px-4 py-3 tabular text-ink border-r border-line">{athlete.atl}</td>
-                <td className="px-4 py-3 tabular text-ink border-r border-line">{athlete.ctl}</td>
-                <td className={`px-4 py-3 tabular font-semibold border-r border-line ${athlete.tsb >= 0 ? "text-success" : "text-danger"}`}>
-                  {athlete.tsb >= 0 ? "+" : ""}{athlete.tsb}
+                <td className="px-4 py-3 tabular text-ink border-r border-line">{athlete.tss ?? "N/A"}</td>
+                <td className="px-4 py-3 tabular text-ink border-r border-line">{athlete.atl ?? "N/A"}</td>
+                <td className="px-4 py-3 tabular text-ink border-r border-line">{athlete.ctl ?? "N/A"}</td>
+                <td className={`px-4 py-3 tabular font-semibold border-r border-line ${athlete.tsb != null ? (athlete.tsb >= 0 ? "text-success" : "text-danger") : "text-muted"}`}>
+                  {athlete.tsb != null ? `${athlete.tsb >= 0 ? "+" : ""}${athlete.tsb}` : "N/A"}
                 </td>
-                <td className="px-4 py-3 tabular text-ink border-r border-line">{athlete.vo2Max}</td>
-                <td className="px-4 py-3 tabular text-ink">{athlete.ftp}w</td>
+                <td className="px-4 py-3 tabular text-ink border-r border-line">{athlete.vo2Max ?? "N/A"}</td>
+                <td className="px-4 py-3 tabular text-ink">{athlete.ftp != null ? `${athlete.ftp}w` : "N/A"}</td>
               </tr>
             </tbody>
           </table>

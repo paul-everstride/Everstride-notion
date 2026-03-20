@@ -73,6 +73,7 @@ function buildAthlete(seed: MockAthleteSeed): AthleteSummary {
     name: seed.name,
     email: seed.email,
     age: seed.age,
+    heightCm: null,
     weightKg: seed.weightKg,
     team: seed.team,
     recoveryScore: seed.recoveryScore,
@@ -308,5 +309,5 @@ export const mockDashboardData: DashboardData = {
   teamAverageRecovery: 62,
   teamAverageSleep: 72,
   teamAverageHrv: 59,
-  attentionAthletes: mockAthletes.filter((athlete) => athlete.recoveryScore < 60 || athlete.tsb < 0)
+  attentionAthletes: mockAthletes.filter((athlete) => (athlete.recoveryScore != null && athlete.recoveryScore < 60) || (athlete.tsb != null && athlete.tsb < 0))
 };

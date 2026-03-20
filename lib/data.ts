@@ -17,30 +17,23 @@ import {
 // ─── Trend helpers ─────────────────────────────────────────────────────────────
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const WEEK_LABELS = ["Wk 1", "Wk 2", "Wk 3", "Wk 4", "Wk 5", "Wk 6"];
+const FLAT_TREND = DAY_LABELS.map((label) => ({ label, value: 0 }));
 
-/** Build a 7-point trend from the last 7 items (items are newest-first) */
+/** Build a 7-point trend from the last 7 items (items are newest-first).
+ *  Returns null if every value in the items is null (meaning no data). */
 function trendFromItems<T>(
   items: T[],
   getValue: (item: T) => number | null,
-  fallback: number
+  fallback: number | null
 ): TrendPoint[] {
   const last7 = items.slice(0, 7).reverse();
   if (last7.length === 0) {
-    return DAY_LABELS.map((label) => ({ label, value: fallback }));
+    return DAY_LABELS.map((label) => ({ label, value: fallback ?? 0 }));
   }
   return DAY_LABELS.map((label, i) => {
     const item = last7[i] ?? last7[last7.length - 1];
-    return { label, value: getValue(item) ?? fallback };
+    return { label, value: getValue(item) ?? fallback ?? 0 };
   });
-}
-
-/** Synthesise a 6-week performance trend from a single current value */
-function syntheticWeekTrend(current: number): TrendPoint[] {
-  return WEEK_LABELS.map((label, i) => ({
-    label,
-    value: Math.max(0, Math.round((current - 10 + i * 2) * 10) / 10),
-  }));
 }
 
 /** Capitalise the first letter of a name part */
@@ -61,22 +54,39 @@ function toAthleteSummary(
   sleep: OWSleepSummary[],
   body: OWBodySummary | null
 ): AthleteSummary {
-  const latestRecovery = recovery[0];
-  const latestSleep = sleep[0];
+  const latestRecovery = recovery[0] ?? null;
+  const latestSleep = sleep[0] ?? null;
 
   const name =
     [capitalize(firstName), capitalize(lastName)].filter(Boolean).join(" ") ||
     "Unnamed Athlete";
 
-  // ── Core metrics ──────────────────────────────────────────────────────────
-  const recoveryScore = latestRecovery?.recovery_score ?? 0;
-  const hrv = latestRecovery?.avg_hrv_sdnn_ms ?? latestSleep?.avg_hrv_sdnn_ms ?? 0;
-  const restHr = latestRecovery?.resting_heart_rate_bpm ?? latestSleep?.avg_heart_rate_bpm ?? 0;
-  const spo2 = latestRecovery?.avg_spo2_percent ?? latestSleep?.avg_spo2_percent ?? 0;
-  const respirationRate = latestSleep?.avg_respiratory_rate ?? 0;
-  const sleepEfficiency = latestSleep?.efficiency_percent ?? latestRecovery?.sleep_efficiency_percent ?? 0;
+  // ── Core metrics — null when wearable does not provide them ───────────────
+  // Recovery score: only available when recovery endpoint works
+  const recoveryScore: number | null = latestRecovery?.recovery_score ?? null;
 
-  // Sleep score: blend of efficiency and normalised duration (8h = 100)
+  // HRV: WHOOP does not expose this in the sleep summary endpoint yet
+  const hrv: number | null =
+    latestRecovery?.avg_hrv_sdnn_ms ??
+    latestSleep?.avg_hrv_sdnn_ms ??
+    null;
+
+  // Resting HR: WHOOP does not expose this in the sleep summary endpoint
+  const restHr: number | null =
+    latestRecovery?.resting_heart_rate_bpm ??
+    latestSleep?.avg_heart_rate_bpm ??
+    null;
+
+  // SpO2 & respiration: not returned by WHOOP sleep summary
+  const spo2: number | null =
+    latestRecovery?.avg_spo2_percent ??
+    latestSleep?.avg_spo2_percent ??
+    null;
+
+  const respirationRate: number | null = latestSleep?.avg_respiratory_rate ?? null;
+
+  // ── Sleep metrics — real WHOOP data ───────────────────────────────────────
+  const sleepEfficiency = latestSleep?.efficiency_percent ?? latestRecovery?.sleep_efficiency_percent ?? 0;
   const durationMinutes = latestSleep?.duration_minutes ?? 0;
   const sleepDurationScore = Math.min(100, Math.round((durationMinutes / 480) * 100));
   const sleepScore = sleepEfficiency > 0
@@ -84,7 +94,7 @@ function toAthleteSummary(
     : sleepDurationScore;
   const sleepConsistency = Math.min(100, Math.round(sleepScore * 0.95));
 
-  // Sleep stages (OW stores minutes, Everstride uses milliseconds)
+  // Sleep stages (OW stores minutes → milliseconds)
   const stages = latestSleep?.stages;
   const totalBedMs = (latestSleep?.time_in_bed_minutes ?? durationMinutes) * 60_000;
   const totalRemMs = (stages?.rem_minutes ?? 0) * 60_000;
@@ -92,52 +102,45 @@ function toAthleteSummary(
   const totalLightMs = (stages?.light_minutes ?? 0) * 60_000;
   const totalAwakeMs = (stages?.awake_minutes ?? 0) * 60_000;
 
-  // Body data
-  const weightKg = body?.slow_changing.weight_kg ?? 68;
-  const age = body?.slow_changing.age ?? 28;
+  // ── Body data ─────────────────────────────────────────────────────────────
+  const weightKg = body?.slow_changing.weight_kg ?? 70;
+  const heightCm = body?.slow_changing.height_cm ?? null;
+  const age: number | null = body?.slow_changing.age ?? null;
   const skinTempRaw = body?.latest.skin_temperature_celsius ?? null;
-  const skinTemp = skinTempRaw != null ? Math.round((skinTempRaw - 36.5) * 10) / 10 : 0;
+  const skinTemp: number | null =
+    skinTempRaw != null ? Math.round((skinTempRaw - 36.5) * 10) / 10 : null;
 
-  // ── Derived training metrics ───────────────────────────────────────────────
-  const tss = Math.max(35, Math.round((sleepScore + recoveryScore) / 2));
-  const atl = Math.max(40, Math.round(tss * 0.9));
-  const ctl = Math.max(45, Math.round((tss + recoveryScore) / 1.7));
-  const tsb = Math.round(ctl - atl);
-  const vo2Max = Math.max(42, Math.round(48 + hrv / 4));
-  const ftp = Math.max(210, Math.round(220 + hrv));
-  const powerMax = Math.max(800, Math.round(ftp * 3.8));
+  // ── Performance metrics — null (require power meter / recovery data) ───────
+  const tss: number | null = null;
+  const atl: number | null = null;
+  const ctl: number | null = null;
+  const tsb: number | null = null;
+  const vo2Max: number | null = null;
+  const ftp: number | null = null;
+  const powerMax: number | null = null;
 
-  // ── 7-day trends ──────────────────────────────────────────────────────────
+  // ── 7-day trends from real data ───────────────────────────────────────────
   const readinessTrend = trendFromItems(recovery, (r) => r.recovery_score, recoveryScore);
   const hrvTrend = trendFromItems(recovery, (r) => r.avg_hrv_sdnn_ms, hrv);
   const rhrTrend = trendFromItems(recovery, (r) => r.resting_heart_rate_bpm, restHr);
   const sleepTrend = trendFromItems(sleep, (s) => s.efficiency_percent, sleepScore);
   const sleepEfficiencyTrend = trendFromItems(sleep, (s) => s.efficiency_percent, sleepEfficiency);
 
-  const tssTrend = readinessTrend.map((p) => ({
-    label: p.label,
-    value: Math.max(35, Math.round((p.value + sleepScore) / 2)),
-  }));
-  const atlTrend = tssTrend.map((p) => ({ ...p, value: Math.round(p.value * 0.9) }));
-  const ctlTrend = tssTrend.map((p) => ({
-    ...p,
-    value: Math.round((p.value + recoveryScore) / 1.7),
-  }));
-  const tsbTrend = ctlTrend.map((c, i) => ({
-    label: c.label,
-    value: c.value - atlTrend[i].value,
-  }));
-
-  // ── 6-week performance trends ──────────────────────────────────────────────
-  const powerTrend = syntheticWeekTrend(powerMax);
-  const ftpTrend = syntheticWeekTrend(ftp);
-  const vo2MaxTrend = syntheticWeekTrend(vo2Max);
+  const tssTrend = FLAT_TREND;
+  const atlTrend = FLAT_TREND;
+  const ctlTrend = FLAT_TREND;
+  const tsbTrend = FLAT_TREND;
+  const powerTrend = FLAT_TREND;
+  const ftpTrend = FLAT_TREND;
+  const vo2MaxTrend = FLAT_TREND;
 
   const creationDate =
     latestRecovery?.date ?? latestSleep?.date ?? createdAt.split("T")[0];
 
   const statusNote =
-    recoveryScore >= 67
+    recoveryScore == null
+      ? "No recovery data yet."
+      : recoveryScore >= 67
       ? "Good recovery. Ready for training."
       : recoveryScore >= 34
       ? "Moderate recovery. Manageable load today."
@@ -150,6 +153,7 @@ function toAthleteSummary(
     email: email ?? `${name.toLowerCase().replace(/\s+/g, ".")}@everstride.ai`,
     age,
     weightKg,
+    heightCm,
     team: "Everstride",
     recoveryScore,
     sleepScore,
@@ -162,7 +166,7 @@ function toAthleteSummary(
     vo2Max,
     ftp,
     powerMax,
-    polarizedZones: { low: 70, moderate: 18, high: 12 },
+    polarizedZones: { low: 0, moderate: 0, high: 0 },
     spo2,
     sleepConsistency,
     sleepEfficiency,
@@ -188,14 +192,7 @@ function toAthleteSummary(
     powerTrend,
     ftpTrend,
     vo2MaxTrend,
-    powerCurve: [
-      { label: "5 sec",  value: Math.round(powerMax * 0.94) },
-      { label: "30 sec", value: Math.round(powerMax * 0.65) },
-      { label: "1 min",  value: Math.round(powerMax * 0.47) },
-      { label: "5 min",  value: Math.round(powerMax * 0.34) },
-      { label: "30 min", value: Math.round(powerMax * 0.22) },
-      { label: "FTP",    value: ftp },
-    ],
+    powerCurve: [],
   };
 }
 
@@ -225,10 +222,7 @@ export async function getDashboardData(): Promise<DashboardData> {
               owGetSleep(user.id),
               owGetBody(user.id),
             ]);
-
-            // Skip users with no wearable data at all
             if (!recovery.length && !sleep.length) return null;
-
             return toAthleteSummary(
               user.id,
               user.first_name,
@@ -246,27 +240,26 @@ export async function getDashboardData(): Promise<DashboardData> {
       )
     )
       .filter((a): a is AthleteSummary => a !== null)
-      .sort((a, b) => b.recoveryScore - a.recoveryScore);
+      .sort((a, b) => (b.recoveryScore ?? 0) - (a.recoveryScore ?? 0));
 
     if (!athletes.length) return emptyDashboard;
 
-    const teamAverageRecovery = Math.round(
-      athletes.reduce((s, a) => s + a.recoveryScore, 0) / athletes.length
-    );
-    const teamAverageSleep = Math.round(
-      athletes.reduce((s, a) => s + a.sleepScore, 0) / athletes.length
-    );
-    const teamAverageHrv = Math.round(
-      athletes.reduce((s, a) => s + a.hrv, 0) / athletes.length
-    );
+    const withRecovery = athletes.filter((a) => a.recoveryScore != null);
+    const withHrv = athletes.filter((a) => a.hrv != null);
 
     return {
       athletes,
-      teamAverageRecovery,
-      teamAverageSleep,
-      teamAverageHrv,
+      teamAverageRecovery: withRecovery.length
+        ? Math.round(withRecovery.reduce((s, a) => s + (a.recoveryScore ?? 0), 0) / withRecovery.length)
+        : 0,
+      teamAverageSleep: Math.round(
+        athletes.reduce((s, a) => s + a.sleepScore, 0) / athletes.length
+      ),
+      teamAverageHrv: withHrv.length
+        ? Math.round(withHrv.reduce((s, a) => s + (a.hrv ?? 0), 0) / withHrv.length)
+        : 0,
       attentionAthletes: athletes.filter(
-        (a) => a.recoveryScore < 60 || a.sleepScore < 65
+        (a) => (a.recoveryScore != null && a.recoveryScore < 60) || a.sleepScore < 65
       ),
     };
   } catch {

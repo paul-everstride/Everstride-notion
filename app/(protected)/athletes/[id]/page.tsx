@@ -24,7 +24,7 @@ export default async function AthleteDetailPage({ params }: { params: { id: stri
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <RecoveryBadge score={athlete.recoveryScore} />
+            {athlete.recoveryScore != null && <RecoveryBadge score={athlete.recoveryScore} />}
             <button type="button"
               className="text-sm font-medium text-brand border border-brand/30 rounded-md px-3 py-1.5 hover:bg-brandSoft transition-colors duration-100">
               Export

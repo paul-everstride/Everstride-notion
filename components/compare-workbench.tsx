@@ -310,23 +310,23 @@ function genPerfSeries(bv: (a: AthleteSummary) => number, key: string) {
 // ── Metric definitions ────────────────────────────────────────────────────────
 
 const readinessMetrics: CompareMetric[] = [
-  { key: "recovery",  label: "Recovery score",   unit: "",    baseValue: (a) => a.recoveryScore,  getSeries: readinessSeries("readinessTrend",    (a) => a.recoveryScore),  renderCurrent: (a) => `${a.recoveryScore}` },
-  { key: "sleep",     label: "Sleep score",       unit: "",    baseValue: (a) => a.sleepScore,     getSeries: readinessSeries("sleepTrend",        (a) => a.sleepScore),     renderCurrent: (a) => `${a.sleepScore}` },
-  { key: "rhr",       label: "RHR",               unit: "bpm", baseValue: (a) => a.restHr,         getSeries: readinessSeries("rhrTrend",          (a) => a.restHr),         renderCurrent: (a) => `${a.restHr} bpm` },
-  { key: "hrv",       label: "HRV",               unit: "ms",  baseValue: (a) => a.hrv,            getSeries: readinessSeries("hrvTrend",          (a) => a.hrv),            renderCurrent: (a) => `${a.hrv} ms` },
-  { key: "atl",       label: "ATL",               unit: "",    baseValue: (a) => a.atl,            getSeries: readinessSeries("atlTrend",          (a) => a.atl),            renderCurrent: (a) => `${a.atl}` },
-  { key: "ctl",       label: "CTL",               unit: "",    baseValue: (a) => a.ctl,            getSeries: readinessSeries("ctlTrend",          (a) => a.ctl),            renderCurrent: (a) => `${a.ctl}` },
+  { key: "recovery",  label: "Recovery score",   unit: "",    baseValue: (a) => a.recoveryScore ?? 0,  getSeries: readinessSeries("readinessTrend",    (a) => a.recoveryScore ?? 0),  renderCurrent: (a) => a.recoveryScore != null ? `${a.recoveryScore}` : "N/A" },
+  { key: "sleep",     label: "Sleep score",       unit: "",    baseValue: (a) => a.sleepScore,          getSeries: readinessSeries("sleepTrend",        (a) => a.sleepScore),           renderCurrent: (a) => `${a.sleepScore}` },
+  { key: "rhr",       label: "RHR",               unit: "bpm", baseValue: (a) => a.restHr ?? 0,         getSeries: readinessSeries("rhrTrend",          (a) => a.restHr ?? 0),          renderCurrent: (a) => a.restHr != null ? `${a.restHr} bpm` : "N/A" },
+  { key: "hrv",       label: "HRV",               unit: "ms",  baseValue: (a) => a.hrv ?? 0,            getSeries: readinessSeries("hrvTrend",          (a) => a.hrv ?? 0),             renderCurrent: (a) => a.hrv != null ? `${a.hrv} ms` : "N/A" },
+  { key: "atl",       label: "ATL",               unit: "",    baseValue: (a) => a.atl ?? 0,            getSeries: readinessSeries("atlTrend",          (a) => a.atl ?? 0),             renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
+  { key: "ctl",       label: "CTL",               unit: "",    baseValue: (a) => a.ctl ?? 0,            getSeries: readinessSeries("ctlTrend",          (a) => a.ctl ?? 0),             renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
 ];
 
 const perfSnapshotMetrics: CompareMetric[] = [
-  { key: "power",          label: "Power max",        unit: "w",  baseValue: (a) => a.powerMax,         getSeries: genPerfSeries((a) => a.powerMax,         "power"),  renderCurrent: (a) => `${a.powerMax}w` },
-  { key: "ftp",            label: "FTP",              unit: "w",  baseValue: (a) => a.ftp,              getSeries: genPerfSeries((a) => a.ftp,              "ftp"),    renderCurrent: (a) => `${a.ftp}w` },
-  { key: "vo2",            label: "VO2 max",          unit: "",   baseValue: (a) => a.vo2Max,           getSeries: genPerfSeries((a) => a.vo2Max,           "vo2"),    renderCurrent: (a) => `${a.vo2Max}` },
-  { key: "tss",            label: "TSS",              unit: "",   baseValue: (a) => a.tss,              getSeries: genPerfSeries((a) => a.tss,              "tss"),    renderCurrent: (a) => `${a.tss}` },
-  { key: "balance",        label: "TSB",              unit: "",   baseValue: (a) => Math.abs(a.tsb)+10, getSeries: genPerfSeries((a) => Math.abs(a.tsb)+10, "tsb"),    renderCurrent: (a) => formatSignedNumber(a.tsb) },
-  { key: "atl",            label: "ATL",              unit: "",   baseValue: (a) => a.atl,              getSeries: genPerfSeries((a) => a.atl,              "atl"),    renderCurrent: (a) => `${a.atl}` },
-  { key: "ctl",            label: "CTL",              unit: "",   baseValue: (a) => a.ctl,              getSeries: genPerfSeries((a) => a.ctl,              "ctl"),    renderCurrent: (a) => `${a.ctl}` },
-  { key: "sleepEfficiency",label: "Sleep efficiency", unit: "%",  baseValue: (a) => a.sleepEfficiency,  getSeries: genPerfSeries((a) => a.sleepEfficiency,  "slpeff"), renderCurrent: (a) => `${a.sleepEfficiency}%` },
+  { key: "power",          label: "Power max",        unit: "w",  baseValue: (a) => a.powerMax ?? 0,         getSeries: genPerfSeries((a) => a.powerMax ?? 0,         "power"),  renderCurrent: (a) => a.powerMax != null ? `${a.powerMax}w` : "N/A" },
+  { key: "ftp",            label: "FTP",              unit: "w",  baseValue: (a) => a.ftp ?? 0,              getSeries: genPerfSeries((a) => a.ftp ?? 0,              "ftp"),    renderCurrent: (a) => a.ftp != null ? `${a.ftp}w` : "N/A" },
+  { key: "vo2",            label: "VO2 max",          unit: "",   baseValue: (a) => a.vo2Max ?? 0,           getSeries: genPerfSeries((a) => a.vo2Max ?? 0,           "vo2"),    renderCurrent: (a) => a.vo2Max != null ? `${a.vo2Max}` : "N/A" },
+  { key: "tss",            label: "TSS",              unit: "",   baseValue: (a) => a.tss ?? 0,              getSeries: genPerfSeries((a) => a.tss ?? 0,              "tss"),    renderCurrent: (a) => a.tss != null ? `${a.tss}` : "N/A" },
+  { key: "balance",        label: "TSB",              unit: "",   baseValue: (a) => Math.abs(a.tsb ?? 0)+10, getSeries: genPerfSeries((a) => Math.abs(a.tsb ?? 0)+10, "tsb"),    renderCurrent: (a) => a.tsb != null ? formatSignedNumber(a.tsb) : "N/A" },
+  { key: "atl",            label: "ATL",              unit: "",   baseValue: (a) => a.atl ?? 0,              getSeries: genPerfSeries((a) => a.atl ?? 0,              "atl"),    renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
+  { key: "ctl",            label: "CTL",              unit: "",   baseValue: (a) => a.ctl ?? 0,              getSeries: genPerfSeries((a) => a.ctl ?? 0,              "ctl"),    renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
+  { key: "sleepEfficiency",label: "Sleep efficiency", unit: "%",  baseValue: (a) => a.sleepEfficiency,       getSeries: genPerfSeries((a) => a.sleepEfficiency,       "slpeff"), renderCurrent: (a) => `${a.sleepEfficiency}%` },
 ];
 
 const powerCurveMetrics: CompareMetric[] = [
@@ -335,20 +335,20 @@ const powerCurveMetrics: CompareMetric[] = [
   { key: "pc2",   label: "1 min",     unit: "w", baseValue: (a) => a.powerCurve[2]?.value ?? 0, getSeries: genPerfSeries((a) => a.powerCurve[2]?.value ?? 0, "pc2"),  renderCurrent: (a) => `${a.powerCurve[2]?.value ?? 0}w` },
   { key: "pc3",   label: "5 min",     unit: "w", baseValue: (a) => a.powerCurve[3]?.value ?? 0, getSeries: genPerfSeries((a) => a.powerCurve[3]?.value ?? 0, "pc3"),  renderCurrent: (a) => `${a.powerCurve[3]?.value ?? 0}w` },
   { key: "pc4",   label: "30 min",    unit: "w", baseValue: (a) => a.powerCurve[4]?.value ?? 0, getSeries: genPerfSeries((a) => a.powerCurve[4]?.value ?? 0, "pc4"),  renderCurrent: (a) => `${a.powerCurve[4]?.value ?? 0}w` },
-  { key: "power", label: "Power max", unit: "w", baseValue: (a) => a.powerMax,                  getSeries: genPerfSeries((a) => a.powerMax,                  "power"), renderCurrent: (a) => `${a.powerMax}w` },
+  { key: "power", label: "Power max", unit: "w", baseValue: (a) => a.powerMax ?? 0,              getSeries: genPerfSeries((a) => a.powerMax ?? 0,              "power"), renderCurrent: (a) => a.powerMax != null ? `${a.powerMax}w` : "N/A" },
 ];
 
 const fitnessMetrics: CompareMetric[] = [
-  { key: "ftp",     label: "FTP",     unit: "w", baseValue: (a) => a.ftp,              getSeries: genPerfSeries((a) => a.ftp,              "ftp"),  renderCurrent: (a) => `${a.ftp}w` },
-  { key: "vo2",     label: "VO2 max", unit: "",  baseValue: (a) => a.vo2Max,           getSeries: genPerfSeries((a) => a.vo2Max,           "vo2"),  renderCurrent: (a) => `${a.vo2Max}` },
-  { key: "tss",     label: "TSS",     unit: "",  baseValue: (a) => a.tss,              getSeries: genPerfSeries((a) => a.tss,              "tss"),  renderCurrent: (a) => `${a.tss}` },
-  { key: "balance", label: "TSB",     unit: "",  baseValue: (a) => Math.abs(a.tsb)+10, getSeries: genPerfSeries((a) => Math.abs(a.tsb)+10, "tsb"),  renderCurrent: (a) => formatSignedNumber(a.tsb) },
+  { key: "ftp",     label: "FTP",     unit: "w", baseValue: (a) => a.ftp ?? 0,              getSeries: genPerfSeries((a) => a.ftp ?? 0,              "ftp"),  renderCurrent: (a) => a.ftp != null ? `${a.ftp}w` : "N/A" },
+  { key: "vo2",     label: "VO2 max", unit: "",  baseValue: (a) => a.vo2Max ?? 0,           getSeries: genPerfSeries((a) => a.vo2Max ?? 0,           "vo2"),  renderCurrent: (a) => a.vo2Max != null ? `${a.vo2Max}` : "N/A" },
+  { key: "tss",     label: "TSS",     unit: "",  baseValue: (a) => a.tss ?? 0,              getSeries: genPerfSeries((a) => a.tss ?? 0,              "tss"),  renderCurrent: (a) => a.tss != null ? `${a.tss}` : "N/A" },
+  { key: "balance", label: "TSB",     unit: "",  baseValue: (a) => Math.abs(a.tsb ?? 0)+10, getSeries: genPerfSeries((a) => Math.abs(a.tsb ?? 0)+10, "tsb"),  renderCurrent: (a) => a.tsb != null ? formatSignedNumber(a.tsb) : "N/A" },
 ];
 
 const loadMetrics: CompareMetric[] = [
-  { key: "atl",            label: "ATL",              unit: "",  baseValue: (a) => a.atl,             getSeries: genPerfSeries((a) => a.atl,             "atl"),    renderCurrent: (a) => `${a.atl}` },
-  { key: "ctl",            label: "CTL",              unit: "",  baseValue: (a) => a.ctl,             getSeries: genPerfSeries((a) => a.ctl,             "ctl"),    renderCurrent: (a) => `${a.ctl}` },
-  { key: "sleepEfficiency",label: "Sleep efficiency", unit: "%", baseValue: (a) => a.sleepEfficiency, getSeries: genPerfSeries((a) => a.sleepEfficiency, "slpeff"), renderCurrent: (a) => `${a.sleepEfficiency}%` },
+  { key: "atl",            label: "ATL",              unit: "",  baseValue: (a) => a.atl ?? 0,           getSeries: genPerfSeries((a) => a.atl ?? 0,           "atl"),    renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
+  { key: "ctl",            label: "CTL",              unit: "",  baseValue: (a) => a.ctl ?? 0,           getSeries: genPerfSeries((a) => a.ctl ?? 0,           "ctl"),    renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
+  { key: "sleepEfficiency",label: "Sleep efficiency", unit: "%", baseValue: (a) => a.sleepEfficiency,    getSeries: genPerfSeries((a) => a.sleepEfficiency,    "slpeff"), renderCurrent: (a) => `${a.sleepEfficiency}%` },
 ];
 
 const PERF_SECTIONS = [
@@ -1042,7 +1042,7 @@ export function CompareWorkbench({
   }, [mode, section, timeframeType, timeframeOffset]);
 
   const availableAthletes = useMemo(
-    () => flaggedOnly ? athletes.filter(a => a.recoveryScore < 60 || a.tsb < 0) : athletes,
+    () => flaggedOnly ? athletes.filter(a => (a.recoveryScore != null && a.recoveryScore < 60) || (a.tsb != null && a.tsb < 0)) : athletes,
     [athletes, flaggedOnly]
   );
   const selectedAthletes = useMemo(

@@ -4,12 +4,15 @@ import { useState, useMemo } from "react";
 import {
   Area, AreaChart, CartesianGrid, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
-  PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart,
 } from "recharts";
 import { Calendar } from "lucide-react";
 import type { AthleteSummary, TrendPoint } from "@/lib/types";
-import { PolarizedBar } from "@/components/polarized-bar";
 import { cn, formatSleepDuration, formatSignedNumber, formatWeight } from "@/lib/utils";
+
+// ── Null-safe display helper ─────────────────────────────────────────────────
+
+const na = (v: number | null | undefined, fmt: (n: number) => string = (n) => String(n)) =>
+  v == null ? "N/A" : fmt(v);
 
 // ── Deterministic helpers ────────────────────────────────────────────────────
 
@@ -169,85 +172,6 @@ function SectionChart({ title, data, color, height = 200, sub }: { title: string
   );
 }
 
-// ── TSB chart (signed, green above 0, red below) ─────────────────────────────
-
-function TsbChart({ data, height = 220 }: { data: TrendPoint[]; height?: number }) {
-  const vals = data.map(d => d.value);
-  const raw_min = Math.min(...vals, 0);
-  const raw_max = Math.max(...vals, 0);
-  const pad = Math.max((raw_max - raw_min) * 0.18, 5);
-  const dm: [number, number] = [Math.floor(raw_min - pad), Math.ceil(raw_max + pad)];
-
-  // pct of y=0 from top of chart (recharts: max at top, min at bottom)
-  const zeroFrac = (dm[1] - 0) / (dm[1] - dm[0]);
-  const zeroPct  = `${Math.round(Math.max(0, Math.min(1, zeroFrac)) * 100)}%`;
-
-  const latest = vals[vals.length - 1] ?? 0;
-  const avg    = vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
-  const maxVal = Math.max(...vals);
-
-  const positiveData = data.map(d => ({ ...d, pos: Math.max(0, d.value), neg: Math.min(0, d.value) }));
-
-  return (
-    <div className="border border-line rounded-lg bg-canvas overflow-hidden">
-      <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-        <div>
-          <span className="text-sm font-medium text-ink">TSB — Form (positive = fresh, negative = fatigued)</span>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <span className="text-[10px] text-muted">Now <span className="font-semibold ml-0.5" style={{ color: latest >= 0 ? "#059669" : "#dc2626" }}>{formatSignedNumber(Math.round(latest))}</span></span>
-          <span className="text-[10px] text-muted">Avg <span className="ml-0.5">{formatSignedNumber(Math.round(avg))}</span></span>
-          <span className="text-[10px] text-muted">Max <span className="ml-0.5">{tfmt(maxVal)}</span></span>
-        </div>
-      </div>
-      <div style={{ height }} className="px-1 pt-2 pb-1">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={positiveData} margin={{ top: 4, right: 10, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="tsb-pos" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#059669" stopOpacity={0.18} />
-                <stop offset="100%" stopColor="#059669" stopOpacity={0.02} />
-              </linearGradient>
-              <linearGradient id="tsb-neg" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#dc2626" stopOpacity={0.02} />
-                <stop offset="100%" stopColor="#dc2626" stopOpacity={0.16} />
-              </linearGradient>
-              <linearGradient id="tsb-line" x1="0" y1="0" x2="0" y2="1">
-                <stop offset={zeroPct} stopColor="#059669" stopOpacity={1} />
-                <stop offset={zeroPct} stopColor="#dc2626" stopOpacity={1} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid vertical={false} stroke="#e9e9e7" />
-            <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }} />
-            <YAxis domain={dm} tickFormatter={v => formatSignedNumber(v)} tickCount={5} tickLine={false} axisLine={false} tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }} width={36} />
-            <ReferenceLine y={0} stroke="#9b9a97" strokeWidth={1.5} strokeOpacity={0.6} />
-            <ReferenceLine y={avg} stroke="#9b9a97" strokeOpacity={0.2} strokeDasharray="4 3" strokeWidth={1} />
-            <Tooltip contentStyle={TS} labelStyle={TL} formatter={(v: number, name: string) => {
-              if (name === "pos") return [v > 0 ? `+${Math.round(v)}` : null, null];
-              if (name === "neg") return [v < 0 ? Math.round(v) : null, null];
-              return [null, null];
-            }} />
-            {/* Positive fill */}
-            <Area type="monotone" dataKey="pos" stroke="none" fill="url(#tsb-pos)" baseValue={0} isAnimationActive={false} dot={false} />
-            {/* Negative fill */}
-            <Area type="monotone" dataKey="neg" stroke="none" fill="url(#tsb-neg)" baseValue={0} isAnimationActive={false} dot={false} />
-            {/* Line using value for dots */}
-            <Area type="monotone" dataKey="value" stroke="url(#tsb-line)" strokeWidth={2} fill="none"
-              dot={(props: { cx: number; cy: number; payload: { value: number } }) => {
-                const c = props.payload.value >= 0 ? "#059669" : "#dc2626";
-                return <circle key={`${props.cx}-${props.cy}`} cx={props.cx} cy={props.cy} r={2.5} fill={c} stroke="#ffffff" strokeWidth={1.5} />;
-              }}
-              activeDot={(props: { cx: number; cy: number; payload: { value: number } }) => {
-                const c = props.payload.value >= 0 ? "#059669" : "#dc2626";
-                return <circle key={`active-${props.cx}`} cx={props.cx} cy={props.cy} r={4} fill={c} stroke="#ffffff" strokeWidth={1.5} />;
-              }} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
 // ── Main export ──────────────────────────────────────────────────────────────
 
 type Tab = "readiness" | "performance" | "load" | "power" | "profile";
@@ -274,8 +198,8 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
   // ── Trend data for current timeframe ──
   const trendData = useMemo(() => {
     const { labels, seed } = getTimeframeInfo(timeframe, customStart, customEnd);
-    const g = (base: number, key: string, v = 0.08) =>
-      genTrend(strHash(athlete.id + key + seed), base, labels, v);
+    const g = (base: number | null, key: string, v = 0.08) =>
+      base != null ? genTrend(strHash(athlete.id + key + seed), base, labels, v) : null;
     return {
       labels,
       recovery: g(athlete.recoveryScore, "rec",    0.07),
@@ -290,7 +214,7 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
       tss:      g(athlete.tss,           "tss",    0.12),
       atl:      g(athlete.atl,           "atl",    0.08),
       ctl:      g(athlete.ctl,           "ctl",    0.05),
-      tsb:      genTsbTrend(strHash(athlete.id + "tsb" + seed), athlete.tsb, labels),
+      tsb:      athlete.tsb != null ? genTsbTrend(strHash(athlete.id + "tsb" + seed), athlete.tsb, labels) : null,
     };
   }, [athlete, timeframe, customStart, customEnd]);
 
@@ -298,17 +222,18 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
   const dayVals = useMemo(() => {
     const d = new Date(); d.setDate(d.getDate() + dayOffset);
     const s = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-    const val = (base: number, key: string) => {
+    const val = (base: number | null, key: string): number | null => {
+      if (base == null) return null;
       const rng = lcg(strHash(athlete.id + key + "snap" + s));
       return base + (rng() - 0.5) * base * 0.18;
     };
     return {
-      recovery: Math.round(val(athlete.recoveryScore, "rec")),
-      hrv:      Math.round(val(athlete.hrv,           "hrv") * 10) / 10,
-      sleep:    Math.round(val(athlete.sleepScore,    "slp")),
-      rhr:      Math.round(val(athlete.restHr,        "rhr")),
-      spo2:     Math.round(val(athlete.spo2,          "spo2") * 10) / 10,
-      resp:     Math.round(val(athlete.respirationRate,"resp") * 10) / 10,
+      recovery: athlete.recoveryScore != null ? Math.round(val(athlete.recoveryScore, "rec")!) : null,
+      hrv:      athlete.hrv != null ? Math.round(val(athlete.hrv, "hrv")! * 10) / 10 : null,
+      sleep:    Math.round(val(athlete.sleepScore, "slp")!),
+      rhr:      athlete.restHr != null ? Math.round(val(athlete.restHr, "rhr")!) : null,
+      spo2:     athlete.spo2 != null ? Math.round(val(athlete.spo2, "spo2")! * 10) / 10 : null,
+      resp:     athlete.respirationRate != null ? Math.round(val(athlete.respirationRate, "resp")! * 10) / 10 : null,
     };
   }, [athlete, dayOffset]);
 
@@ -318,16 +243,6 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
   const remPct    = Math.round(athlete.totalRemMs       / total * 100);
   const lightPct  = Math.round(athlete.totalLightMs     / total * 100);
   const awakePct  = Math.max(0, 100 - deepPct - remPct - lightPct);
-
-  // ── Power hexagon ──
-  const POWER_LABELS = ["5s", "30s", "1min", "5min", "30min", "FTP"];
-  const hexData = useMemo(() => {
-    const rng = lcg(strHash(athlete.id + "hexprofile"));
-    const profile = POWER_LABELS.map(() => 0.3 + rng() * 1.4);
-    const raw = athlete.powerCurve.map((pt, i) => pt.value * profile[i]);
-    const mx = Math.max(...raw, 1);
-    return POWER_LABELS.map((subject, i) => ({ subject, value: Math.round((raw[i] / mx) * 95) }));
-  }, [athlete]);
 
   const TF_OPTS: { key: TF; label: string }[] = [
     { key: "7d",     label: "7 days" },
@@ -431,14 +346,15 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
           {/* Metrics strip */}
           <div className="border border-line rounded-lg overflow-hidden">
             <div className="flex flex-wrap divide-x divide-line bg-canvas">
-              <MetricPill label="Recovery" value={`${dayVals.recovery}`}
-                accent={dayVals.recovery >= 70 ? "#059669" : dayVals.recovery >= 50 ? "#d97706" : "#dc2626"}
+              <MetricPill label="Recovery"
+                value={dayVals.recovery != null ? String(dayVals.recovery) : "N/A"}
+                accent={dayVals.recovery != null ? (dayVals.recovery >= 70 ? "#059669" : dayVals.recovery >= 50 ? "#d97706" : "#dc2626") : undefined}
                 sub={athlete.statusNote} />
-              <MetricPill label="HRV" value={`${dayVals.hrv} ms`} sub="Overnight avg" />
+              <MetricPill label="HRV" value={dayVals.hrv != null ? `${dayVals.hrv} ms` : "N/A"} sub="Overnight avg" />
               <MetricPill label="Sleep score" value={`${dayVals.sleep}`} sub={`Eff ${athlete.sleepEfficiency}%`} />
-              <MetricPill label="Resting HR" value={`${dayVals.rhr} bpm`} sub="Overnight avg" />
-              <MetricPill label="SpO₂" value={`${dayVals.spo2}%`} sub="Overnight" />
-              <MetricPill label="Resp rate" value={`${dayVals.resp} rpm`} sub="Overnight" />
+              <MetricPill label="Resting HR" value={dayVals.rhr != null ? `${dayVals.rhr} bpm` : "N/A"} sub="Overnight avg" />
+              <MetricPill label="SpO₂" value={dayVals.spo2 != null ? `${dayVals.spo2}%` : "N/A"} sub="Overnight" />
+              <MetricPill label="Resp rate" value={dayVals.resp != null ? `${dayVals.resp} rpm` : "N/A"} sub="Overnight" />
             </div>
           </div>
 
@@ -474,7 +390,7 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
                 {[
                   { label: "Efficiency",   value: `${athlete.sleepEfficiency}%` },
                   { label: "Consistency",  value: `${athlete.sleepConsistency}%` },
-                  { label: "Skin temp Δ",  value: `${athlete.skinTemp > 0 ? "+" : ""}${athlete.skinTemp.toFixed(1)}°C` },
+                  { label: "Skin temp Δ",  value: athlete.skinTemp != null ? `${athlete.skinTemp > 0 ? "+" : ""}${athlete.skinTemp.toFixed(1)}°C` : "N/A" },
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-surface rounded-md px-3 py-2">
                     <p className="text-[10px] text-muted">{label}</p>
@@ -488,12 +404,24 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
           {/* Trends */}
           <SectionHeader title="Readiness trends" sub="Historical view" controls={<TimeframeBar />} />
           <div className="grid gap-4 lg:grid-cols-2">
-            <SectionChart title="Recovery score"    data={trendData.recovery} color="#e16b2b" />
-            <SectionChart title="Sleep score"       data={trendData.sleep}    color="#3b82f6" />
-            <SectionChart title="HRV"               data={trendData.hrv}      color="#059669" sub="ms" />
-            <SectionChart title="Resting HR"        data={trendData.rhr}      color="#d97706" sub="bpm" />
-            <SectionChart title="SpO₂"              data={trendData.spo2}     color="#8b5cf6" sub="%" />
-            <SectionChart title="Sleep efficiency"  data={trendData.sleepEff} color="#06b6d4" sub="%" />
+            {trendData.recovery && <SectionChart title="Recovery score"   data={trendData.recovery} color="#e16b2b" />}
+            {trendData.sleep    && <SectionChart title="Sleep score"      data={trendData.sleep}    color="#3b82f6" />}
+            {trendData.hrv ? (
+              <SectionChart title="HRV" data={trendData.hrv} color="#059669" sub="ms" />
+            ) : (
+              <div className="border border-line rounded-lg bg-canvas px-4 py-6 flex items-center justify-center">
+                <p className="text-sm text-muted">N/A — HRV data not yet available from this device</p>
+              </div>
+            )}
+            {trendData.rhr ? (
+              <SectionChart title="Resting HR" data={trendData.rhr} color="#d97706" sub="bpm" />
+            ) : (
+              <div className="border border-line rounded-lg bg-canvas px-4 py-6 flex items-center justify-center">
+                <p className="text-sm text-muted">N/A — Resting HR data not yet available from this device</p>
+              </div>
+            )}
+            {trendData.spo2     && <SectionChart title="SpO₂"             data={trendData.spo2}     color="#8b5cf6" sub="%" />}
+            {trendData.sleepEff && <SectionChart title="Sleep efficiency"  data={trendData.sleepEff} color="#06b6d4" sub="%" />}
           </div>
         </div>
       )}
@@ -501,28 +429,12 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
       {/* ── PERFORMANCE ── */}
       {tab === "performance" && (
         <div className="px-6 py-5 space-y-5">
-          <SectionHeader title="Performance" sub="FTP · VO2 max · Power" controls={<TimeframeBar />} />
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {[
-              { label: "FTP",       value: `${athlete.ftp}w`,     sub: "Threshold power",     color: "#e16b2b" },
-              { label: "VO2 max",   value: `${athlete.vo2Max}`,   sub: "ml · kg⁻¹ · min⁻¹",  color: "#3b82f6" },
-              { label: "Power max", value: `${athlete.powerMax}w`,sub: "All-time peak",        color: "#d97706" },
-              { label: "TSS",       value: `${athlete.tss}`,      sub: "Training stress",      color: "#059669" },
-            ].map(({ label, value, sub, color }) => (
-              <div key={label} className="border border-line rounded-lg bg-canvas px-4 py-3 space-y-1">
-                <p className="text-xs text-muted">{label}</p>
-                <p className="text-2xl font-semibold tabular leading-none" style={{ color }}>{value}</p>
-                <p className="text-[11px] text-muted">{sub}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <SectionChart title="FTP"       data={trendData.ftp}   color="#e16b2b" sub="watts" />
-            <SectionChart title="VO2 max"   data={trendData.vo2}   color="#3b82f6" sub="ml/kg/min" />
-            <SectionChart title="Power max" data={trendData.power} color="#d97706" sub="watts" />
-            <SectionChart title="TSS"       data={trendData.tss}   color="#059669" />
+          <SectionHeader title="Performance" sub="FTP · VO2 max · Power" />
+          <div className="border border-line rounded-lg bg-canvas px-6 py-8 flex flex-col items-center justify-center text-center gap-2">
+            <p className="text-sm font-medium text-ink">Performance metrics not available</p>
+            <p className="text-sm text-muted max-w-md">
+              Performance metrics (FTP, VO2 max, power) require a power meter connection. Coming soon.
+            </p>
           </div>
         </div>
       )}
@@ -530,44 +442,12 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
       {/* ── TRAINING LOAD ── */}
       {tab === "load" && (
         <div className="px-6 py-5 space-y-5">
-          <SectionHeader title="Training Load" sub="ATL · CTL · TSB · form" controls={<TimeframeBar />} />
-
-          <div className="border border-line rounded-lg overflow-hidden">
-            <div className="flex flex-wrap divide-x divide-line bg-canvas">
-              <MetricPill label="ATL" value={`${athlete.atl}`} sub="Acute load (fatigue)" />
-              <MetricPill label="CTL" value={`${athlete.ctl}`} sub="Chronic load (fitness)" />
-              <MetricPill label="TSB" value={formatSignedNumber(athlete.tsb)} sub="Form · freshness"
-                accent={athlete.tsb >= 0 ? "#059669" : "#dc2626"} />
-              <MetricPill label="TSS" value={`${athlete.tss}`} sub="Today's stress score" />
-            </div>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <SectionChart title="ATL — Acute Training Load"   data={trendData.atl} color="#e16b2b" />
-            <SectionChart title="CTL — Chronic Training Load" data={trendData.ctl} color="#3b82f6" />
-          </div>
-          <TsbChart data={trendData.tsb} height={220} />
-
-          <div className="border border-line rounded-lg overflow-hidden bg-canvas">
-            <div className="border-b border-line px-4 py-2.5">
-              <span className="text-sm font-medium text-ink">Training zone distribution</span>
-            </div>
-            <div className="px-4 py-4 space-y-3">
-              <PolarizedBar zones={athlete.polarizedZones} />
-              <div className="flex flex-wrap gap-5 pt-1">
-                {[
-                  { label: "Zone 1 – Low",  pct: athlete.polarizedZones.low,      color: "#3b82f6" },
-                  { label: "Zone 2 – Mod",  pct: athlete.polarizedZones.moderate, color: "#d97706" },
-                  { label: "Zone 3 – High", pct: athlete.polarizedZones.high,     color: "#dc2626" },
-                ].map(({ label, pct, color }) => (
-                  <div key={label} className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: color }} />
-                    <span className="text-xs text-muted">{label}</span>
-                    <span className="text-xs font-semibold text-ink">{pct}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <SectionHeader title="Training Load" sub="ATL · CTL · TSB · form" />
+          <div className="border border-line rounded-lg bg-canvas px-6 py-8 flex flex-col items-center justify-center text-center gap-2">
+            <p className="text-sm font-medium text-ink">Training load metrics not available</p>
+            <p className="text-sm text-muted max-w-md">
+              Training load metrics require recovery score data. Coming soon.
+            </p>
           </div>
         </div>
       )}
@@ -575,58 +455,12 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
       {/* ── POWER ── */}
       {tab === "power" && (
         <div className="px-6 py-5 space-y-5">
-          <SectionHeader title="Power Profile" sub="Curve · hexagon · trend" controls={<TimeframeBar />} />
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            {/* Hexagon */}
-            <div className="border border-line rounded-lg bg-canvas overflow-hidden">
-              <div className="border-b border-line px-4 py-2.5">
-                <span className="text-sm font-medium text-ink">Power profile hexagon</span>
-              </div>
-              <div style={{ height: 280 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart data={hexData} margin={{ top: 16, right: 40, bottom: 16, left: 40 }}>
-                    <PolarGrid gridType="polygon" stroke="#e9e9e7" />
-                    <PolarAngleAxis dataKey="subject" tick={{ fill: "#9b9a97", fontSize: 11, fontFamily: "inherit" }} />
-                    <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-                    <Tooltip contentStyle={TS} labelStyle={TL} formatter={(v: number) => [`${v}%`, ""]} />
-                    <Radar dataKey="value" stroke="#e16b2b" strokeWidth={2.5} fill="#e16b2b" fillOpacity={0.08} />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-            <SectionChart title="Power max trend" data={trendData.power} color="#e16b2b" height={280} sub="watts" />
-          </div>
-
-          {/* Power curve */}
-          <div className="border border-line rounded-lg overflow-hidden bg-canvas">
-            <div className="border-b border-line px-4 py-2.5">
-              <span className="text-sm font-medium text-ink">Power curve</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="bg-surface border-b border-line">
-                    {[...athlete.powerCurve.map(p => p.label), "Max power"].map(h => (
-                      <th key={h} className="px-4 py-2.5 text-right text-xs font-medium text-muted">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    {athlete.powerCurve.map(pt => (
-                      <td key={pt.label} className="px-4 py-3 text-right tabular text-ink border-r border-line">{pt.value}w</td>
-                    ))}
-                    <td className="px-4 py-3 text-right tabular font-semibold text-brand">{athlete.powerMax}w</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <SectionChart title="FTP trend"     data={trendData.ftp} color="#d97706" sub="watts" />
-            <SectionChart title="VO2 max trend" data={trendData.vo2} color="#3b82f6" sub="ml/kg/min" />
+          <SectionHeader title="Power Profile" sub="Curve · hexagon · trend" />
+          <div className="border border-line rounded-lg bg-canvas px-6 py-8 flex flex-col items-center justify-center text-center gap-2">
+            <p className="text-sm font-medium text-ink">Power data not available</p>
+            <p className="text-sm text-muted max-w-md">
+              Power data requires a power meter. Coming soon.
+            </p>
           </div>
         </div>
       )}
@@ -643,8 +477,9 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
                 { label: "Full name",  value: athlete.name },
                 { label: "Email",      value: athlete.email },
                 { label: "Team",       value: athlete.team },
-                { label: "Age",        value: `${athlete.age}` },
+                { label: "Age",        value: athlete.age != null ? String(athlete.age) : "N/A" },
                 { label: "Weight",     value: formatWeight(athlete.weightKg) },
+                { label: "Height",     value: athlete.heightCm != null ? `${athlete.heightCm} cm` : "N/A" },
               ],
             },
             {
@@ -655,21 +490,21 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
                 { label: "REM sleep",          value: formatSleepDuration(athlete.totalRemMs) },
                 { label: "Deep sleep",         value: formatSleepDuration(athlete.totalSlowWaveMs) },
                 { label: "Light sleep",        value: formatSleepDuration(athlete.totalLightMs) },
-                { label: "SpO₂",               value: `${athlete.spo2}%` },
-                { label: "Resp rate",          value: `${athlete.respirationRate} rpm` },
-                { label: "Skin temp Δ",        value: `${athlete.skinTemp > 0 ? "+" : ""}${athlete.skinTemp.toFixed(1)}°C` },
+                { label: "SpO₂",               value: athlete.spo2 != null ? `${athlete.spo2}%` : "N/A" },
+                { label: "Resp rate",          value: na(athlete.respirationRate, n => `${n} rpm`) },
+                { label: "Skin temp Δ",        value: athlete.skinTemp != null ? `${athlete.skinTemp > 0 ? "+" : ""}${athlete.skinTemp.toFixed(1)}°C` : "N/A" },
               ],
             },
             {
               title: "Performance baseline",
               rows: [
-                { label: "FTP",       value: `${athlete.ftp}w` },
-                { label: "VO2 max",   value: `${athlete.vo2Max} ml/kg/min` },
-                { label: "Power max", value: `${athlete.powerMax}w` },
-                { label: "TSS",       value: `${athlete.tss}` },
-                { label: "ATL",       value: `${athlete.atl}` },
-                { label: "CTL",       value: `${athlete.ctl}` },
-                { label: "TSB",       value: formatSignedNumber(athlete.tsb) },
+                { label: "FTP",       value: athlete.ftp != null ? `${athlete.ftp}w` : "N/A" },
+                { label: "VO2 max",   value: athlete.vo2Max != null ? `${athlete.vo2Max} ml/kg/min` : "N/A" },
+                { label: "Power max", value: athlete.powerMax != null ? `${athlete.powerMax}w` : "N/A" },
+                { label: "TSS",       value: athlete.tss != null ? String(athlete.tss) : "N/A" },
+                { label: "ATL",       value: athlete.atl != null ? String(athlete.atl) : "N/A" },
+                { label: "CTL",       value: athlete.ctl != null ? String(athlete.ctl) : "N/A" },
+                { label: "TSB",       value: athlete.tsb != null ? formatSignedNumber(athlete.tsb) : "N/A" },
               ],
             },
           ].map(section => (
