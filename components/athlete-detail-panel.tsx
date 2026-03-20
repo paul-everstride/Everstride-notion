@@ -200,6 +200,7 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
   const [dayOffset,   setDayOffset]   = useState(0);
   const [timeframe,   setTimeframe]   = useState<TF>("30d");
   const [recTf,       setRecTf]       = useState<RecTF>("all");
+  const [recTablePage, setRecTablePage] = useState(0);
   const [customStart, setCustomStart] = useState(thirtyAgo);
   const [customEnd,   setCustomEnd]   = useState(todayStr);
 
@@ -342,6 +343,28 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
     if (n <= 180) return 13;
     return 20;
   }, [filteredRecHistory.length]);
+
+  // ── Year boundary markers for the recovery chart ──
+  const yearMarkers = useMemo(() => {
+    const markers: { xLabel: string; year: number }[] = [];
+    for (let i = 1; i < filteredRecHistory.length; i++) {
+      const prevYear = parseInt(filteredRecHistory[i - 1].date.slice(0, 4));
+      const currYear = parseInt(filteredRecHistory[i].date.slice(0, 4));
+      if (currYear > prevYear) {
+        markers.push({ xLabel: filteredRecHistory[i].shortLabel, year: currYear });
+      }
+    }
+    return markers;
+  }, [filteredRecHistory]);
+
+  // ── Paginated table data (newest first, 30 per page) ──
+  const RECORDS_PER_PAGE = 30;
+  const reversedHistory  = useMemo(() => [...filteredRecHistory].reverse(), [filteredRecHistory]);
+  const totalPages       = Math.max(1, Math.ceil(reversedHistory.length / RECORDS_PER_PAGE));
+  const pagedHistory     = useMemo(
+    () => reversedHistory.slice(recTablePage * RECORDS_PER_PAGE, (recTablePage + 1) * RECORDS_PER_PAGE),
+    [reversedHistory, recTablePage]
+  );
 
   // ── Shared controls ──
   const TimeframeBar = () => (
@@ -572,7 +595,7 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
               <span className="text-sm font-medium text-ink">Daily Recovery Score</span>
               <div className="inline-flex items-center bg-surfaceStrong rounded-md p-0.5 gap-0.5">
                 {(["7d","30d","90d","365d","all"] as RecTF[]).map(tf => (
-                  <button key={tf} type="button" onClick={() => setRecTf(tf)}
+                  <button key={tf} type="button" onClick={() => { setRecTf(tf); setRecTablePage(0); }}
                     className={cn(
                       "px-2.5 py-1 text-xs rounded-[5px] transition-colors duration-100 font-medium",
                       recTf === tf ? "bg-canvas text-ink shadow-sm" : "text-muted hover:text-ink"
@@ -593,9 +616,20 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
                   margin={{ top: 4, right: 10, left: 0, bottom: 0 }}
                 >
                   <defs>
-                    <linearGradient id="rec-hist-grad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%"   stopColor="#e16b2b" stopOpacity={0.15} />
-                      <stop offset="100%" stopColor="#e16b2b" stopOpacity={0.01} />
+                    {/* Fill gradient — subtle background shading */}
+                    <linearGradient id="rec-hist-fill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%"   stopColor="#6366f1" stopOpacity={0.08} />
+                      <stop offset="100%" stopColor="#6366f1" stopOpacity={0.01} />
+                    </linearGradient>
+                    {/* Stroke gradient — green (top/high) → yellow (mid) → red (bottom/low)
+                        Y domain is 0–100; y=67 is 33% from top, y=33 is 67% from top */}
+                    <linearGradient id="rec-stroke-grad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%"   stopColor="#059669" />
+                      <stop offset="33%"  stopColor="#059669" />
+                      <stop offset="50%"  stopColor="#d97706" />
+                      <stop offset="67%"  stopColor="#d97706" />
+                      <stop offset="78%"  stopColor="#dc2626" />
+                      <stop offset="100%" stopColor="#dc2626" />
                     </linearGradient>
                   </defs>
                   <CartesianGrid vertical={false} stroke="#e9e9e7" />
@@ -615,8 +649,21 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
                     tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }}
                     width={36}
                   />
+                  {/* Zone threshold lines */}
                   <ReferenceLine y={67} stroke="#059669" strokeOpacity={0.25} strokeDasharray="4 3" strokeWidth={1} />
                   <ReferenceLine y={33} stroke="#dc2626" strokeOpacity={0.25} strokeDasharray="4 3" strokeWidth={1} />
+                  {/* Year boundary markers */}
+                  {yearMarkers.map(m => (
+                    <ReferenceLine
+                      key={m.year}
+                      x={m.xLabel}
+                      stroke="#9b9a97"
+                      strokeOpacity={0.5}
+                      strokeDasharray="3 3"
+                      strokeWidth={1}
+                      label={{ value: String(m.year), position: "insideTopRight", fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }}
+                    />
+                  ))}
                   <Tooltip
                     contentStyle={TS}
                     labelStyle={TL}
@@ -628,11 +675,11 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
                   <Area
                     type="monotone"
                     dataKey="recoveryScore"
-                    stroke="#e16b2b"
-                    strokeWidth={1.5}
-                    fill="url(#rec-hist-grad)"
+                    stroke="url(#rec-stroke-grad)"
+                    strokeWidth={2}
+                    fill="url(#rec-hist-fill)"
                     dot={false}
-                    activeDot={{ r: 3, fill: "#e16b2b", stroke: "#ffffff", strokeWidth: 1.5 }}
+                    activeDot={{ r: 3, fill: "#6366f1", stroke: "#ffffff", strokeWidth: 1.5 }}
                     connectNulls
                   />
                 </AreaChart>
@@ -640,13 +687,20 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
             </div>
           </div>
 
-          {/* Daily breakdown table */}
+          {/* Daily breakdown table — paginated, 30 records per page, newest first */}
           <div>
-            <h3 className="text-sm font-semibold text-ink mb-3">Daily Breakdown</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-ink">Daily Breakdown</h3>
+              {reversedHistory.length > 0 && (
+                <span className="text-xs text-muted">
+                  {recTablePage * RECORDS_PER_PAGE + 1}–{Math.min((recTablePage + 1) * RECORDS_PER_PAGE, reversedHistory.length)} of {reversedHistory.length} days
+                </span>
+              )}
+            </div>
             <div className="border border-line rounded-lg overflow-hidden">
-              <div className="overflow-x-auto" style={{ maxHeight: 480, overflowY: "auto" }}>
+              <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-line text-sm">
-                  <thead className="bg-surface" style={{ position: "sticky", top: 0, zIndex: 1 }}>
+                  <thead className="bg-surface">
                     <tr>
                       {["Date","Recovery","HRV (ms)","Resting HR","SpO₂","Skin Temp"].map((h, i) => (
                         <th key={h}
@@ -657,7 +711,7 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line bg-canvas">
-                    {[...filteredRecHistory].reverse().map(day => {
+                    {pagedHistory.map(day => {
                       const tone = day.recoveryScore != null ? getRecoveryTone(day.recoveryScore) : null;
                       const recColor = tone === "success" ? "#059669" : tone === "warning" ? "#d97706" : tone === "danger" ? "#dc2626" : undefined;
                       return (
@@ -683,9 +737,59 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
                         </tr>
                       );
                     })}
+                    {pagedHistory.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted">No data for this period</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
+              {/* Pagination controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between border-t border-line px-4 py-2.5 bg-surface">
+                  <button
+                    type="button"
+                    onClick={() => setRecTablePage(p => Math.max(0, p - 1))}
+                    disabled={recTablePage === 0}
+                    className={cn(
+                      "px-3 py-1.5 text-xs font-medium rounded-md border border-line transition-colors",
+                      recTablePage === 0
+                        ? "text-muted opacity-40 cursor-not-allowed bg-canvas"
+                        : "text-ink bg-canvas hover:bg-surfaceStrong"
+                    )}>
+                    ‹ Previous
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i).map(i => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setRecTablePage(i)}
+                        className={cn(
+                          "w-7 h-7 text-xs rounded-md transition-colors",
+                          i === recTablePage
+                            ? "bg-ink text-canvas font-semibold"
+                            : "text-muted hover:text-ink hover:bg-surfaceStrong"
+                        )}>
+                        {i + 1}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRecTablePage(p => Math.min(totalPages - 1, p + 1))}
+                    disabled={recTablePage === totalPages - 1}
+                    className={cn(
+                      "px-3 py-1.5 text-xs font-medium rounded-md border border-line transition-colors",
+                      recTablePage === totalPages - 1
+                        ? "text-muted opacity-40 cursor-not-allowed bg-canvas"
+                        : "text-ink bg-canvas hover:bg-surfaceStrong"
+                    )}>
+                    Next ›
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
