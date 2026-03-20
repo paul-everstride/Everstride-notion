@@ -9,31 +9,53 @@ import {
   owGetRecovery,
   owGetSleep,
   owGetBody,
+  owGetTimeseries,
   type OWRecoverySummary,
   type OWSleepSummary,
   type OWBodySummary,
+  type OWTimeseriesPoint,
 } from "@/lib/ow-client";
 
 // ─── Trend helpers ─────────────────────────────────────────────────────────────
 
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const FLAT_TREND = DAY_LABELS.map((label) => ({ label, value: 0 }));
+const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-/** Build a 7-point trend from the last 7 items (items are newest-first).
- *  Returns null if every value in the items is null (meaning no data). */
-function trendFromItems<T>(
-  items: T[],
-  getValue: (item: T) => number | null,
-  fallback: number | null
+/** Convert "YYYY-MM-DD" → "1 Mar" */
+function dateLabel(dateStr: string): string {
+  const parts = dateStr.split("-");
+  return `${parseInt(parts[2])} ${MONTH_SHORT[parseInt(parts[1]) - 1]}`;
+}
+
+/**
+ * Build a trend array (oldest→newest) from the last N sleep items.
+ * Items are expected newest-first.
+ */
+function trendFromSleep(
+  items: OWSleepSummary[],
+  getValue: (item: OWSleepSummary) => number | null,
+  fallback: number | null,
+  n = 30
 ): TrendPoint[] {
-  const last7 = items.slice(0, 7).reverse();
-  if (last7.length === 0) {
-    return DAY_LABELS.map((label) => ({ label, value: fallback ?? 0 }));
-  }
-  return DAY_LABELS.map((label, i) => {
-    const item = last7[i] ?? last7[last7.length - 1];
-    return { label, value: getValue(item) ?? fallback ?? 0 };
-  });
+  const slice = items.slice(0, n).reverse(); // oldest first
+  return slice.map((item) => ({
+    label: dateLabel(item.date),
+    value: getValue(item) ?? fallback ?? 0,
+  }));
+}
+
+/**
+ * Build a trend array (oldest→newest) from timeseries points.
+ * Points are expected newest-first.
+ */
+function trendFromTS(
+  items: OWTimeseriesPoint[],
+  n = 30
+): TrendPoint[] {
+  const slice = items.slice(0, n).reverse(); // oldest first
+  return slice.map((item) => ({
+    label: dateLabel(item.date),
+    value: item.value,
+  }));
 }
 
 /** Capitalise the first letter of a name part */
@@ -52,46 +74,60 @@ function toAthleteSummary(
   createdAt: string,
   recovery: OWRecoverySummary[],
   sleep: OWSleepSummary[],
-  body: OWBodySummary | null
+  body: OWBodySummary | null,
+  timeseries: Record<string, OWTimeseriesPoint[]>
 ): AthleteSummary {
-  const latestRecovery = recovery[0] ?? null;
   const latestSleep = sleep[0] ?? null;
 
   const name =
     [capitalize(firstName), capitalize(lastName)].filter(Boolean).join(" ") ||
     "Unnamed Athlete";
 
-  // ── Core metrics — null when wearable does not provide them ───────────────
-  // Recovery score: only available when recovery endpoint works
-  const recoveryScore: number | null = latestRecovery?.recovery_score ?? null;
+  // ── Timeseries-sourced metrics (real WHOOP data) ───────────────────────────
+  const ts_recovery = timeseries["recovery_score"]                  ?? [];
+  const ts_rhr      = timeseries["resting_heart_rate"]              ?? [];
+  const ts_hrv      = timeseries["heart_rate_variability_sdnn"]     ?? [];
+  const ts_spo2     = timeseries["oxygen_saturation"]               ?? [];
+  const ts_resp     = timeseries["respiratory_rate"]                ?? [];
+  const ts_skin     = timeseries["skin_temperature"]                ?? [];
 
-  // HRV: WHOOP does not expose this in the sleep summary endpoint yet
-  const hrv: number | null =
-    latestRecovery?.avg_hrv_sdnn_ms ??
-    latestSleep?.avg_hrv_sdnn_ms ??
-    null;
+  const recoveryScore: number | null =
+    ts_recovery[0]?.value != null ? Math.round(ts_recovery[0].value) : null;
 
-  // Resting HR: WHOOP does not expose this in the sleep summary endpoint
   const restHr: number | null =
-    latestRecovery?.resting_heart_rate_bpm ??
-    latestSleep?.avg_heart_rate_bpm ??
-    null;
+    ts_rhr[0]?.value != null ? Math.round(ts_rhr[0].value) : null;
 
-  // SpO2 & respiration: not returned by WHOOP sleep summary
+  const hrv: number | null =
+    ts_hrv[0]?.value != null ? Math.round(ts_hrv[0].value * 10) / 10 : null;
+
   const spo2: number | null =
-    latestRecovery?.avg_spo2_percent ??
-    latestSleep?.avg_spo2_percent ??
-    null;
+    ts_spo2[0]?.value != null ? Math.round(ts_spo2[0].value * 10) / 10 : null;
 
-  const respirationRate: number | null = latestSleep?.avg_respiratory_rate ?? null;
+  const respirationRate: number | null =
+    ts_resp[0]?.value != null ? Math.round(ts_resp[0].value * 10) / 10 : null;
+
+  // Skin temp: show delta from the user's own 7-day rolling average
+  const skinTempRaw: number | null = ts_skin[0]?.value ?? null;
+  let skinTemp: number | null = null;
+  if (skinTempRaw != null) {
+    if (ts_skin.length >= 2) {
+      const baseline =
+        ts_skin.slice(0, Math.min(7, ts_skin.length)).reduce((s, p) => s + p.value, 0) /
+        Math.min(7, ts_skin.length);
+      skinTemp = Math.round((skinTempRaw - baseline) * 10) / 10;
+    } else {
+      skinTemp = 0; // only one reading; no baseline to compare against
+    }
+  }
 
   // ── Sleep metrics — real WHOOP data ───────────────────────────────────────
-  const sleepEfficiency = latestSleep?.efficiency_percent ?? latestRecovery?.sleep_efficiency_percent ?? 0;
+  const sleepEfficiency = latestSleep?.efficiency_percent ?? 0;
   const durationMinutes = latestSleep?.duration_minutes ?? 0;
   const sleepDurationScore = Math.min(100, Math.round((durationMinutes / 480) * 100));
-  const sleepScore = sleepEfficiency > 0
-    ? Math.round((sleepEfficiency + sleepDurationScore) / 2)
-    : sleepDurationScore;
+  const sleepScore =
+    sleepEfficiency > 0
+      ? Math.round((sleepEfficiency + sleepDurationScore) / 2)
+      : sleepDurationScore;
   const sleepConsistency = Math.min(100, Math.round(sleepScore * 0.95));
 
   // Sleep stages (OW stores minutes → milliseconds)
@@ -106,11 +142,8 @@ function toAthleteSummary(
   const weightKg = body?.slow_changing.weight_kg ?? 70;
   const heightCm = body?.slow_changing.height_cm ?? null;
   const age: number | null = body?.slow_changing.age ?? null;
-  const skinTempRaw = body?.latest.skin_temperature_celsius ?? null;
-  const skinTemp: number | null =
-    skinTempRaw != null ? Math.round((skinTempRaw - 36.5) * 10) / 10 : null;
 
-  // ── Performance metrics — null (require power meter / recovery data) ───────
+  // ── Performance metrics — null (require power meter) ──────────────────────
   const tss: number | null = null;
   const atl: number | null = null;
   const ctl: number | null = null;
@@ -119,23 +152,29 @@ function toAthleteSummary(
   const ftp: number | null = null;
   const powerMax: number | null = null;
 
-  // ── 7-day trends from real data ───────────────────────────────────────────
-  const readinessTrend = trendFromItems(recovery, (r) => r.recovery_score, recoveryScore);
-  const hrvTrend = trendFromItems(recovery, (r) => r.avg_hrv_sdnn_ms, hrv);
-  const rhrTrend = trendFromItems(recovery, (r) => r.resting_heart_rate_bpm, restHr);
-  const sleepTrend = trendFromItems(sleep, (s) => s.efficiency_percent, sleepScore);
-  const sleepEfficiencyTrend = trendFromItems(sleep, (s) => s.efficiency_percent, sleepEfficiency);
+  // ── 30-day trend data from real data (oldest→newest) ─────────────────────
+  const readinessTrend     = trendFromTS(ts_recovery, 30);
+  const rhrTrend           = trendFromTS(ts_rhr, 30);
+  const hrvTrend           = trendFromTS(ts_hrv, 30);
+  const sleepEfficiencyTrend = trendFromSleep(sleep, (s) => s.efficiency_percent, sleepEfficiency, 30);
+  const sleepTrend = trendFromSleep(sleep, (s) => {
+    const eff = s.efficiency_percent ?? 0;
+    const dur = s.duration_minutes ?? 0;
+    const durScore = Math.min(100, Math.round((dur / 480) * 100));
+    return eff > 0 ? Math.round((eff + durScore) / 2) : durScore;
+  }, sleepScore, 30);
 
-  const tssTrend = FLAT_TREND;
-  const atlTrend = FLAT_TREND;
-  const ctlTrend = FLAT_TREND;
-  const tsbTrend = FLAT_TREND;
-  const powerTrend = FLAT_TREND;
-  const ftpTrend = FLAT_TREND;
-  const vo2MaxTrend = FLAT_TREND;
+  // Performance trends — flat/empty until power meter data arrives
+  const tssTrend: TrendPoint[]    = [];
+  const atlTrend: TrendPoint[]    = [];
+  const ctlTrend: TrendPoint[]    = [];
+  const tsbTrend: TrendPoint[]    = [];
+  const powerTrend: TrendPoint[]  = [];
+  const ftpTrend: TrendPoint[]    = [];
+  const vo2MaxTrend: TrendPoint[] = [];
 
   const creationDate =
-    latestRecovery?.date ?? latestSleep?.date ?? createdAt.split("T")[0];
+    ts_recovery[0]?.date ?? latestSleep?.date ?? createdAt.split("T")[0];
 
   const statusNote =
     recoveryScore == null
@@ -217,12 +256,13 @@ export async function getDashboardData(): Promise<DashboardData> {
       await Promise.all(
         users.map(async (user) => {
           try {
-            const [recovery, sleep, body] = await Promise.all([
+            const [recovery, sleep, body, timeseries] = await Promise.all([
               owGetRecovery(user.id),
               owGetSleep(user.id),
               owGetBody(user.id),
+              owGetTimeseries(user.id, 90),
             ]);
-            if (!recovery.length && !sleep.length) return null;
+            if (!sleep.length && !Object.keys(timeseries).length) return null;
             return toAthleteSummary(
               user.id,
               user.first_name,
@@ -231,7 +271,8 @@ export async function getDashboardData(): Promise<DashboardData> {
               user.created_at,
               recovery,
               sleep,
-              body
+              body,
+              timeseries
             );
           } catch {
             return null;
@@ -245,7 +286,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     if (!athletes.length) return emptyDashboard;
 
     const withRecovery = athletes.filter((a) => a.recoveryScore != null);
-    const withHrv = athletes.filter((a) => a.hrv != null);
+    const withHrv      = athletes.filter((a) => a.hrv != null);
 
     return {
       athletes,

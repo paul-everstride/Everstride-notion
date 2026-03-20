@@ -51,42 +51,48 @@ function genTsbTrend(seed: number, center: number, labels: string[], swing = 12)
 const MS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const MN = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 
-function getTimeframeInfo(tf: string, cStart: string, cEnd: string): { labels: string[]; seed: string } {
+/**
+ * Returns evenly-spaced date labels (always full, never empty) + the
+ * XAxis `interval` that keeps the axis readable without losing tooltip dates.
+ */
+function getTimeframeInfo(
+  tf: string, cStart: string, cEnd: string
+): { labels: string[]; tickInterval: number; seed: string } {
   const now = new Date();
   if (tf === "7d") {
     const labels = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(now); d.setDate(now.getDate() - 6 + i);
       return `${d.getDate()} ${MS[d.getMonth()]}`;
     });
-    return { labels, seed: "7d" };
+    return { labels, tickInterval: 0, seed: "7d" };
   }
   if (tf === "30d") {
     const labels = Array.from({ length: 30 }, (_, i) => {
       const d = new Date(now); d.setDate(now.getDate() - 29 + i);
-      return (i % 7 === 0 || i === 29) ? `${d.getDate()} ${MS[d.getMonth()]}` : "";
+      return `${d.getDate()} ${MS[d.getMonth()]}`;
     });
-    return { labels, seed: "30d" };
+    return { labels, tickInterval: 6, seed: "30d" };
   }
   if (tf === "3m") {
     const labels = Array.from({ length: 13 }, (_, i) => {
       const d = new Date(now); d.setDate(now.getDate() - 12 * 7 + i * 7);
       return `${d.getDate()} ${MS[d.getMonth()]}`;
     });
-    return { labels, seed: "3m" };
+    return { labels, tickInterval: 1, seed: "3m" };
   }
   if (tf === "6m") {
     const labels = Array.from({ length: 26 }, (_, i) => {
       const d = new Date(now); d.setDate(now.getDate() - 25 * 7 + i * 7);
-      return i % 2 === 0 ? `${d.getDate()} ${MS[d.getMonth()]}` : "";
+      return `${d.getDate()} ${MS[d.getMonth()]}`;
     });
-    return { labels, seed: "6m" };
+    return { labels, tickInterval: 3, seed: "6m" };
   }
   if (tf === "1y") {
     const labels = Array.from({ length: 12 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
       return MS[d.getMonth()];
     });
-    return { labels, seed: "1y" };
+    return { labels, tickInterval: 0, seed: "1y" };
   }
   // custom
   const start = new Date(cStart), end = new Date(cEnd);
@@ -98,7 +104,7 @@ function getTimeframeInfo(tf: string, cStart: string, cEnd: string): { labels: s
     const d = new Date(start); d.setDate(d.getDate() + i * step);
     if (d <= end) labels.push(`${d.getDate()} ${MS[d.getMonth()]}`);
   }
-  return { labels, seed: `${cStart}${cEnd}` };
+  return { labels, tickInterval: Math.max(0, Math.floor(pts / 6)), seed: `${cStart}${cEnd}` };
 }
 
 // ── Chart helpers ────────────────────────────────────────────────────────────
@@ -130,7 +136,9 @@ function MetricPill({ label, value, sub, accent }: { label: string; value: strin
   );
 }
 
-function SectionChart({ title, data, color, height = 200, sub }: { title: string; data: TrendPoint[]; color: string; height?: number; sub?: string }) {
+function SectionChart({ title, data, color, height = 200, sub, tickInterval = 0 }: {
+  title: string; data: TrendPoint[]; color: string; height?: number; sub?: string; tickInterval?: number;
+}) {
   const dm = domain(data);
   const avg = data.length ? data.reduce((s, d) => s + d.value, 0) / data.length : 0;
   const latest = data[data.length - 1]?.value ?? 0;
@@ -158,7 +166,13 @@ function SectionChart({ title, data, color, height = 200, sub }: { title: string
               </linearGradient>
             </defs>
             <CartesianGrid vertical={false} stroke="#e9e9e7" />
-            <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }} />
+            <XAxis
+              dataKey="label"
+              interval={tickInterval}
+              tickLine={false}
+              axisLine={false}
+              tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }}
+            />
             <YAxis domain={dm} tickFormatter={tfmt} tickCount={4} tickLine={false} axisLine={false} tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }} width={32} />
             <ReferenceLine y={avg} stroke={color} strokeOpacity={0.2} strokeDasharray="4 3" strokeWidth={1} />
             <Tooltip contentStyle={TS} labelStyle={TL} formatter={(v: number) => [tfmt(v), ""]} />
@@ -197,17 +211,26 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
 
   // ── Trend data for current timeframe ──
   const trendData = useMemo(() => {
-    const { labels, seed } = getTimeframeInfo(timeframe, customStart, customEnd);
+    const { labels, tickInterval, seed } = getTimeframeInfo(timeframe, customStart, customEnd);
     const g = (base: number | null, key: string, v = 0.08) =>
       base != null ? genTrend(strHash(athlete.id + key + seed), base, labels, v) : null;
+
+    // For 7d and 30d use real stored trend data (real dates + real values).
+    // For longer timeframes we fall back to genTrend (synthetic values, real date labels).
+    const n = timeframe === "7d" ? 7 : 30;
+    const useReal = timeframe === "7d" || timeframe === "30d";
+    /** Pick last n points of a real trend (oldest→newest), or fall back to genTrend */
+    const real = (trend: TrendPoint[], base: number | null, key: string, v = 0.08) =>
+      useReal && trend.length ? trend.slice(-n) : g(base, key, v);
+
     return {
-      labels,
-      recovery: g(athlete.recoveryScore, "rec",    0.07),
-      sleep:    g(athlete.sleepScore,    "slp",    0.07),
-      hrv:      g(athlete.hrv,           "hrv",    0.09),
-      rhr:      g(athlete.restHr,        "rhr",    0.05),
-      spo2:     g(athlete.spo2,          "spo2",   0.02),
-      sleepEff: g(athlete.sleepEfficiency,"slpeff",0.06),
+      tickInterval,
+      recovery: real(athlete.readinessTrend,       athlete.recoveryScore,    "rec",    0.07),
+      sleep:    real(athlete.sleepTrend,            athlete.sleepScore,       "slp",    0.07),
+      hrv:      real(athlete.hrvTrend,              athlete.hrv,              "hrv",    0.09),
+      rhr:      real(athlete.rhrTrend,              athlete.restHr,           "rhr",    0.05),
+      spo2:     g(athlete.spo2,  "spo2",  0.02),
+      sleepEff: real(athlete.sleepEfficiencyTrend,  athlete.sleepEfficiency,  "slpeff", 0.06),
       ftp:      g(athlete.ftp,           "ftp",    0.06),
       vo2:      g(athlete.vo2Max,        "vo2",    0.05),
       power:    g(athlete.powerMax,      "power",  0.08),
@@ -219,7 +242,19 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
   }, [athlete, timeframe, customStart, customEnd]);
 
   // ── Daily snapshot values ──
+  // For dayOffset=0 (today) use the latest real values directly.
+  // For past days, use the deterministic synthetic variation (no real historical lookup yet).
   const dayVals = useMemo(() => {
+    if (dayOffset === 0) {
+      return {
+        recovery: athlete.recoveryScore,
+        hrv:      athlete.hrv,
+        sleep:    athlete.sleepScore,
+        rhr:      athlete.restHr,
+        spo2:     athlete.spo2,
+        resp:     athlete.respirationRate,
+      };
+    }
     const d = new Date(); d.setDate(d.getDate() + dayOffset);
     const s = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
     const val = (base: number | null, key: string): number | null => {
@@ -404,24 +439,24 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
           {/* Trends */}
           <SectionHeader title="Readiness trends" sub="Historical view" controls={<TimeframeBar />} />
           <div className="grid gap-4 lg:grid-cols-2">
-            {trendData.recovery && <SectionChart title="Recovery score"   data={trendData.recovery} color="#e16b2b" />}
-            {trendData.sleep    && <SectionChart title="Sleep score"      data={trendData.sleep}    color="#3b82f6" />}
+            {trendData.recovery && <SectionChart title="Recovery score"  data={trendData.recovery} color="#e16b2b" tickInterval={trendData.tickInterval} />}
+            {trendData.sleep    && <SectionChart title="Sleep score"     data={trendData.sleep}    color="#3b82f6" tickInterval={trendData.tickInterval} />}
             {trendData.hrv ? (
-              <SectionChart title="HRV" data={trendData.hrv} color="#059669" sub="ms" />
+              <SectionChart title="HRV" data={trendData.hrv} color="#059669" sub="ms" tickInterval={trendData.tickInterval} />
             ) : (
               <div className="border border-line rounded-lg bg-canvas px-4 py-6 flex items-center justify-center">
-                <p className="text-sm text-muted">N/A — HRV data not yet available from this device</p>
+                <p className="text-sm text-muted">HRV data not available from this device</p>
               </div>
             )}
             {trendData.rhr ? (
-              <SectionChart title="Resting HR" data={trendData.rhr} color="#d97706" sub="bpm" />
+              <SectionChart title="Resting HR" data={trendData.rhr} color="#d97706" sub="bpm" tickInterval={trendData.tickInterval} />
             ) : (
               <div className="border border-line rounded-lg bg-canvas px-4 py-6 flex items-center justify-center">
-                <p className="text-sm text-muted">N/A — Resting HR data not yet available from this device</p>
+                <p className="text-sm text-muted">Resting HR data not available from this device</p>
               </div>
             )}
-            {trendData.spo2     && <SectionChart title="SpO₂"             data={trendData.spo2}     color="#8b5cf6" sub="%" />}
-            {trendData.sleepEff && <SectionChart title="Sleep efficiency"  data={trendData.sleepEff} color="#06b6d4" sub="%" />}
+            {trendData.spo2     && <SectionChart title="SpO₂"            data={trendData.spo2}     color="#8b5cf6" sub="%" tickInterval={trendData.tickInterval} />}
+            {trendData.sleepEff && <SectionChart title="Sleep efficiency" data={trendData.sleepEff} color="#06b6d4" sub="%" tickInterval={trendData.tickInterval} />}
           </div>
         </div>
       )}

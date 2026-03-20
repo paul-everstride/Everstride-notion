@@ -76,10 +76,14 @@ interface PaginatedUsers {
 
 // ─── Fetch helper ──────────────────────────────────────────────────────────────
 
-async function owFetch<T>(path: string, params: Record<string, string> = {}): Promise<T> {
+async function owFetch<T>(path: string, params: Record<string, string | string[]> = {}): Promise<T> {
   const url = new URL(`${OW_API_URL}${path}`);
   for (const [key, value] of Object.entries(params)) {
-    url.searchParams.set(key, value);
+    if (Array.isArray(value)) {
+      for (const v of value) url.searchParams.append(key, v);
+    } else {
+      url.searchParams.set(key, value);
+    }
   }
 
   const res = await fetch(url.toString(), {
@@ -171,5 +175,85 @@ export async function owGetBody(userId: string): Promise<OWBodySummary | null> {
     return await owFetch<OWBodySummary>(`/api/v1/users/${userId}/summaries/body`);
   } catch {
     return null;
+  }
+}
+
+// ─── Timeseries ────────────────────────────────────────────────────────────────
+
+export interface OWTimeseriesPoint {
+  date: string;   // YYYY-MM-DD (derived from timestamp)
+  value: number;
+  type: string;
+}
+
+/** The recovery-related timeseries types we fetch from WHOOP. */
+const RECOVERY_TIMESERIES_TYPES = [
+  "recovery_score",
+  "resting_heart_rate",
+  "heart_rate_variability_sdnn",
+  "oxygen_saturation",
+  "respiratory_rate",
+  "skin_temperature",
+] as const;
+
+interface RawTSPoint {
+  timestamp: string;
+  type: string;
+  value: number;
+  unit: string;
+}
+
+/**
+ * Fetch timeseries data (recovery/HRV/RHR/SpO2/etc.) for the last N days.
+ * Returns a map of type → points sorted newest-first.
+ * Returns {} on error so callers always get a safe value.
+ */
+export async function owGetTimeseries(
+  userId: string,
+  days = 90
+): Promise<Record<string, OWTimeseriesPoint[]>> {
+  try {
+    const endTime = new Date();
+    const startTime = new Date();
+    startTime.setDate(startTime.getDate() - days);
+
+    const allSamples: RawTSPoint[] = [];
+    let cursor: string | null = null;
+
+    do {
+      const params: Record<string, string | string[]> = {
+        start_time: startTime.toISOString(),
+        end_time:   endTime.toISOString(),
+        types:      [...RECOVERY_TIMESERIES_TYPES],
+        limit:      "100",
+      };
+      if (cursor) params.cursor = cursor;
+
+      const page = await owFetch<PaginatedOWResponse<RawTSPoint>>(
+        `/api/v1/users/${userId}/timeseries`,
+        params
+      );
+      allSamples.push(...(page.data ?? []));
+      cursor = page.pagination.has_more ? page.pagination.next_cursor : null;
+    } while (cursor);
+
+    // Group by type → by date. Multiple readings per day → take the last one seen.
+    const byTypeDate: Record<string, Record<string, number>> = {};
+    for (const s of allSamples) {
+      const date = s.timestamp.split("T")[0];
+      if (!byTypeDate[s.type]) byTypeDate[s.type] = {};
+      byTypeDate[s.type][date] = s.value;
+    }
+
+    // Convert to sorted arrays (newest first)
+    const result: Record<string, OWTimeseriesPoint[]> = {};
+    for (const [type, byDate] of Object.entries(byTypeDate)) {
+      result[type] = Object.entries(byDate)
+        .map(([date, value]) => ({ date, value, type }))
+        .sort((a, b) => b.date.localeCompare(a.date));
+    }
+    return result;
+  } catch {
+    return {};
   }
 }
