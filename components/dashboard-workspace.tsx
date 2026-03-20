@@ -77,17 +77,21 @@ function StatDonut({ pct, color, value, label }: { pct: number; color: string; v
 function StatGradientLine({
   values, avg, min, max, label, unit, avgLabel
 }: {
-  values: number[]; avg: number; min: number; max: number;
+  values: number[]; avg: number | null; min: number; max: number;
   label: string; unit: string; avgLabel?: string;
 }) {
   const W = 120, trackY = 10, trackH = 2;
   const toX = (v: number) => ((Math.min(Math.max(v, min), max) - min) / (max - min)) * W;
   const gradId = `sg-${label.replace(/\s/g, "")}`;
+  const hasData = avg != null && values.length > 0;
   return (
     <div className="flex items-center gap-3 px-3 py-1.5 border-r border-line last:border-r-0 flex-1 min-w-0">
       <div>
         <p className="text-[10px] text-muted leading-none mb-0.5 uppercase tracking-wide whitespace-nowrap">{label}</p>
-        <p className="text-xs font-semibold text-ink tabular">{avg}<span className="text-[10px] text-muted font-normal ml-0.5">{unit}</span></p>
+        {hasData
+          ? <p className="text-xs font-semibold text-ink tabular">{avg}<span className="text-[10px] text-muted font-normal ml-0.5">{unit}</span></p>
+          : <p className="text-xs font-semibold text-muted tabular">N/A</p>
+        }
         {avgLabel && <p className="text-[10px] text-muted leading-none mt-0.5">{avgLabel}</p>}
       </div>
       <div className="flex-1 min-w-[80px]">
@@ -101,16 +105,16 @@ function StatGradientLine({
           </defs>
           {/* track */}
           <rect x="0" y={trackY} width={W} height={trackH} rx="1" fill="#e9e9e7" />
-          <rect x="0" y={trackY} width={W} height={trackH} rx="1" fill={`url(#${gradId})`} opacity="0.5" />
+          {hasData && <rect x="0" y={trackY} width={W} height={trackH} rx="1" fill={`url(#${gradId})`} opacity="0.5" />}
           {/* athlete ticks */}
-          {values.map((v, i) => {
+          {hasData && values.map((v, i) => {
             const x = toX(v);
             return <line key={i} x1={x} y1={trackY - 3} x2={x} y2={trackY + trackH + 1}
               stroke="#9b9a97" strokeWidth="1" strokeLinecap="round" opacity="0.55" />;
           })}
           {/* avg marker */}
-          {(() => {
-            const mx = toX(avg);
+          {hasData && (() => {
+            const mx = toX(avg as number);
             return (
               <g>
                 <line x1={mx} y1={trackY - 5} x2={mx} y2={trackY + trackH + 3} stroke="#37352f" strokeWidth="1.5" strokeLinecap="round" />

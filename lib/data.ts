@@ -260,7 +260,7 @@ export async function getDashboardData(): Promise<DashboardData> {
               owGetRecovery(user.id),
               owGetSleep(user.id),
               owGetBody(user.id),
-              owGetTimeseries(user.id, 90),
+              owGetTimeseries(user.id),
             ]);
             if (!sleep.length && !Object.keys(timeseries).length) return null;
             return toAthleteSummary(

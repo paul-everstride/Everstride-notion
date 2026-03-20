@@ -149,7 +149,8 @@ export async function owGetRecovery(userId: string, days = 730): Promise<OWRecov
 }
 
 /**
- * Fetch sleep summaries for a user over the last N days.
+ * Fetch ALL sleep summaries for a user over the last N days.
+ * Paginates through all pages so we always get the most recent records.
  * Returns items sorted newest first.
  */
 export async function owGetSleep(userId: string, days = 730): Promise<OWSleepSummary[]> {
@@ -157,16 +158,26 @@ export async function owGetSleep(userId: string, days = 730): Promise<OWSleepSum
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
 
-  const data = await owFetch<PaginatedOWResponse<OWSleepSummary>>(
-    `/api/v1/users/${userId}/summaries/sleep`,
-    {
-      start_date: startDate.toISOString().split("T")[0],
-      end_date: endDate.toISOString().split("T")[0],
-      limit: "100",
-    }
-  );
+  const allRecords: OWSleepSummary[] = [];
+  let cursor: string | null = null;
 
-  return (data.data ?? []).sort((a, b) => b.date.localeCompare(a.date));
+  do {
+    const params: Record<string, string | string[]> = {
+      start_date: startDate.toISOString().split("T")[0],
+      end_date:   endDate.toISOString().split("T")[0],
+      limit:      "100",
+    };
+    if (cursor) params.cursor = cursor;
+
+    const data = await owFetch<PaginatedOWResponse<OWSleepSummary>>(
+      `/api/v1/users/${userId}/summaries/sleep`,
+      params
+    );
+    allRecords.push(...(data.data ?? []));
+    cursor = data.pagination.has_more ? data.pagination.next_cursor : null;
+  } while (cursor);
+
+  return allRecords.sort((a, b) => b.date.localeCompare(a.date));
 }
 
 /** Fetch body summary for a user (most recent values). */
@@ -205,12 +216,13 @@ interface RawTSPoint {
 
 /**
  * Fetch timeseries data (recovery/HRV/RHR/SpO2/etc.) for the last N days.
- * Returns a map of type → points sorted newest-first.
+ * Uses 500 days by default so data is captured even if syncing stopped months ago.
+ * Paginates through all pages. Returns a map of type → points sorted newest-first.
  * Returns {} on error so callers always get a safe value.
  */
 export async function owGetTimeseries(
   userId: string,
-  days = 90
+  days = 500
 ): Promise<Record<string, OWTimeseriesPoint[]>> {
   try {
     const endTime = new Date();
