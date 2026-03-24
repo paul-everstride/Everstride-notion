@@ -448,6 +448,14 @@ function CompareChart({
 }) {
   const data   = useMemo(() => mergeSeries(athletes, metric, timeframe), [athletes, metric, timeframe]);
   const domain = useMemo(() => chartDomain(data), [data]);
+  const isYear = timeframe.startsWith("year");
+
+  const athleteAvgs = useMemo(() => athletes.map(a => {
+    const s = metric.getSeries(a, timeframe);
+    if (!s.length) return null;
+    const avg = s.reduce((sum, p) => sum + p.value, 0) / s.length;
+    return Math.round(avg * 10) / 10;
+  }), [athletes, metric, timeframe]);
 
   return (
     <div className="border border-line bg-canvas rounded-lg flex flex-col overflow-hidden">
@@ -463,13 +471,19 @@ function CompareChart({
       <div className="flex border-b border-line" style={{ borderBottomColor: "#e9e9e7" }}>
         {athletes.map((athlete, i) => {
           const color = athleteColors[i % athleteColors.length];
+          const avg = athleteAvgs[i];
           return (
             <div key={athlete.id} className="flex-1 flex flex-col gap-1 px-3 py-2.5 border-r border-line last:border-r-0">
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
                 <span className="text-xs text-muted">{athlete.name.split(" ")[0]}</span>
               </div>
-              <span className="text-sm font-semibold tabular text-ink">{metric.renderCurrent(athlete)}</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-sm font-semibold tabular text-ink">
+                  {avg != null ? `${tickFmt(avg)}${metric.unit ? ` ${metric.unit}` : ""}` : "–"}
+                </span>
+                {avg != null && <span className="text-[10px] text-muted">avg</span>}
+              </div>
             </div>
           );
         })}
@@ -500,9 +514,10 @@ function CompareChart({
                     }
                   }
                 }
+                if (isYear) return `${label} (monthly avg)`;
                 return label;
               }}
-              formatter={(v: number, name: string) => [tickFmt(v), name]} />
+              formatter={(v: number, name: string) => [`${tickFmt(v)}${metric.unit ? ` ${metric.unit}` : ""}`, name]} />
             {athletes.map((athlete, i) => {
               const stroke = athleteColors[i % athleteColors.length];
               return <Line key={athlete.id} type="monotone" dataKey={athlete.name} stroke={stroke} strokeWidth={1.5}
@@ -825,17 +840,23 @@ function MetricDetailPanel({
           </div>
         </div>
         <div className="lg:col-span-3 p-4">
-          <p className="text-[10px] tracking-widest uppercase text-muted mb-3">Current Values</p>
+          <p className="text-[10px] tracking-widest uppercase text-muted mb-3">Period avg</p>
           <div className="space-y-2">
-            {athletes.map((a, i) => (
-              <div key={a.id} className="flex items-center justify-between gap-2 border-b border-line pb-2">
-                <div className="inline-flex items-center gap-1.5">
-                  <span className="block h-1.5 w-1.5 shrink-0" style={{ backgroundColor: athleteColors[i % athleteColors.length] }} />
-                  <span className="text-[11px] text-ink">{a.name.split(" ")[0]}</span>
+            {athletes.map((a, i) => {
+              const s = metric.getSeries(a, timeframe);
+              const avg = s.length ? Math.round((s.reduce((sum, p) => sum + p.value, 0) / s.length) * 10) / 10 : null;
+              return (
+                <div key={a.id} className="flex items-center justify-between gap-2 border-b border-line pb-2">
+                  <div className="inline-flex items-center gap-1.5">
+                    <span className="block h-1.5 w-1.5 shrink-0" style={{ backgroundColor: athleteColors[i % athleteColors.length] }} />
+                    <span className="text-[11px] text-ink">{a.name.split(" ")[0]}</span>
+                  </div>
+                  <span className="text-[11px] tabular text-muted">
+                    {avg != null ? `${tickFmt(avg)}${metric.unit ? ` ${metric.unit}` : ""}` : "–"}
+                  </span>
                 </div>
-                <span className="text-[11px] tabular text-muted">{metric.renderCurrent(a)}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
