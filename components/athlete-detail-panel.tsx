@@ -196,21 +196,27 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
   const todayStr   = new Date().toISOString().slice(0, 10);
   const thirtyAgo  = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 
-  const [tab,         setTab]         = useState<Tab>("readiness");
-  const [dayOffset,   setDayOffset]   = useState(0);
-  const [timeframe,   setTimeframe]   = useState<TF>("30d");
-  const [recTf,       setRecTf]       = useState<RecTF>("all");
-  const [recTablePage, setRecTablePage] = useState(0);
-  const [customStart, setCustomStart] = useState(thirtyAgo);
-  const [customEnd,   setCustomEnd]   = useState(todayStr);
+  // Default to the most recent date that actually has data, not today
+  const latestDataDate = athlete.recoveryHistory.length
+    ? athlete.recoveryHistory[athlete.recoveryHistory.length - 1].date
+    : todayStr;
 
-  // ── Day label ──
+  const [tab,          setTab]          = useState<Tab>("readiness");
+  const [selectedDate, setSelectedDate] = useState<string>(latestDataDate);
+  const [timeframe,    setTimeframe]    = useState<TF>("30d");
+  const [recTf,        setRecTf]        = useState<RecTF>("all");
+  const [recTablePage, setRecTablePage] = useState(0);
+  const [customStart,  setCustomStart]  = useState(thirtyAgo);
+  const [customEnd,    setCustomEnd]    = useState(todayStr);
+
+  // ── Day label — shows actual date; "Today" only when it really is today ──
   const dayLabel = useMemo(() => {
-    if (dayOffset === 0) return "Today";
-    if (dayOffset === -1) return "Yesterday";
-    const d = new Date(); d.setDate(d.getDate() + dayOffset);
-    return `${String(d.getDate()).padStart(2, "0")} ${MN[d.getMonth()]}`;
-  }, [dayOffset]);
+    if (selectedDate === todayStr) return "Today";
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    if (selectedDate === yesterday) return "Yesterday";
+    const d = new Date(selectedDate + "T12:00:00Z");
+    return `${String(d.getUTCDate()).padStart(2, "0")} ${MN[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  }, [selectedDate, todayStr]);
 
   // ── Trend data for current timeframe ──
   const trendData = useMemo(() => {
@@ -244,36 +250,26 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
     };
   }, [athlete, timeframe, customStart, customEnd]);
 
-  // ── Daily snapshot values ──
-  // For dayOffset=0 (today) use the latest real values directly.
-  // For past days, use the deterministic synthetic variation (no real historical lookup yet).
+  // ── Per-date lookup map built from recoveryHistory ──
+  const historyMap = useMemo(() => {
+    const m = new Map<string, typeof recHistory[0]>();
+    for (const d of recHistory) m.set(d.date, d);
+    return m;
+  }, [recHistory]);
+
+  // ── Daily snapshot values — always from real data, never synthetic ──
+  // Shows N/A for any date that has no data in recoveryHistory (e.g. today if sync has stopped).
   const dayVals = useMemo(() => {
-    if (dayOffset === 0) {
-      return {
-        recovery: athlete.recoveryScore,
-        hrv:      athlete.hrv,
-        sleep:    athlete.sleepScore,
-        rhr:      athlete.restHr,
-        spo2:     athlete.spo2,
-        resp:     athlete.respirationRate,
-      };
-    }
-    const d = new Date(); d.setDate(d.getDate() + dayOffset);
-    const s = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-    const val = (base: number | null, key: string): number | null => {
-      if (base == null) return null;
-      const rng = lcg(strHash(athlete.id + key + "snap" + s));
-      return base + (rng() - 0.5) * base * 0.18;
-    };
+    const rec = historyMap.get(selectedDate);
     return {
-      recovery: athlete.recoveryScore != null ? Math.round(val(athlete.recoveryScore, "rec")!) : null,
-      hrv:      athlete.hrv != null ? Math.round(val(athlete.hrv, "hrv")! * 10) / 10 : null,
-      sleep:    Math.round(val(athlete.sleepScore, "slp")!),
-      rhr:      athlete.restHr != null ? Math.round(val(athlete.restHr, "rhr")!) : null,
-      spo2:     athlete.spo2 != null ? Math.round(val(athlete.spo2, "spo2")! * 10) / 10 : null,
-      resp:     athlete.respirationRate != null ? Math.round(val(athlete.respirationRate, "resp")! * 10) / 10 : null,
+      recovery: rec?.recoveryScore ?? null,
+      hrv:      rec?.hrv           ?? null,
+      sleep:    null as number | null,   // sleep score not stored per-day in recoveryHistory
+      rhr:      rec?.restHr        ?? null,
+      spo2:     rec?.spo2          ?? null,
+      resp:     rec?.resp          ?? null,
     };
-  }, [athlete, dayOffset]);
+  }, [selectedDate, historyMap]);
 
   // ── Sleep breakdown ──
   const total = athlete.totalBedMs || 1;
@@ -393,28 +389,40 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
     </div>
   );
 
-  const DayNav = () => (
-    <div className="flex items-center gap-2">
-      <div className="inline-flex items-center border border-line rounded-md overflow-hidden">
-        <button type="button" onClick={() => setDayOffset(o => o - 1)}
-          className="px-2 py-1.5 text-xs text-muted hover:text-ink hover:bg-surfaceStrong border-r border-line transition-colors">‹</button>
-        <span className="px-3 py-1.5 text-sm text-ink whitespace-nowrap">{dayLabel}</span>
-        <button type="button" onClick={() => setDayOffset(o => Math.min(0, o + 1))} disabled={dayOffset >= 0}
-          className={cn("px-2 py-1.5 text-xs border-l border-line transition-colors",
-            dayOffset >= 0 ? "text-muted opacity-30 cursor-not-allowed" : "text-muted hover:text-ink hover:bg-surfaceStrong")}>›</button>
+  const DayNav = () => {
+    const prevDate = new Date(selectedDate + "T12:00:00Z");
+    prevDate.setUTCDate(prevDate.getUTCDate() - 1);
+    const prevStr = prevDate.toISOString().slice(0, 10);
+
+    const nextDate = new Date(selectedDate + "T12:00:00Z");
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+    const nextStr = nextDate.toISOString().slice(0, 10);
+
+    const atToday = selectedDate >= todayStr;
+    const hasData = historyMap.has(selectedDate);
+
+    return (
+      <div className="flex items-center gap-2">
+        <div className="inline-flex items-center border border-line rounded-md overflow-hidden">
+          <button type="button" onClick={() => setSelectedDate(prevStr)}
+            className="px-2 py-1.5 text-xs text-muted hover:text-ink hover:bg-surfaceStrong border-r border-line transition-colors">‹</button>
+          <span className={cn("px-3 py-1.5 text-sm whitespace-nowrap", hasData ? "text-ink" : "text-muted")}>
+            {dayLabel}
+            {!hasData && <span className="ml-1.5 text-[10px] opacity-60">no data</span>}
+          </span>
+          <button type="button" onClick={() => setSelectedDate(nextStr)} disabled={atToday}
+            className={cn("px-2 py-1.5 text-xs border-l border-line transition-colors",
+              atToday ? "text-muted opacity-30 cursor-not-allowed" : "text-muted hover:text-ink hover:bg-surfaceStrong")}>›</button>
+        </div>
+        <label className="relative flex items-center justify-center w-7 h-7 rounded-md border border-line text-muted hover:text-ink hover:bg-surfaceStrong transition-colors cursor-pointer">
+          <Calendar size={13} />
+          <input type="date" max={todayStr} value={selectedDate}
+            onChange={e => setSelectedDate(e.target.value)}
+            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+        </label>
       </div>
-      <label className="relative flex items-center justify-center w-7 h-7 rounded-md border border-line text-muted hover:text-ink hover:bg-surfaceStrong transition-colors cursor-pointer">
-        <Calendar size={13} />
-        <input type="date" max={todayStr}
-          value={(() => { const d = new Date(); d.setDate(d.getDate() + dayOffset); return d.toISOString().slice(0,10); })()}
-          onChange={e => {
-            const diff = Math.round((new Date(e.target.value).getTime() - new Date(todayStr).getTime()) / 86400000);
-            setDayOffset(Math.min(0, diff));
-          }}
-          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
-      </label>
-    </div>
-  );
+    );
+  };
 
   const SectionHeader = ({ title, sub, controls }: { title: string; sub?: string; controls?: React.ReactNode }) => (
     <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
@@ -456,7 +464,7 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
                 accent={dayVals.recovery != null ? (dayVals.recovery >= 70 ? "#059669" : dayVals.recovery >= 50 ? "#d97706" : "#dc2626") : undefined}
                 sub={athlete.statusNote} />
               <MetricPill label="HRV" value={dayVals.hrv != null ? `${dayVals.hrv} ms` : "N/A"} sub="Overnight avg" />
-              <MetricPill label="Sleep score" value={`${dayVals.sleep}`} sub={`Eff ${athlete.sleepEfficiency}%`} />
+              <MetricPill label="Sleep score" value={dayVals.sleep != null ? String(dayVals.sleep) : "N/A"} sub={`Eff ${athlete.sleepEfficiency}%`} />
               <MetricPill label="Resting HR" value={dayVals.rhr != null ? `${dayVals.rhr} bpm` : "N/A"} sub="Overnight avg" />
               <MetricPill label="SpO₂" value={dayVals.spo2 != null ? `${dayVals.spo2}%` : "N/A"} sub="Overnight" />
               <MetricPill label="Resp rate" value={dayVals.resp != null ? `${dayVals.resp} rpm` : "N/A"} sub="Overnight" />

@@ -139,6 +139,7 @@ function toAthleteSummary(
   const hrvMap  = Object.fromEntries(ts_hrv.map(p => [p.date, p.value]));
   const spo2Map = Object.fromEntries(ts_spo2.map(p => [p.date, p.value]));
   const skinMap = Object.fromEntries(ts_skin.map(p => [p.date, p.value]));
+  const respMap = Object.fromEntries(ts_resp.map(p => [p.date, p.value]));
 
   const allHistoryDates = Array.from(new Set([
     ...ts_recovery.map(p => p.date),
@@ -146,17 +147,19 @@ function toAthleteSummary(
     ...ts_hrv.map(p => p.date),
     ...ts_spo2.map(p => p.date),
     ...ts_skin.map(p => p.date),
+    ...ts_resp.map(p => p.date),
   ])).sort(); // ascending — oldest first
 
   const recoveryHistory: RecoveryHistoryDay[] = allHistoryDates.map(date => ({
     date,
     label:      fullDayLabel(date),
     shortLabel: shortLabel(date),
-    recoveryScore: recMap[date] != null  ? Math.round(recMap[date])            : null,
-    hrv:           hrvMap[date] != null  ? Math.round(hrvMap[date])            : null,
-    restHr:        rhrMap[date] != null  ? Math.round(rhrMap[date])            : null,
+    recoveryScore: recMap[date]  != null ? Math.round(recMap[date])            : null,
+    hrv:           hrvMap[date]  != null ? Math.round(hrvMap[date])            : null,
+    restHr:        rhrMap[date]  != null ? Math.round(rhrMap[date])            : null,
     spo2:          spo2Map[date] != null ? Math.round(spo2Map[date] * 10) / 10 : null,
     skinTempC:     skinMap[date] != null ? Math.round(skinMap[date] * 10) / 10 : null,
+    resp:          respMap[date] != null ? Math.round(respMap[date] * 10) / 10 : null,
   }));
 
   // ── Sleep metrics — real WHOOP data ───────────────────────────────────────

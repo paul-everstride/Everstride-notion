@@ -50,6 +50,7 @@ export type RecoveryHistoryDay = {
   restHr: number | null;    // Resting HR in bpm
   spo2: number | null;      // SpO₂ in %
   skinTempC: number | null; // Raw skin temperature in °C
+  resp: number | null;      // Respiratory rate in breaths/min
 };
 
 export type AthleteSummary = {
