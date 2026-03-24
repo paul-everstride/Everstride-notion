@@ -255,14 +255,73 @@ type CompareMetric = {
 
 // ── Series factories ──────────────────────────────────────────────────────────
 
-function readinessSeries(trendKey: keyof AthleteSummary, _seedKey: string, _bv: (a: AthleteSummary) => number | null) {
+function readinessSeries(historyField: keyof RecoveryHistoryDay, trendKey: keyof AthleteSummary) {
   return (athlete: AthleteSummary, timeframe: string): TrendPoint[] => {
+    const [type, p2] = timeframe.split(":");
+    const offset = parseInt(p2 || "0");
+    const now = new Date();
+
+    if (type === "week") {
+      const dow = now.getDay();
+      const mondayOff = dow === 0 ? 6 : dow - 1;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - mondayOff + offset * 7);
+      monday.setHours(0, 0, 0, 0);
+      const points: TrendPoint[] = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        const dateStr = d.toISOString().slice(0, 10);
+        const day = athlete.recoveryHistory.find(r => r.date === dateStr);
+        if (!day) continue;
+        const val = day[historyField];
+        if (typeof val === "number" && !isNaN(val)) {
+          const label = day.shortLabel ?? `${MONTH_SHORT[d.getMonth()]} ${d.getDate()}`;
+          points.push({ label, value: val });
+        }
+      }
+      return points;
+    }
+
+    if (type === "month") {
+      const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+      const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      const points: TrendPoint[] = [];
+      for (let i = 0; i < daysInMonth; i++) {
+        const dd = new Date(d.getFullYear(), d.getMonth(), i + 1);
+        const dateStr = dd.toISOString().slice(0, 10);
+        const day = athlete.recoveryHistory.find(r => r.date === dateStr);
+        if (!day) continue;
+        const val = day[historyField];
+        if (typeof val === "number" && !isNaN(val)) {
+          points.push({ label: day.shortLabel ?? `${dd.getDate()}`, value: val });
+        }
+      }
+      return points;
+    }
+
+    if (type === "year") {
+      const year = now.getFullYear() + offset;
+      const monthBuckets = new Map<number, number[]>();
+      for (const day of athlete.recoveryHistory) {
+        if (parseInt(day.date.slice(0, 4)) !== year) continue;
+        const val = day[historyField];
+        if (typeof val !== "number" || isNaN(val)) continue;
+        const m = parseInt(day.date.slice(5, 7)) - 1;
+        if (!monthBuckets.has(m)) monthBuckets.set(m, []);
+        monthBuckets.get(m)!.push(val);
+      }
+      return Array.from(monthBuckets.entries())
+        .sort(([a], [b]) => a - b)
+        .map(([m, vals]) => ({
+          label: MONTH_SHORT[m],
+          value: Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10,
+        }));
+    }
+
+    // Fallback: use the trend array
     const realData = athlete[trendKey] as TrendPoint[] | undefined;
-    if (!realData || !realData.length) return [];
-    const [type] = timeframe.split(":");
-    if (type === "week")  return realData.slice(-Math.min(7,  realData.length));
-    if (type === "month") return realData.slice(-Math.min(30, realData.length));
-    return realData;
+    return realData ?? [];
   };
 }
 
@@ -302,12 +361,12 @@ function genPerfSeries(bv: (a: AthleteSummary) => number, key: string) {
 // ── Metric definitions ────────────────────────────────────────────────────────
 
 const readinessMetrics: CompareMetric[] = [
-  { key: "rec",  label: "Recovery score", unit: "",    historyField: "recoveryScore", baseValue: (a) => a.recoveryScore ?? 0, getSeries: readinessSeries("readinessTrend", "rec",  (a) => a.recoveryScore), renderCurrent: (a) => a.recoveryScore != null ? `${a.recoveryScore}` : "–" },
-  { key: "slp",  label: "Sleep score",    unit: "",    historyField: "sleepScore",    baseValue: (a) => a.sleepScore,         getSeries: readinessSeries("sleepTrend",    "slp",  (a) => a.sleepScore),    renderCurrent: (a) => `${a.sleepScore}` },
-  { key: "rhr",  label: "RHR",            unit: "bpm", historyField: "restHr",        baseValue: (a) => a.restHr ?? 0,        getSeries: readinessSeries("rhrTrend",      "rhr",  (a) => a.restHr),        renderCurrent: (a) => a.restHr != null ? `${a.restHr} bpm` : "–" },
-  { key: "hrv",  label: "HRV",            unit: "ms",  historyField: "hrv",           baseValue: (a) => a.hrv ?? 0,           getSeries: readinessSeries("hrvTrend",      "hrv",  (a) => a.hrv),           renderCurrent: (a) => a.hrv != null ? `${a.hrv} ms` : "–" },
-  { key: "atl",  label: "ATL",            unit: "",    historyField: undefined,       baseValue: (a) => a.atl ?? 0,           getSeries: readinessSeries("atlTrend",      "atl",  (a) => a.atl),           renderCurrent: (a) => a.atl != null ? `${a.atl}` : "–" },
-  { key: "ctl",  label: "CTL",            unit: "",    historyField: undefined,       baseValue: (a) => a.ctl ?? 0,           getSeries: readinessSeries("ctlTrend",      "ctl",  (a) => a.ctl),           renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "–" },
+  { key: "rec",  label: "Recovery score", unit: "",    historyField: "recoveryScore", baseValue: (a) => a.recoveryScore ?? 0, getSeries: readinessSeries("recoveryScore", "readinessTrend"), renderCurrent: (a) => a.recoveryScore != null ? `${a.recoveryScore}` : "–" },
+  { key: "slp",  label: "Sleep score",    unit: "",    historyField: "sleepScore",    baseValue: (a) => a.sleepScore,         getSeries: readinessSeries("sleepScore",    "sleepTrend"),     renderCurrent: (a) => `${a.sleepScore}` },
+  { key: "rhr",  label: "RHR",            unit: "bpm", historyField: "restHr",        baseValue: (a) => a.restHr ?? 0,        getSeries: readinessSeries("restHr",        "rhrTrend"),       renderCurrent: (a) => a.restHr != null ? `${a.restHr} bpm` : "–" },
+  { key: "hrv",  label: "HRV",            unit: "ms",  historyField: "hrv",           baseValue: (a) => a.hrv ?? 0,           getSeries: readinessSeries("hrv",           "hrvTrend"),       renderCurrent: (a) => a.hrv != null ? `${a.hrv} ms` : "–" },
+  { key: "atl",  label: "ATL",            unit: "",    historyField: undefined,       baseValue: (a) => a.atl ?? 0,           getSeries: readinessSeries("recoveryScore", "atlTrend"),       renderCurrent: (a) => a.atl != null ? `${a.atl}` : "–" },
+  { key: "ctl",  label: "CTL",            unit: "",    historyField: undefined,       baseValue: (a) => a.ctl ?? 0,           getSeries: readinessSeries("recoveryScore", "ctlTrend"),       renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "–" },
 ];
 
 const perfSnapshotMetrics: CompareMetric[] = [
