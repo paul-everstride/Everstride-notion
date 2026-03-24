@@ -7,7 +7,7 @@ import {
   PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis
 } from "recharts";
-import type { AthleteSummary, TrendPoint } from "@/lib/types";
+import type { AthleteSummary, RecoveryHistoryDay, TrendPoint } from "@/lib/types";
 import { PolarizedBar } from "@/components/polarized-bar";
 import { cn, formatSignedNumber, formatWeight } from "@/lib/utils";
 import { BarChart2, Table, Calendar } from "lucide-react";
@@ -183,30 +183,32 @@ function getSnapshotWindow(
   };
 }
 
-/** Single deterministic daily value from LCG seed */
-function getDayValue(athleteId: string, metricKey: string, base: number, dayOffset: number): number {
-  const d = new Date();
-  d.setDate(d.getDate() + dayOffset);
-  const seedStr = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-  const seed = strHash(athleteId + metricKey + "snap" + seedStr);
-  const rng = lcg(seed);
-  return (base + (rng() - 0.5) * base * 0.18);
-}
-
-/** Peak (max) value recorded in the given window — what snapshot displays */
-function getPeakValue(
-  athleteId: string,
-  metricKey: string,
-  base: number,
+/**
+ * Look up actual history data for a snapshot window.
+ * For metrics with a historyField, searches recoveryHistory by date.
+ * For performance metrics without historyField, returns the base value.
+ */
+function getHistorySnapshot(
+  athlete: AthleteSummary,
+  historyField: keyof RecoveryHistoryDay | undefined,
+  baseValue: number | null,
   startDayOffset: number,
   days: number
-): number {
-  let peak = -Infinity;
+): number | null {
+  if (!historyField) return baseValue;
+  let best: number | null = null;
   for (let i = 0; i < Math.max(days, 1); i++) {
-    const v = getDayValue(athleteId, metricKey, base, startDayOffset + i);
-    if (v > peak) peak = v;
+    const d = new Date();
+    d.setDate(d.getDate() + startDayOffset + i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const day = athlete.recoveryHistory.find(r => r.date === dateStr);
+    if (!day) continue;
+    const val = day[historyField];
+    if (typeof val === "number" && !isNaN(val)) {
+      if (best === null || val > best) best = val;
+    }
   }
-  return Math.round(peak * 10) / 10;
+  return best;
 }
 
 // ── Chart helpers ─────────────────────────────────────────────────────────────
@@ -244,33 +246,23 @@ type CompareMetric = {
   key: string;
   label: string;
   unit?: string;
-  baseValue: (a: AthleteSummary) => number;
+  baseValue: (a: AthleteSummary) => number | null;
   getSeries: (a: AthleteSummary, timeframe: string) => TrendPoint[];
   renderCurrent: (a: AthleteSummary) => string;
+  /** Field in RecoveryHistoryDay to use for snapshot date lookups. Undefined = use baseValue. */
+  historyField?: keyof RecoveryHistoryDay;
 };
 
 // ── Series factories ──────────────────────────────────────────────────────────
 
-function readinessSeries(existingKey: keyof AthleteSummary, seedKey: string, bv: (a: AthleteSummary) => number) {
+function readinessSeries(trendKey: keyof AthleteSummary, _seedKey: string, _bv: (a: AthleteSummary) => number | null) {
   return (athlete: AthleteSummary, timeframe: string): TrendPoint[] => {
-    const base = bv(athlete);
-    if (timeframe === "Last 7 days") return athlete[existingKey] as TrendPoint[];
-    if (timeframe === "Today") return genTrend(strHash(athlete.id + seedKey + "today"), base, LABELS_TODAY, 0.03);
-    const [type, offStr] = timeframe.split(":");
-    const off = offStr !== undefined ? parseInt(offStr) : 0;
-    if (type === "week") {
-      const info = getPeriodInfo("week", off);
-      return genTrend(strHash(athlete.id + seedKey + info.seedStr), base, info.dataLabels, 0.07);
-    }
-    if (type === "month") {
-      const info = getPeriodInfo("month", off);
-      return genTrend(strHash(athlete.id + seedKey + info.seedStr), base, info.dataLabels, 0.06);
-    }
-    if (type === "year") {
-      const info = getPeriodInfo("year", off);
-      return genTrend(strHash(athlete.id + seedKey + info.seedStr), base, info.dataLabels, 0.12);
-    }
-    return athlete[existingKey] as TrendPoint[];
+    const realData = athlete[trendKey] as TrendPoint[] | undefined;
+    if (!realData || !realData.length) return [];
+    const [type] = timeframe.split(":");
+    if (type === "week")  return realData.slice(-Math.min(7,  realData.length));
+    if (type === "month") return realData.slice(-Math.min(30, realData.length));
+    return realData;
   };
 }
 
@@ -310,12 +302,12 @@ function genPerfSeries(bv: (a: AthleteSummary) => number, key: string) {
 // ── Metric definitions ────────────────────────────────────────────────────────
 
 const readinessMetrics: CompareMetric[] = [
-  { key: "rec",  label: "Recovery score", unit: "",    baseValue: (a) => a.recoveryScore ?? 0, getSeries: readinessSeries("readinessTrend", "rec",  (a) => a.recoveryScore ?? 0), renderCurrent: (a) => a.recoveryScore != null ? `${a.recoveryScore}` : "N/A" },
-  { key: "slp",  label: "Sleep score",    unit: "",    baseValue: (a) => a.sleepScore,        getSeries: readinessSeries("sleepTrend",    "slp",  (a) => a.sleepScore),         renderCurrent: (a) => `${a.sleepScore}` },
-  { key: "rhr",  label: "RHR",            unit: "bpm", baseValue: (a) => a.restHr ?? 0,       getSeries: readinessSeries("rhrTrend",      "rhr",  (a) => a.restHr ?? 0),       renderCurrent: (a) => a.restHr != null ? `${a.restHr} bpm` : "N/A" },
-  { key: "hrv",  label: "HRV",            unit: "ms",  baseValue: (a) => a.hrv ?? 0,          getSeries: readinessSeries("hrvTrend",      "hrv",  (a) => a.hrv ?? 0),          renderCurrent: (a) => a.hrv != null ? `${a.hrv} ms` : "N/A" },
-  { key: "atl",  label: "ATL",            unit: "",    baseValue: (a) => a.atl ?? 0,          getSeries: readinessSeries("atlTrend",      "atl",  (a) => a.atl ?? 0),          renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
-  { key: "ctl",  label: "CTL",            unit: "",    baseValue: (a) => a.ctl ?? 0,          getSeries: readinessSeries("ctlTrend",      "ctl",  (a) => a.ctl ?? 0),          renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
+  { key: "rec",  label: "Recovery score", unit: "",    historyField: "recoveryScore", baseValue: (a) => a.recoveryScore ?? 0, getSeries: readinessSeries("readinessTrend", "rec",  (a) => a.recoveryScore), renderCurrent: (a) => a.recoveryScore != null ? `${a.recoveryScore}` : "–" },
+  { key: "slp",  label: "Sleep score",    unit: "",    historyField: "sleepScore",    baseValue: (a) => a.sleepScore,         getSeries: readinessSeries("sleepTrend",    "slp",  (a) => a.sleepScore),    renderCurrent: (a) => `${a.sleepScore}` },
+  { key: "rhr",  label: "RHR",            unit: "bpm", historyField: "restHr",        baseValue: (a) => a.restHr ?? 0,        getSeries: readinessSeries("rhrTrend",      "rhr",  (a) => a.restHr),        renderCurrent: (a) => a.restHr != null ? `${a.restHr} bpm` : "–" },
+  { key: "hrv",  label: "HRV",            unit: "ms",  historyField: "hrv",           baseValue: (a) => a.hrv ?? 0,           getSeries: readinessSeries("hrvTrend",      "hrv",  (a) => a.hrv),           renderCurrent: (a) => a.hrv != null ? `${a.hrv} ms` : "–" },
+  { key: "atl",  label: "ATL",            unit: "",    historyField: undefined,       baseValue: (a) => a.atl ?? 0,           getSeries: readinessSeries("atlTrend",      "atl",  (a) => a.atl),           renderCurrent: (a) => a.atl != null ? `${a.atl}` : "–" },
+  { key: "ctl",  label: "CTL",            unit: "",    historyField: undefined,       baseValue: (a) => a.ctl ?? 0,           getSeries: readinessSeries("ctlTrend",      "ctl",  (a) => a.ctl),           renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "–" },
 ];
 
 const perfSnapshotMetrics: CompareMetric[] = [
@@ -361,10 +353,28 @@ const PERF_SECTIONS = [
 
 function mergeSeries(athletes: AthleteSummary[], metric: CompareMetric, timeframe: string) {
   if (!athletes.length) return [];
-  const first = metric.getSeries(athletes[0], timeframe);
-  return first.map((point, i) => {
-    const row: Record<string, number | string> = { label: point.label };
-    athletes.forEach(a => { row[a.name] = metric.getSeries(a, timeframe)[i]?.value ?? 0; });
+  const allSeries = athletes.map(a => metric.getSeries(a, timeframe));
+  if (allSeries.every(s => !s.length)) return [];
+
+  // Build label→value maps per athlete for accurate date alignment
+  const maps = allSeries.map(s => new Map(s.map(p => [p.label, p.value])));
+
+  // Use the longest series as the ordered label base, then append any remaining labels
+  const baseIdx = allSeries.reduce((bi, s, i) => s.length > allSeries[bi].length ? i : bi, 0);
+  const labels: string[] = allSeries[baseIdx].map(p => p.label);
+  const labelSet = new Set(labels);
+  for (const s of allSeries) {
+    for (const p of s) {
+      if (!labelSet.has(p.label)) { labels.push(p.label); labelSet.add(p.label); }
+    }
+  }
+
+  return labels.map(label => {
+    const row: Record<string, number | string> = { label };
+    athletes.forEach((a, i) => {
+      const val = maps[i].get(label);
+      if (val != null) row[a.name] = val;
+    });
     return row;
   });
 }
@@ -457,7 +467,7 @@ function SnapshotBarChart({
 }) {
   const data = useMemo(() => athletes.map((athlete, i) => ({
     name: athlete.name.split(" ")[0],
-    value: getPeakValue(athlete.id, metric.key, metric.baseValue(athlete), win.startDayOffset, win.days),
+    value: getHistorySnapshot(athlete, metric.historyField, metric.baseValue(athlete), win.startDayOffset, win.days),
     color: athleteColors[i % athleteColors.length],
     athleteId: athlete.id
   })), [athletes, metric, win]);
@@ -472,7 +482,7 @@ function SnapshotBarChart({
       <div className="flex border-b border-line" style={{ borderBottomColor: "#e9e9e7" }}>
         {athletes.map((athlete, i) => {
           const color = athleteColors[i % athleteColors.length];
-          const peak = data.find(d => d.athleteId === athlete.id)?.value ?? 0;
+          const peak = data.find(d => d.athleteId === athlete.id)?.value ?? null;
           return (
             <div key={athlete.id} className="flex-1 flex flex-col gap-1 px-3 py-2.5 border-r border-line last:border-r-0">
               <div className="flex items-center gap-1.5">
@@ -480,7 +490,7 @@ function SnapshotBarChart({
                 <span className="text-xs text-muted">{athlete.name.split(" ")[0]}</span>
               </div>
               <span className="text-sm font-semibold tabular text-ink">
-                {tickFmt(peak)}{metric.unit ? ` ${metric.unit}` : ""}
+                {peak != null ? `${tickFmt(peak)}${metric.unit ? ` ${metric.unit}` : ""}` : "–"}
               </span>
             </div>
           );
@@ -520,9 +530,7 @@ function PowerHexagon({
     });
 
     const rawValues = athletes.map(a =>
-      a.powerCurve.map((pt, i) =>
-        getPeakValue(a.id, `pc${i}`, pt.value, win.startDayOffset, win.days)
-      )
+      a.powerCurve.map((pt) => pt.value ?? 0)
     );
 
     // Apply profile to raw watts before normalising
@@ -614,10 +622,10 @@ function SnapshotTable({
             <tr key={metric.key} className={cn("border-b border-line last:border-b-0 transition-colors hover:bg-surface/60", rowIdx % 2 === 1 ? "bg-surface/40" : "bg-canvas")}>
               <td className="px-4 py-2.5 text-sm text-muted">{metric.label}</td>
               {athletes.map((a) => {
-                const val = getPeakValue(a.id, metric.key, metric.baseValue(a), win.startDayOffset, win.days);
+                const val = getHistorySnapshot(a, metric.historyField, metric.baseValue(a), win.startDayOffset, win.days);
                 return (
                   <td key={`${a.id}-${metric.key}`} className="px-4 py-2.5 text-sm font-medium tabular text-ink">
-                    {tickFmt(val)}{metric.unit ? ` ${metric.unit}` : ""}
+                    {val != null ? `${tickFmt(val)}${metric.unit ? ` ${metric.unit}` : ""}` : "–"}
                   </td>
                 );
               })}
@@ -664,10 +672,10 @@ function PerfSnapshotTable({
         {metric.label}
       </td>
       {athletes.map((a) => {
-        const val = getPeakValue(a.id, metric.key, metric.baseValue(a), win.startDayOffset, win.days);
+        const val = getHistorySnapshot(a, metric.historyField, metric.baseValue(a), win.startDayOffset, win.days);
         return (
           <td key={`${a.id}-${metric.key}`} className="px-4 py-2.5 text-sm font-medium tabular text-ink">
-            {tickFmt(val)}{metric.unit ? ` ${metric.unit}` : ""}
+            {val != null ? `${tickFmt(val)}${metric.unit ? ` ${metric.unit}` : ""}` : "–"}
           </td>
         );
       })}
