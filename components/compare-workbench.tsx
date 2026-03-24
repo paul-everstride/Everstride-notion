@@ -365,8 +365,6 @@ const readinessMetrics: CompareMetric[] = [
   { key: "slp",  label: "Sleep score",    unit: "",    historyField: "sleepScore",    baseValue: (a) => a.sleepScore,         getSeries: readinessSeries("sleepScore",    "sleepTrend"),     renderCurrent: (a) => `${a.sleepScore}` },
   { key: "rhr",  label: "RHR",            unit: "bpm", historyField: "restHr",        baseValue: (a) => a.restHr ?? 0,        getSeries: readinessSeries("restHr",        "rhrTrend"),       renderCurrent: (a) => a.restHr != null ? `${a.restHr} bpm` : "–" },
   { key: "hrv",  label: "HRV",            unit: "ms",  historyField: "hrv",           baseValue: (a) => a.hrv ?? 0,           getSeries: readinessSeries("hrv",           "hrvTrend"),       renderCurrent: (a) => a.hrv != null ? `${a.hrv} ms` : "–" },
-  { key: "atl",  label: "ATL",            unit: "",    historyField: undefined,       baseValue: (a) => a.atl ?? 0,           getSeries: readinessSeries("recoveryScore", "atlTrend"),       renderCurrent: (a) => a.atl != null ? `${a.atl}` : "–" },
-  { key: "ctl",  label: "CTL",            unit: "",    historyField: undefined,       baseValue: (a) => a.ctl ?? 0,           getSeries: readinessSeries("recoveryScore", "ctlTrend"),       renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "–" },
 ];
 
 const perfSnapshotMetrics: CompareMetric[] = [
