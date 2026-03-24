@@ -441,10 +441,11 @@ function mergeSeries(athletes: AthleteSummary[], metric: CompareMetric, timefram
 // ── CompareChart (line chart) ─────────────────────────────────────────────────
 
 function CompareChart({
-  title, athletes, metric, onSeeMore, accentColor, timeframe
+  title, athletes, metric, onSeeMore, accentColor, timeframe, colorMap
 }: {
   title: string; athletes: AthleteSummary[]; metric: CompareMetric;
   onSeeMore?: (m: CompareMetric) => void; accentColor: string; timeframe: string;
+  colorMap: Map<string, string>;
 }) {
   const data   = useMemo(() => mergeSeries(athletes, metric, timeframe), [athletes, metric, timeframe]);
   const domain = useMemo(() => chartDomain(data), [data]);
@@ -470,7 +471,7 @@ function CompareChart({
       </div>
       <div className="flex border-b border-line" style={{ borderBottomColor: "#e9e9e7" }}>
         {athletes.map((athlete, i) => {
-          const color = athleteColors[i % athleteColors.length];
+          const color = colorMap.get(athlete.id) ?? athleteColors[0];
           const avg = athleteAvgs[i];
           return (
             <div key={athlete.id} className="flex-1 flex flex-col gap-1 px-3 py-2.5 border-r border-line last:border-r-0">
@@ -518,8 +519,8 @@ function CompareChart({
                 return label;
               }}
               formatter={(v: number, name: string) => [`${tickFmt(v)}${metric.unit ? ` ${metric.unit}` : ""}`, name]} />
-            {athletes.map((athlete, i) => {
-              const stroke = athleteColors[i % athleteColors.length];
+            {athletes.map((athlete) => {
+              const stroke = colorMap.get(athlete.id) ?? athleteColors[0];
               return <Line key={athlete.id} type="monotone" dataKey={athlete.name} stroke={stroke} strokeWidth={1.5}
                 dot={{ r: 2.5, fill: stroke, stroke: "#ffffff", strokeWidth: 1 }}
                 activeDot={{ r: 4, fill: stroke, stroke: "#ffffff", strokeWidth: 1 }} />;
@@ -534,17 +535,17 @@ function CompareChart({
 // ── SnapshotBarChart ──────────────────────────────────────────────────────────
 
 function SnapshotBarChart({
-  title, athletes, metric, window: win, accentColor
+  title, athletes, metric, window: win, accentColor, colorMap
 }: {
   title: string; athletes: AthleteSummary[]; metric: CompareMetric;
-  window: SnapshotWindow; accentColor: string;
+  window: SnapshotWindow; accentColor: string; colorMap: Map<string, string>;
 }) {
-  const data = useMemo(() => athletes.map((athlete, i) => ({
+  const data = useMemo(() => athletes.map((athlete) => ({
     name: athlete.name.split(" ")[0],
     value: getHistorySnapshot(athlete, metric.historyField, metric.baseValue(athlete), win.startDayOffset, win.days),
-    color: athleteColors[i % athleteColors.length],
+    color: colorMap.get(athlete.id) ?? athleteColors[0],
     athleteId: athlete.id
-  })), [athletes, metric, win]);
+  })), [athletes, metric, win, colorMap]);
 
   const domain: [number, number] = metric.barDomain ?? scalarDomain(data.map(d => d.value ?? 0));
 
@@ -554,8 +555,8 @@ function SnapshotBarChart({
         <span className="text-sm font-medium text-ink">{title}</span>
       </div>
       <div className="flex border-b border-line" style={{ borderBottomColor: "#e9e9e7" }}>
-        {athletes.map((athlete, i) => {
-          const color = athleteColors[i % athleteColors.length];
+        {athletes.map((athlete) => {
+          const color = colorMap.get(athlete.id) ?? athleteColors[0];
           const peak = data.find(d => d.athleteId === athlete.id)?.value ?? null;
           return (
             <div key={athlete.id} className="flex-1 flex flex-col gap-1 px-3 py-2.5 border-r border-line last:border-r-0">
@@ -592,9 +593,9 @@ function SnapshotBarChart({
 const POWER_SHORT_LABELS = ["5s", "30s", "1min", "5min", "30min", "FTP"];
 
 function PowerHexagon({
-  athletes, window: win
+  athletes, window: win, colorMap
 }: {
-  athletes: AthleteSummary[]; window: SnapshotWindow;
+  athletes: AthleteSummary[]; window: SnapshotWindow; colorMap: Map<string, string>;
 }) {
   const hexData = useMemo(() => {
     // Per-athlete profile: each athlete has unique strengths/weaknesses per axis
@@ -633,8 +634,8 @@ function PowerHexagon({
         <span className="text-xs text-muted bg-surface rounded-full px-2.5 py-0.5">Peak in period</span>
       </div>
       <div className="flex border-b border-line" style={{ borderBottomColor: "#e9e9e7" }}>
-        {athletes.map((athlete, i) => {
-          const color = athleteColors[i % athleteColors.length];
+        {athletes.map((athlete) => {
+          const color = colorMap.get(athlete.id) ?? athleteColors[0];
           return (
             <div key={athlete.id} className="flex-1 flex flex-col gap-1 px-3 py-2.5 border-r border-line last:border-r-0">
               <div className="flex items-center gap-1.5">
@@ -654,8 +655,8 @@ function PowerHexagon({
               tick={{ fill: "#9b9a97", fontSize: 11, fontFamily: "inherit" }} />
             <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
             <Tooltip contentStyle={TS} labelStyle={TL} formatter={(v: number, name: string) => [`${v}%`, name]} />
-            {athletes.map((athlete, i) => {
-              const color = athleteColors[i % athleteColors.length];
+            {athletes.map((athlete) => {
+              const color = colorMap.get(athlete.id) ?? athleteColors[0];
               return (
                 <Radar key={athlete.id} name={athlete.name} dataKey={athlete.name}
                   stroke={color} strokeWidth={2.5} fill={color} fillOpacity={0} />
@@ -671,9 +672,10 @@ function PowerHexagon({
 // ── SnapshotTable (readiness) ─────────────────────────────────────────────────
 
 function SnapshotTable({
-  athletes, metrics, window: win
+  athletes, metrics, window: win, colorMap
 }: {
   athletes: AthleteSummary[]; metrics: CompareMetric[]; window: SnapshotWindow;
+  colorMap: Map<string, string>;
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-line bg-canvas">
@@ -681,10 +683,10 @@ function SnapshotTable({
         <thead>
           <tr className="border-b border-line bg-surface">
             <th className="px-4 py-3 text-left text-xs font-medium text-muted w-40">Metric</th>
-            {athletes.map((a, i) => (
+            {athletes.map((a) => (
               <th key={a.id} className="px-4 py-3 text-left font-medium">
                 <span className="inline-flex items-center gap-2">
-                  <span className="block h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: athleteColors[i % athleteColors.length] }} />
+                  <span className="block h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: colorMap.get(a.id) ?? athleteColors[0] }} />
                   <span className="text-xs font-medium text-ink">{a.name}</span>
                 </span>
               </th>
@@ -714,9 +716,9 @@ function SnapshotTable({
 // ── PerfSnapshotTable ─────────────────────────────────────────────────────────
 
 function PerfSnapshotTable({
-  athletes, window: win
+  athletes, window: win, colorMap
 }: {
-  athletes: AthleteSummary[]; window: SnapshotWindow;
+  athletes: AthleteSummary[]; window: SnapshotWindow; colorMap: Map<string, string>;
 }) {
   const cols = athletes.length + 1;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -762,10 +764,10 @@ function PerfSnapshotTable({
         <thead>
           <tr className="border-b border-line bg-surface">
             <th className="px-4 py-3 text-left text-xs font-medium text-muted w-40">Metric</th>
-            {athletes.map((a, i) => (
+            {athletes.map((a) => (
               <th key={a.id} className="px-4 py-3 text-left font-medium">
                 <span className="inline-flex items-center gap-2">
-                  <span className="block h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: athleteColors[i % athleteColors.length] }} />
+                  <span className="block h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: colorMap.get(a.id) ?? athleteColors[0] }} />
                   <span className="text-xs font-medium text-ink">{a.name}</span>
                 </span>
               </th>
@@ -801,10 +803,11 @@ function PerfSnapshotTable({
 // ── MetricDetailPanel ─────────────────────────────────────────────────────────
 
 function MetricDetailPanel({
-  metric, athletes, onClose, timeframe, accentColor
+  metric, athletes, onClose, timeframe, accentColor, colorMap
 }: {
   metric: CompareMetric; athletes: AthleteSummary[];
   onClose: () => void; timeframe: string; accentColor: string;
+  colorMap: Map<string, string>;
 }) {
   const data = useMemo(() => mergeSeries(athletes, metric, timeframe), [athletes, metric, timeframe]);
 
@@ -829,8 +832,8 @@ function MetricDetailPanel({
                 <XAxis dataKey="label" tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }} tickLine={false} axisLine={false} />
                 <YAxis domain={chartDomain(data)} tickFormatter={tickFmt} tickCount={6} tickLine={false} axisLine={false} tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }} width={36} />
                 <Tooltip contentStyle={TS} labelStyle={TL} />
-                {athletes.map((a, i) => {
-                  const stroke = athleteColors[i % athleteColors.length];
+                {athletes.map((a) => {
+                  const stroke = colorMap.get(a.id) ?? athleteColors[0];
                   return <Line key={a.id} type="monotone" dataKey={a.name} stroke={stroke} strokeWidth={1.5}
                     dot={{ r: 3, fill: stroke, stroke: "#ffffff", strokeWidth: 1.5 }}
                     activeDot={{ r: 5, fill: stroke, stroke: "#ffffff", strokeWidth: 1.5 }} />;
@@ -848,7 +851,7 @@ function MetricDetailPanel({
               return (
                 <div key={a.id} className="flex items-center justify-between gap-2 border-b border-line pb-2">
                   <div className="inline-flex items-center gap-1.5">
-                    <span className="block h-1.5 w-1.5 shrink-0" style={{ backgroundColor: athleteColors[i % athleteColors.length] }} />
+                    <span className="block h-1.5 w-1.5 shrink-0" style={{ backgroundColor: colorMap.get(a.id) ?? athleteColors[0] }} />
                     <span className="text-[11px] text-ink">{a.name.split(" ")[0]}</span>
                   </div>
                   <span className="text-[11px] tabular text-muted">
@@ -1137,6 +1140,11 @@ export function CompareWorkbench({
     () => availableAthletes.filter(a => selectedIds.includes(a.id)),
     [availableAthletes, selectedIds]
   );
+  // Stable color per athlete — keyed by ID so color never changes when others are deselected
+  const colorMap = useMemo(
+    () => new Map(availableAthletes.map((a, i) => [a.id, athleteColors[i % athleteColors.length]])),
+    [availableAthletes]
+  );
 
   const allTimeframeMetrics = section === "readiness"
     ? readinessMetrics
@@ -1167,8 +1175,8 @@ export function CompareWorkbench({
         return (
           <div className="p-4 bg-canvas">
             {section === "readiness"
-              ? <SnapshotTable athletes={selectedAthletes} metrics={readinessMetrics} window={snapshotWindow} />
-              : <PerfSnapshotTable athletes={selectedAthletes} window={snapshotWindow} />
+              ? <SnapshotTable athletes={selectedAthletes} metrics={readinessMetrics} window={snapshotWindow} colorMap={colorMap} />
+              : <PerfSnapshotTable athletes={selectedAthletes} window={snapshotWindow} colorMap={colorMap} />
             }
           </div>
         );
@@ -1178,17 +1186,17 @@ export function CompareWorkbench({
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 p-4 bg-canvas">
             {readinessMetrics.map(m => (
               <SnapshotBarChart key={m.key} title={m.label} athletes={selectedAthletes}
-                metric={m} window={snapshotWindow} accentColor={accentColor} />
+                metric={m} window={snapshotWindow} accentColor={accentColor} colorMap={colorMap} />
             ))}
           </div>
         );
       }
       return (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 p-4 bg-canvas">
-          <PowerHexagon athletes={selectedAthletes} window={snapshotWindow} />
+          <PowerHexagon athletes={selectedAthletes} window={snapshotWindow} colorMap={colorMap} />
           {perfSnapshotMetrics.map(m => (
             <SnapshotBarChart key={m.key} title={m.label} athletes={selectedAthletes}
-              metric={m} window={snapshotWindow} accentColor={accentColor} />
+              metric={m} window={snapshotWindow} accentColor={accentColor} colorMap={colorMap} />
           ))}
         </div>
       );
@@ -1215,27 +1223,27 @@ export function CompareWorkbench({
             <div key={exp.key} ref={expandedPanelRef} className="lg:col-span-2">
               <MetricDetailPanel
                 metric={exp} athletes={selectedAthletes}
-                onClose={() => setExpanded(null)} timeframe={activeTimeframe} accentColor={accent} />
+                onClose={() => setExpanded(null)} timeframe={activeTimeframe} accentColor={accent} colorMap={colorMap} />
             </div>
           );
           if (other) {
             nodes.push(
               <CompareChart key={other.key} title={other.label} athletes={selectedAthletes}
                 metric={other} accentColor={accent} timeframe={activeTimeframe}
-                onSeeMore={m2 => setExpanded(m2.key)} />
+                onSeeMore={m2 => setExpanded(m2.key)} colorMap={colorMap} />
             );
           }
         } else {
           nodes.push(
             <CompareChart key={left.key} title={left.label} athletes={selectedAthletes}
               metric={left} accentColor={accent} timeframe={activeTimeframe}
-              onSeeMore={m2 => setExpanded(m2.key)} />
+              onSeeMore={m2 => setExpanded(m2.key)} colorMap={colorMap} />
           );
           if (right) {
             nodes.push(
               <CompareChart key={right.key} title={right.label} athletes={selectedAthletes}
                 metric={right} accentColor={accent} timeframe={activeTimeframe}
-                onSeeMore={m2 => setExpanded(m2.key)} />
+                onSeeMore={m2 => setExpanded(m2.key)} colorMap={colorMap} />
             );
           }
         }
