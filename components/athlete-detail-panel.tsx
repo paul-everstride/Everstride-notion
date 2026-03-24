@@ -245,6 +245,9 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
     };
   }, [athlete, timeframe, customStart, customEnd]);
 
+  // ── Recovery history (declared here so historyMap can reference it) ──
+  const recHistory = athlete.recoveryHistory; // oldest → newest
+
   // ── Per-date lookup map built from recoveryHistory ──
   const historyMap = useMemo(() => {
     const m = new Map<string, typeof recHistory[0]>();
@@ -292,8 +295,6 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
   ];
 
   // ── Recovery tab data ──
-  const recHistory = athlete.recoveryHistory; // oldest → newest
-
   const filteredRecHistory = useMemo(() => {
     if (recTf === "all" || !recHistory.length) return recHistory;
     const days = ({ "7d": 7, "30d": 30, "90d": 90, "365d": 365 } as Record<RecTF, number>)[recTf];
