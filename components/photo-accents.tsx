@@ -3,9 +3,10 @@ import Image from "next/image";
 
 /**
  * Photo accent components for Everstride.
- * All photo placements are isolated here so reverting is a single file deletion
- * plus removing the import lines from: login/page.tsx, dashboard-workspace.tsx,
- * athlete-detail-panel.tsx, and compare-workbench.tsx
+ * All photo placements live here — reverting is one file deletion
+ * plus removing import lines from:
+ *   login/page.tsx, dashboard-workspace.tsx,
+ *   athlete-detail-panel.tsx, compare-workbench.tsx
  */
 
 // ── Login page: full-height left panel ───────────────────────────────────────
@@ -17,23 +18,22 @@ export function LoginPhotoPanel() {
         src="/photos/runners-legs.jpg"
         alt=""
         fill
-        className="object-cover object-center opacity-80"
+        className="object-cover object-center opacity-90"
         priority
         sizes="60vw"
       />
-      {/* gradient: darkens bottom-left for text legibility, fades right edge into page */}
-      <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/20 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/30" />
-      {/* Branding */}
+      {/* darken right edge toward the sign-in card */}
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-black/10 to-black/50" />
+      {/* general dark wash for readability */}
+      <div className="absolute inset-0 bg-black/25" />
       <div className="absolute top-10 left-10">
-        <span className="text-white/70 text-[11px] font-semibold uppercase tracking-[0.2em]">Everstride</span>
+        <span className="text-white/60 text-[11px] font-semibold uppercase tracking-[0.22em]">Everstride</span>
       </div>
-      {/* Bottom tagline */}
-      <div className="absolute bottom-10 left-10 right-12">
-        <p className="text-white text-2xl font-light leading-snug tracking-tight">
+      <div className="absolute bottom-10 left-10 right-14">
+        <p className="text-white text-[26px] font-light leading-snug tracking-tight drop-shadow-sm">
           Coach-first intelligence<br />for endurance athletes.
         </p>
-        <p className="mt-3 text-white/50 text-sm leading-relaxed">
+        <p className="mt-3 text-white/45 text-sm leading-relaxed">
           Recovery, readiness, and performance — unified.
         </p>
       </div>
@@ -41,88 +41,72 @@ export function LoginPhotoPanel() {
   );
 }
 
-// ── Athlete detail: hero strip behind athlete name ────────────────────────────
+// ── Athlete detail: hero card behind athlete name ─────────────────────────────
+// Full-width at top of panel, rounded bottom corners, dark overlay only (no white wash)
 
 export function AthleteHeroStrip({ name }: { name: string }) {
   return (
-    <div className="relative h-[140px] overflow-hidden bg-black">
+    <div className="relative h-[155px] overflow-hidden bg-black rounded-b-2xl shadow-sm">
       <Image
         src="/photos/cyclist-solo.jpg"
         alt=""
         fill
-        className="object-cover object-center opacity-75"
+        className="object-cover object-[center_42%] opacity-90"
         sizes="100vw"
         priority
       />
-      {/* bottom-to-top fade into page background */}
-      <div className="absolute inset-0 bg-gradient-to-t from-canvas via-canvas/40 to-transparent" />
-      {/* left fade */}
-      <div className="absolute inset-0 bg-gradient-to-r from-canvas/60 to-transparent" />
-      {/* Name overlay (bottom-left) */}
-      <div className="absolute bottom-4 left-6">
-        <p className="text-ink/50 text-[10px] font-semibold uppercase tracking-[0.18em] mb-0.5">Athlete</p>
-        <h1 className="text-ink text-2xl font-semibold tracking-tight leading-none">{name}</h1>
+      {/* dark vignette — no white/canvas colors */}
+      <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/20 to-black/10" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/20" />
+      {/* Athlete label */}
+      <div className="absolute bottom-5 left-6">
+        <p className="text-white/50 text-[10px] font-semibold uppercase tracking-[0.2em] mb-1">Athlete</p>
+        <h1 className="text-white text-2xl font-semibold tracking-tight leading-none drop-shadow">{name}</h1>
       </div>
     </div>
   );
 }
 
-// ── Compare page: cinematic header strip ─────────────────────────────────────
+// ── Compare page: inset rounded photo card ────────────────────────────────────
+// Sits at the top of the compare workbench with rounded corners and visible imagery
 
 export function ComparePhotoStrip({ title }: { title: string }) {
   return (
-    <div className="relative h-[100px] overflow-hidden bg-black border-b border-line">
+    <div className="relative h-[110px] overflow-hidden bg-black rounded-2xl mx-4 mt-4 shadow-md">
       <Image
         src="/photos/cyclists-race.jpg"
         alt=""
         fill
-        className="object-cover object-[center_30%] opacity-70"
+        className="object-cover object-[center_32%] opacity-90"
         sizes="100vw"
       />
-      {/* dark overlay + left-to-right fade */}
-      <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent" />
-      {/* bottom fade into toolbar */}
-      <div className="absolute inset-0 bg-gradient-to-t from-canvas/80 to-transparent" />
+      {/* dark overlay — photo stays fully visible */}
+      <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/25 to-black/10" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20" />
       <div className="absolute bottom-4 left-5">
-        <p className="text-white/50 text-[10px] font-semibold uppercase tracking-[0.18em] mb-0.5">Compare</p>
-        <h2 className="text-white text-lg font-semibold tracking-tight leading-none">{title}</h2>
+        <p className="text-white/50 text-[10px] font-semibold uppercase tracking-[0.2em] mb-1">Compare</p>
+        <h2 className="text-white text-lg font-semibold tracking-tight leading-none drop-shadow">{title}</h2>
       </div>
     </div>
   );
 }
 
-// ── Dashboard: attention monitor section accent ───────────────────────────────
-// A narrow right-edge accent photo beside the attention monitor header
+// ── Dashboard: background texture for the team stats strip ───────────────────
+// Render this as the FIRST child inside the stats strip div (which must have `relative` added).
+// The photo sits behind the stat content as a subtle environmental texture.
 
-export function DashboardAttentionPhoto() {
+export function DashboardStatsBg() {
   return (
-    <div className="relative h-full w-[120px] shrink-0 overflow-hidden rounded-r-xl">
-      <Image
-        src="/photos/crosswalk-runner.jpg"
-        alt=""
-        fill
-        className="object-cover object-[center_20%] opacity-60"
-        sizes="120px"
-      />
-      <div className="absolute inset-0 bg-gradient-to-r from-canvas/90 to-transparent" />
-    </div>
-  );
-}
-
-// ── Dashboard: desert ambient strip (above the table, subtle) ────────────────
-
-export function DashboardAmbientStrip() {
-  return (
-    <div className="relative h-[72px] overflow-hidden bg-black border-b border-line">
+    <>
       <Image
         src="/photos/desert-landscape.jpg"
         alt=""
         fill
-        className="object-cover object-[center_55%] opacity-50"
+        className="object-cover object-[center_58%] opacity-40"
         sizes="100vw"
       />
-      <div className="absolute inset-0 bg-gradient-to-r from-canvas/80 via-transparent to-canvas/80" />
-      <div className="absolute inset-0 bg-gradient-to-b from-canvas/30 to-canvas/70" />
-    </div>
+      {/* light canvas wash so stat text stays legible */}
+      <div className="absolute inset-0 bg-canvas/55" />
+    </>
   );
 }
