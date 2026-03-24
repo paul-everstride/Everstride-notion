@@ -251,6 +251,8 @@ type CompareMetric = {
   renderCurrent: (a: AthleteSummary) => string;
   /** Field in RecoveryHistoryDay to use for snapshot date lookups. Undefined = use baseValue. */
   historyField?: keyof RecoveryHistoryDay;
+  /** Fixed Y-axis domain for the snapshot bar chart. Falls back to auto-scale if omitted. */
+  barDomain?: [number, number];
 };
 
 // ── Series factories ──────────────────────────────────────────────────────────
@@ -361,10 +363,10 @@ function genPerfSeries(bv: (a: AthleteSummary) => number, key: string) {
 // ── Metric definitions ────────────────────────────────────────────────────────
 
 const readinessMetrics: CompareMetric[] = [
-  { key: "rec",  label: "Recovery score", unit: "",    historyField: "recoveryScore", baseValue: (a) => a.recoveryScore ?? 0, getSeries: readinessSeries("recoveryScore", "readinessTrend"), renderCurrent: (a) => a.recoveryScore != null ? `${a.recoveryScore}` : "–" },
-  { key: "slp",  label: "Sleep score",    unit: "",    historyField: "sleepScore",    baseValue: (a) => a.sleepScore,         getSeries: readinessSeries("sleepScore",    "sleepTrend"),     renderCurrent: (a) => `${a.sleepScore}` },
-  { key: "rhr",  label: "RHR",            unit: "bpm", historyField: "restHr",        baseValue: (a) => a.restHr ?? 0,        getSeries: readinessSeries("restHr",        "rhrTrend"),       renderCurrent: (a) => a.restHr != null ? `${a.restHr} bpm` : "–" },
-  { key: "hrv",  label: "HRV",            unit: "ms",  historyField: "hrv",           baseValue: (a) => a.hrv ?? 0,           getSeries: readinessSeries("hrv",           "hrvTrend"),       renderCurrent: (a) => a.hrv != null ? `${a.hrv} ms` : "–" },
+  { key: "rec",  label: "Recovery score", unit: "",    barDomain: [0, 100],  historyField: "recoveryScore", baseValue: (a) => a.recoveryScore ?? 0, getSeries: readinessSeries("recoveryScore", "readinessTrend"), renderCurrent: (a) => a.recoveryScore != null ? `${a.recoveryScore}` : "–" },
+  { key: "slp",  label: "Sleep score",    unit: "",    barDomain: [0, 100],  historyField: "sleepScore",    baseValue: (a) => a.sleepScore,         getSeries: readinessSeries("sleepScore",    "sleepTrend"),     renderCurrent: (a) => `${a.sleepScore}` },
+  { key: "rhr",  label: "RHR",            unit: "bpm", barDomain: [30, 80],  historyField: "restHr",        baseValue: (a) => a.restHr ?? 0,        getSeries: readinessSeries("restHr",        "rhrTrend"),       renderCurrent: (a) => a.restHr != null ? `${a.restHr} bpm` : "–" },
+  { key: "hrv",  label: "HRV",            unit: "ms",  barDomain: [0, 150],  historyField: "hrv",           baseValue: (a) => a.hrv ?? 0,           getSeries: readinessSeries("hrv",           "hrvTrend"),       renderCurrent: (a) => a.hrv != null ? `${a.hrv} ms` : "–" },
 ];
 
 const perfSnapshotMetrics: CompareMetric[] = [
@@ -544,7 +546,7 @@ function SnapshotBarChart({
     athleteId: athlete.id
   })), [athletes, metric, win]);
 
-  const domain = scalarDomain(data.map(d => d.value ?? 0));
+  const domain: [number, number] = metric.barDomain ?? scalarDomain(data.map(d => d.value ?? 0));
 
   return (
     <div className="border border-line bg-canvas rounded-lg flex flex-col overflow-hidden">
