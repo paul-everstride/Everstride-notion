@@ -196,13 +196,8 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
   const todayStr   = new Date().toISOString().slice(0, 10);
   const thirtyAgo  = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 
-  // Default to the most recent date that actually has data, not today
-  const latestDataDate = athlete.recoveryHistory.length
-    ? athlete.recoveryHistory[athlete.recoveryHistory.length - 1].date
-    : todayStr;
-
   const [tab,          setTab]          = useState<Tab>("readiness");
-  const [selectedDate, setSelectedDate] = useState<string>(latestDataDate);
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [timeframe,    setTimeframe]    = useState<TF>("30d");
   const [recTf,        setRecTf]        = useState<RecTF>("all");
   const [recTablePage, setRecTablePage] = useState(0);
