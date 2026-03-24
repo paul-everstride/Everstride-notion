@@ -11,6 +11,7 @@ import type { AthleteSummary, RecoveryHistoryDay, TrendPoint } from "@/lib/types
 import { PolarizedBar } from "@/components/polarized-bar";
 import { cn, formatSignedNumber, formatWeight } from "@/lib/utils";
 import { BarChart2, Table, Calendar } from "lucide-react";
+import { ComparePhotoStrip } from "@/components/photo-accents";
 
 const athleteColors = ["#e16b2b", "#3b82f6", "#059669", "#d97706", "#dc2626", "#8b5cf6"];
 
@@ -1574,6 +1575,9 @@ export function CompareWorkbench({
 
   return (
     <div className="border border-line">
+
+      {/* ── Photo header strip ── */}
+      <ComparePhotoStrip title={section === "readiness" ? "Readiness & Recovery" : "Performance"} />
 
       {/* ── Control toolbar ── */}
       <div className="bg-surface border-b border-line px-4 py-3 space-y-3">

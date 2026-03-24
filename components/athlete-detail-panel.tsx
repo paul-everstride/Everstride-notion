@@ -8,6 +8,7 @@ import {
 import { Calendar, SlidersHorizontal, X } from "lucide-react";
 import type { AthleteSummary, RecoveryHistoryDay, TrendPoint } from "@/lib/types";
 import { cn, formatSleepDuration, formatSignedNumber, formatWeight, getRecoveryTone } from "@/lib/utils";
+import { AthleteHeroStrip } from "@/components/photo-accents";
 
 // ── Detail table column config ────────────────────────────────────────────────
 
@@ -603,6 +604,9 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
 
   return (
     <div>
+      {/* Athlete hero photo strip */}
+      <AthleteHeroStrip name={athlete.name} />
+
       {/* Tab bar */}
       <div className="border-b border-line bg-canvas px-6">
         <div className="flex -mb-px">

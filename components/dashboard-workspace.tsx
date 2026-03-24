@@ -24,6 +24,7 @@ import { AthleteTable, type AthleteColumnKey, defaultAthleteColumns } from "@/co
 import { RecoveryBadge } from "@/components/recovery-badge";
 import type { AthleteSummary, DashboardData } from "@/lib/types";
 import { cn, formatSignedNumber } from "@/lib/utils";
+import { DashboardAmbientStrip } from "@/components/photo-accents";
 
 // ── Column config ──────────────────────────────────────────────────────────────
 
@@ -1090,6 +1091,9 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
             </button>
           </div>
         </div>
+
+        {/* ── Ambient photo strip ── */}
+        <DashboardAmbientStrip />
 
         {/* ── Roster table ── */}
         <AthleteTable
