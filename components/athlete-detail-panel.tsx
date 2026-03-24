@@ -1,13 +1,174 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   Area, AreaChart, CartesianGrid, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { Calendar } from "lucide-react";
-import type { AthleteSummary, TrendPoint } from "@/lib/types";
+import { Calendar, SlidersHorizontal, X } from "lucide-react";
+import type { AthleteSummary, RecoveryHistoryDay, TrendPoint } from "@/lib/types";
 import { cn, formatSleepDuration, formatSignedNumber, formatWeight, getRecoveryTone } from "@/lib/utils";
+
+// ── Detail table column config ────────────────────────────────────────────────
+
+type DetailColKey = "date" | "recovery" | "hrv" | "rhr" | "spo2" | "skinTemp" | "sleepScore" | "sleepEfficiency" | "sleepDuration" | "sleepDeep" | "sleepRem";
+
+const DETAIL_COL_DEFS: Array<{ key: DetailColKey; label: string; header: string }> = [
+  { key: "date",            label: "Date",             header: "Date"         },
+  { key: "recovery",        label: "Recovery",         header: "Recovery"     },
+  { key: "hrv",             label: "HRV (ms)",         header: "HRV (ms)"     },
+  { key: "rhr",             label: "Resting HR",       header: "Resting HR"   },
+  { key: "spo2",            label: "SpO₂",             header: "SpO₂"         },
+  { key: "skinTemp",        label: "Skin Temp",        header: "Skin Temp"    },
+  { key: "sleepScore",      label: "Sleep Score",      header: "Sleep Score"  },
+  { key: "sleepEfficiency", label: "Sleep Efficiency", header: "Sleep Eff."   },
+  { key: "sleepDuration",   label: "Sleep Duration",   header: "Sleep Dur."   },
+  { key: "sleepDeep",       label: "Deep Sleep",       header: "Deep"         },
+  { key: "sleepRem",        label: "REM Sleep",        header: "REM"          },
+];
+
+const DEFAULT_DETAIL_COLS: DetailColKey[] = ["date", "recovery", "hrv", "rhr", "spo2", "skinTemp"];
+
+function renderDetailCell(key: DetailColKey, day: RecoveryHistoryDay): React.ReactNode {
+  const tone = day.recoveryScore != null ? getRecoveryTone(day.recoveryScore) : null;
+  const recColor = tone === "success" ? "#059669" : tone === "warning" ? "#d97706" : tone === "danger" ? "#dc2626" : undefined;
+  switch (key) {
+    case "date":
+      return <span className="text-muted whitespace-nowrap">{day.label}</span>;
+    case "recovery":
+      return day.recoveryScore != null
+        ? <span style={{ color: recColor }} className="font-semibold">{day.recoveryScore}%</span>
+        : <span className="text-muted">—</span>;
+    case "hrv":
+      return day.hrv != null ? day.hrv : <span className="text-muted">—</span>;
+    case "rhr":
+      return day.restHr != null ? `${day.restHr} bpm` : <span className="text-muted">—</span>;
+    case "spo2":
+      return day.spo2 != null ? `${day.spo2}%` : <span className="text-muted">—</span>;
+    case "skinTemp":
+      return day.skinTempC != null ? `${day.skinTempC}°C` : <span className="text-muted">—</span>;
+    case "sleepScore":
+      return day.sleepScore != null ? day.sleepScore : <span className="text-muted">—</span>;
+    case "sleepEfficiency":
+      return day.sleepEfficiency != null ? `${day.sleepEfficiency}%` : <span className="text-muted">—</span>;
+    case "sleepDuration":
+      return day.sleepDurationMins != null
+        ? `${Math.floor(day.sleepDurationMins / 60)}h ${day.sleepDurationMins % 60}m`
+        : <span className="text-muted">—</span>;
+    case "sleepDeep":
+      return day.sleepDeepMins != null ? `${day.sleepDeepMins}m` : <span className="text-muted">—</span>;
+    case "sleepRem":
+      return day.sleepRemMins != null ? `${day.sleepRemMins}m` : <span className="text-muted">—</span>;
+  }
+}
+
+// ── Detail column editor panel ────────────────────────────────────────────────
+
+function DetailColEditorPanel({
+  colOrder, onReorder, onClose,
+}: {
+  colOrder: DetailColKey[];
+  onReorder: (next: DetailColKey[]) => void;
+  onClose: () => void;
+}) {
+  const dragKey = useRef<DetailColKey | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<DetailColKey | null>(null);
+
+  const isActive = (key: DetailColKey) => colOrder.includes(key);
+  const locked   = (key: DetailColKey) => key === "date";
+
+  const toggleKey = (key: DetailColKey) => {
+    if (locked(key)) return;
+    if (colOrder.includes(key)) {
+      onReorder(colOrder.filter(k => k !== key));
+    } else {
+      onReorder([...colOrder, key]);
+    }
+  };
+
+  const handleDrop = (targetKey: DetailColKey) => {
+    setDragOverKey(null);
+    const src = dragKey.current;
+    if (!src || src === targetKey) return;
+    if (!colOrder.includes(src) || !colOrder.includes(targetKey)) return;
+    const next = [...colOrder];
+    const fromIdx = next.indexOf(src);
+    const toIdx   = next.indexOf(targetKey);
+    next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, src);
+    onReorder(next);
+    dragKey.current = null;
+  };
+
+  const activeItems   = colOrder.map(k => DETAIL_COL_DEFS.find(d => d.key === k)!).filter(Boolean);
+  const inactiveItems = DETAIL_COL_DEFS.filter(d => !colOrder.includes(d.key));
+  const sortedItems   = [...activeItems, ...inactiveItems];
+
+  return (
+    <div className="fixed inset-0 z-30 bg-black/20 backdrop-blur-sm" onClick={onClose}>
+      <div className="absolute right-0 top-0 bottom-0 w-72 border-l border-line bg-canvas shadow-xl flex flex-col"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-line px-4 py-4">
+          <div>
+            <p className="text-xs text-muted mb-0.5">Configure</p>
+            <h3 className="text-sm font-semibold text-ink">Table columns</h3>
+          </div>
+          <button type="button" onClick={onClose}
+            className="rounded-md p-1.5 text-muted hover:text-ink hover:bg-surfaceStrong transition-colors duration-100">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-0.5">
+          {sortedItems.map(item => {
+            const active = isActive(item.key);
+            const isLocked = locked(item.key);
+            return (
+              <div
+                key={item.key}
+                draggable={active && !isLocked}
+                onDragStart={() => { dragKey.current = item.key; }}
+                onDragEnter={() => setDragOverKey(item.key)}
+                onDragOver={e => { e.preventDefault(); }}
+                onDragEnd={() => { setDragOverKey(null); dragKey.current = null; }}
+                onDrop={() => handleDrop(item.key)}
+                className={cn(
+                  "flex w-full items-center gap-2 px-2 py-2 text-left text-sm rounded-md border transition-colors duration-100",
+                  dragOverKey === item.key && active && !isLocked ? "border-t-2 border-t-brand" : "",
+                  active
+                    ? "border-brand/20 bg-brandSoft text-ink"
+                    : "border-transparent bg-surface text-muted hover:text-ink hover:bg-surfaceStrong"
+                )}>
+                <span
+                  className={cn(
+                    "text-muted/40 cursor-grab select-none text-base leading-none shrink-0",
+                    (!active || isLocked) && "invisible"
+                  )}
+                  title="Drag to reorder">
+                  ⠿
+                </span>
+                <span className="flex-1">{item.label}</span>
+                {isLocked ? (
+                  <span className="text-xs ml-2 font-medium text-muted/40">Locked</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => toggleKey(item.key)}
+                    className={cn("text-xs ml-2 font-medium shrink-0", active ? "text-brand" : "text-muted/50")}>
+                    {active ? "On" : "Off"}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="border-t border-line px-4 py-2.5 bg-surface flex items-center justify-between">
+          <span className="text-xs text-muted">{colOrder.length} columns visible</span>
+          <button type="button" onClick={onClose} className="text-sm font-medium text-brand hover:text-brandInk transition-colors">Done</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Null-safe display helper ─────────────────────────────────────────────────
 
@@ -198,6 +359,8 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
 
   const [tab,          setTab]          = useState<Tab>("readiness");
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+  const [detailColOrder, setDetailColOrder] = useState<DetailColKey[]>(DEFAULT_DETAIL_COLS);
+  const [showDetailColEditor, setShowDetailColEditor] = useState(false);
   const [timeframe,    setTimeframe]    = useState<TF>("30d");
   const [recTf,        setRecTf]        = useState<RecTF>("all");
   const [recTablePage, setRecTablePage] = useState(0);
@@ -714,55 +877,51 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-ink">Daily Breakdown</h3>
-              {reversedHistory.length > 0 && (
-                <span className="text-xs text-muted">
-                  {recTablePage * RECORDS_PER_PAGE + 1}–{Math.min((recTablePage + 1) * RECORDS_PER_PAGE, reversedHistory.length)} of {reversedHistory.length} days
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {reversedHistory.length > 0 && (
+                  <span className="text-xs text-muted">
+                    {recTablePage * RECORDS_PER_PAGE + 1}–{Math.min((recTablePage + 1) * RECORDS_PER_PAGE, reversedHistory.length)} of {reversedHistory.length} days
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowDetailColEditor(true)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-muted border border-line rounded-md px-2 py-1 hover:text-ink hover:border-ink/30 hover:bg-surfaceStrong transition-colors duration-100"
+                  title="Edit columns">
+                  <SlidersHorizontal size={12} />
+                  Columns
+                </button>
+              </div>
             </div>
             <div className="border border-line rounded-lg overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-line text-sm">
                   <thead className="bg-surface">
                     <tr>
-                      {["Date","Recovery","HRV (ms)","Resting HR","SpO₂","Skin Temp"].map((h, i) => (
-                        <th key={h}
-                          className={`px-4 py-2.5 text-xs font-medium text-muted whitespace-nowrap ${i === 0 ? "text-left" : "text-right"}`}>
-                          {h}
-                        </th>
-                      ))}
+                      {detailColOrder.map((key, i) => {
+                        const def = DETAIL_COL_DEFS.find(d => d.key === key);
+                        return def ? (
+                          <th key={key}
+                            className={`px-4 py-2.5 text-xs font-medium text-muted whitespace-nowrap ${i === 0 ? "text-left" : "text-right"}`}>
+                            {def.header}
+                          </th>
+                        ) : null;
+                      })}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line bg-canvas">
-                    {pagedHistory.map(day => {
-                      const tone = day.recoveryScore != null ? getRecoveryTone(day.recoveryScore) : null;
-                      const recColor = tone === "success" ? "#059669" : tone === "warning" ? "#d97706" : tone === "danger" ? "#dc2626" : undefined;
-                      return (
-                        <tr key={day.date} className="hover:bg-surface/60 transition-colors duration-75">
-                          <td className="px-4 py-2.5 text-sm text-muted whitespace-nowrap">{day.label}</td>
-                          <td className="px-4 py-2.5 text-right tabular">
-                            {day.recoveryScore != null
-                              ? <span className="font-semibold" style={{ color: recColor }}>{day.recoveryScore}%</span>
-                              : <span className="text-muted">—</span>}
+                    {pagedHistory.map(day => (
+                      <tr key={day.date} className="hover:bg-surface/60 transition-colors duration-75">
+                        {detailColOrder.map((key, i) => (
+                          <td key={key} className={`px-4 py-2.5 tabular text-ink ${i === 0 ? "text-sm" : "text-right"}`}>
+                            {renderDetailCell(key, day)}
                           </td>
-                          <td className="px-4 py-2.5 text-right tabular text-ink">
-                            {day.hrv != null ? day.hrv : <span className="text-muted">—</span>}
-                          </td>
-                          <td className="px-4 py-2.5 text-right tabular text-ink">
-                            {day.restHr != null ? `${day.restHr} bpm` : <span className="text-muted">—</span>}
-                          </td>
-                          <td className="px-4 py-2.5 text-right tabular text-ink">
-                            {day.spo2 != null ? `${day.spo2}%` : <span className="text-muted">—</span>}
-                          </td>
-                          <td className="px-4 py-2.5 text-right tabular text-ink">
-                            {day.skinTempC != null ? `${day.skinTempC}°C` : <span className="text-muted">—</span>}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                        ))}
+                      </tr>
+                    ))}
                     {pagedHistory.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted">No data for this period</td>
+                        <td colSpan={detailColOrder.length} className="px-4 py-8 text-center text-sm text-muted">No data for this period</td>
                       </tr>
                     )}
                   </tbody>
@@ -916,6 +1075,14 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
             </div>
           ))}
         </div>
+      )}
+
+      {showDetailColEditor && (
+        <DetailColEditorPanel
+          colOrder={detailColOrder}
+          onReorder={setDetailColOrder}
+          onClose={() => setShowDetailColEditor(false)}
+        />
       )}
     </div>
   );

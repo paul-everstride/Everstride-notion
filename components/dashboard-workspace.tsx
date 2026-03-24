@@ -724,6 +724,7 @@ function EditorPanel({
   onClose: () => void;
 }) {
   const dragKey = useRef<AthleteColumnKey | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<AthleteColumnKey | null>(null);
 
   // Build a lookup of all column defs from the imported array (at module level we have columnDefinitions already)
   // We reference the same columnDefinitions used in athlete-table.tsx via columnOptions defined in this file
@@ -772,6 +773,7 @@ function EditorPanel({
 
   const handleDragStart = (key: AthleteColumnKey) => { dragKey.current = key; };
   const handleDrop = (targetKey: AthleteColumnKey) => {
+    setDragOverKey(null);
     const src = dragKey.current;
     if (!src || src === targetKey) return;
     // Only reorder within same group
@@ -803,12 +805,19 @@ function EditorPanel({
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-4">
           {EDITOR_GROUPS.map(group => {
-            const groupCols = columnOptions.filter(o => colMeta.get(o.key)?.group === group.key);
+            const activeItems = columnOrder
+              .filter(k => colMeta.get(k)?.group === group.key)
+              .map(k => columnOptions.find(c => c.key === k)!)
+              .filter(Boolean);
+            const inactiveItems = columnOptions.filter(
+              o => colMeta.get(o.key)?.group === group.key && !columnOrder.includes(o.key)
+            );
+            const sortedItems = [...activeItems, ...inactiveItems];
             return (
               <div key={group.key}>
                 <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 px-1 ${group.textClass}`}>{group.label}</p>
                 <div className="space-y-0.5">
-                  {groupCols.map(item => {
+                  {sortedItems.map(item => {
                     const active = isActive(item.key);
                     const locked = item.key === "name";
                     return (
@@ -816,10 +825,13 @@ function EditorPanel({
                         key={item.key}
                         draggable={active && !locked}
                         onDragStart={() => handleDragStart(item.key)}
+                        onDragEnter={() => setDragOverKey(item.key)}
                         onDragOver={e => { e.preventDefault(); }}
+                        onDragEnd={() => { setDragOverKey(null); dragKey.current = null; }}
                         onDrop={() => handleDrop(item.key)}
                         className={cn(
                           "flex w-full items-center gap-2 px-2 py-2 text-left text-sm rounded-md border transition-colors duration-100",
+                          dragOverKey === item.key && active && !locked ? "border-t-2 border-t-brand" : "",
                           active
                             ? "border-brand/20 bg-brandSoft text-ink"
                             : "border-transparent bg-surface text-muted hover:text-ink hover:bg-surfaceStrong"
