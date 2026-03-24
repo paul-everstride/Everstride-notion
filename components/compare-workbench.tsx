@@ -472,7 +472,7 @@ function SnapshotBarChart({
     athleteId: athlete.id
   })), [athletes, metric, win]);
 
-  const domain = scalarDomain(data.map(d => d.value));
+  const domain = scalarDomain(data.map(d => d.value ?? 0));
 
   return (
     <div className="border border-line bg-canvas rounded-lg flex flex-col overflow-hidden">
