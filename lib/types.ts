@@ -40,17 +40,26 @@ export type AthleteMetricRow = {
   skin_temp: number | null;
 };
 
-/** One day of full recovery data sourced from the OW timeseries endpoint. */
+/** One day of full recovery + sleep data sourced from the OW API. */
 export type RecoveryHistoryDay = {
   date: string;             // YYYY-MM-DD
   label: string;            // "Thu, Nov 6"  (for table display)
   shortLabel: string;       // "Nov 6"       (for chart X-axis)
+  // Recovery / biometrics (from timeseries)
   recoveryScore: number | null;
   hrv: number | null;       // HRV RMSSD in ms
   restHr: number | null;    // Resting HR in bpm
   spo2: number | null;      // SpO₂ in %
   skinTempC: number | null; // Raw skin temperature in °C
   resp: number | null;      // Respiratory rate in breaths/min
+  // Sleep (from sleep summaries, matched by date)
+  sleepScore: number | null;
+  sleepEfficiency: number | null;  // %
+  sleepDurationMins: number | null;
+  sleepDeepMins: number | null;
+  sleepRemMins: number | null;
+  sleepLightMins: number | null;
+  sleepAwakeMins: number | null;
 };
 
 export type AthleteSummary = {

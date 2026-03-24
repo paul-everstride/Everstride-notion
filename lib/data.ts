@@ -104,23 +104,38 @@ function toAthleteSummary(
   const ts_resp     = timeseries["respiratory_rate"]              ?? [];
   const ts_skin     = timeseries["skin_temperature"]              ?? [];
 
+  // ── Today-only headline metrics (dashboard cards) ─────────────────────────
+  // Only use the most recent data point if it is from today or yesterday —
+  // WHOOP delivers overnight data in the morning so yesterday is acceptable.
+  // If a user's sync stopped months ago (e.g. Paul) all headline metrics are null.
+  const todayStr     = new Date().toISOString().slice(0, 10);
+  const yesterdayStr = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const isRecent = (date: string | undefined): boolean =>
+    date != null && date >= yesterdayStr;
+
   const recoveryScore: number | null =
-    ts_recovery[0]?.value != null ? Math.round(ts_recovery[0].value) : null;
+    isRecent(ts_recovery[0]?.date) && ts_recovery[0]?.value != null
+      ? Math.round(ts_recovery[0].value) : null;
 
   const restHr: number | null =
-    ts_rhr[0]?.value != null ? Math.round(ts_rhr[0].value) : null;
+    isRecent(ts_rhr[0]?.date) && ts_rhr[0]?.value != null
+      ? Math.round(ts_rhr[0].value) : null;
 
   const hrv: number | null =
-    ts_hrv[0]?.value != null ? Math.round(ts_hrv[0].value) : null;
+    isRecent(ts_hrv[0]?.date) && ts_hrv[0]?.value != null
+      ? Math.round(ts_hrv[0].value) : null;
 
   const spo2: number | null =
-    ts_spo2[0]?.value != null ? Math.round(ts_spo2[0].value * 10) / 10 : null;
+    isRecent(ts_spo2[0]?.date) && ts_spo2[0]?.value != null
+      ? Math.round(ts_spo2[0].value * 10) / 10 : null;
 
   const respirationRate: number | null =
-    ts_resp[0]?.value != null ? Math.round(ts_resp[0].value * 10) / 10 : null;
+    isRecent(ts_resp[0]?.date) && ts_resp[0]?.value != null
+      ? Math.round(ts_resp[0].value * 10) / 10 : null;
 
-  // Skin temp: show delta from the user's own 7-day rolling average
-  const skinTempRaw: number | null = ts_skin[0]?.value ?? null;
+  // Skin temp: delta from the user's own 7-day rolling average (recent only)
+  const skinTempRaw: number | null =
+    isRecent(ts_skin[0]?.date) ? (ts_skin[0]?.value ?? null) : null;
   let skinTemp: number | null = null;
   if (skinTempRaw != null) {
     if (ts_skin.length >= 2) {
@@ -133,13 +148,19 @@ function toAthleteSummary(
     }
   }
 
-  // ── Full recovery history (all days, oldest → newest) ─────────────────────
+  // suppress unused-variable warning — todayStr used below in recoveryHistory
+  void todayStr;
+
+  // ── Full recovery + sleep history (all days, oldest → newest) ────────────
   const recMap  = Object.fromEntries(ts_recovery.map(p => [p.date, p.value]));
   const rhrMap  = Object.fromEntries(ts_rhr.map(p => [p.date, p.value]));
   const hrvMap  = Object.fromEntries(ts_hrv.map(p => [p.date, p.value]));
   const spo2Map = Object.fromEntries(ts_spo2.map(p => [p.date, p.value]));
   const skinMap = Object.fromEntries(ts_skin.map(p => [p.date, p.value]));
   const respMap = Object.fromEntries(ts_resp.map(p => [p.date, p.value]));
+
+  // Sleep records keyed by date so we can join per-day sleep data
+  const sleepByDate = Object.fromEntries(sleep.map(s => [s.date, s]));
 
   const allHistoryDates = Array.from(new Set([
     ...ts_recovery.map(p => p.date),
@@ -148,19 +169,36 @@ function toAthleteSummary(
     ...ts_spo2.map(p => p.date),
     ...ts_skin.map(p => p.date),
     ...ts_resp.map(p => p.date),
+    ...sleep.map(s => s.date),      // include all sleep dates too
   ])).sort(); // ascending — oldest first
 
-  const recoveryHistory: RecoveryHistoryDay[] = allHistoryDates.map(date => ({
-    date,
-    label:      fullDayLabel(date),
-    shortLabel: shortLabel(date),
-    recoveryScore: recMap[date]  != null ? Math.round(recMap[date])            : null,
-    hrv:           hrvMap[date]  != null ? Math.round(hrvMap[date])            : null,
-    restHr:        rhrMap[date]  != null ? Math.round(rhrMap[date])            : null,
-    spo2:          spo2Map[date] != null ? Math.round(spo2Map[date] * 10) / 10 : null,
-    skinTempC:     skinMap[date] != null ? Math.round(skinMap[date] * 10) / 10 : null,
-    resp:          respMap[date] != null ? Math.round(respMap[date] * 10) / 10 : null,
-  }));
+  const recoveryHistory: RecoveryHistoryDay[] = allHistoryDates.map(date => {
+    const s = sleepByDate[date];
+    const sleepDur = s?.duration_minutes ?? 0;
+    const sleepEff = s?.efficiency_percent ?? 0;
+    const durScore  = sleepDur > 0 ? Math.min(100, Math.round((sleepDur / 480) * 100)) : null;
+    const slpScore  =
+      durScore != null && sleepEff > 0 ? Math.round((sleepEff + durScore) / 2)
+      : durScore;
+    return {
+      date,
+      label:      fullDayLabel(date),
+      shortLabel: shortLabel(date),
+      recoveryScore: recMap[date]  != null ? Math.round(recMap[date])            : null,
+      hrv:           hrvMap[date]  != null ? Math.round(hrvMap[date])            : null,
+      restHr:        rhrMap[date]  != null ? Math.round(rhrMap[date])            : null,
+      spo2:          spo2Map[date] != null ? Math.round(spo2Map[date] * 10) / 10 : null,
+      skinTempC:     skinMap[date] != null ? Math.round(skinMap[date] * 10) / 10 : null,
+      resp:          respMap[date] != null ? Math.round(respMap[date] * 10) / 10 : null,
+      sleepScore:       slpScore ?? null,
+      sleepEfficiency:  sleepEff > 0 ? Math.round(sleepEff) : null,
+      sleepDurationMins: sleepDur > 0 ? sleepDur : null,
+      sleepDeepMins:    s?.stages?.deep_minutes   ?? null,
+      sleepRemMins:     s?.stages?.rem_minutes    ?? null,
+      sleepLightMins:   s?.stages?.light_minutes  ?? null,
+      sleepAwakeMins:   s?.stages?.awake_minutes  ?? null,
+    };
+  });
 
   // ── Sleep metrics — real WHOOP data ───────────────────────────────────────
   const sleepEfficiency = latestSleep?.efficiency_percent ?? 0;

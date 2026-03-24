@@ -255,25 +255,33 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
     return m;
   }, [recHistory]);
 
-  // ── Daily snapshot values — always from real data, never synthetic ──
-  // Shows N/A for any date that has no data in recoveryHistory (e.g. today if sync has stopped).
+  // ── Daily snapshot values — keyed exactly to selectedDate ──
+  // All fields are null for any date with no data (e.g. today when sync has stopped).
   const dayVals = useMemo(() => {
     const rec = historyMap.get(selectedDate);
     return {
-      recovery: rec?.recoveryScore ?? null,
-      hrv:      rec?.hrv           ?? null,
-      sleep:    null as number | null,   // sleep score not stored per-day in recoveryHistory
-      rhr:      rec?.restHr        ?? null,
-      spo2:     rec?.spo2          ?? null,
-      resp:     rec?.resp          ?? null,
+      recovery:          rec?.recoveryScore    ?? null,
+      hrv:               rec?.hrv              ?? null,
+      sleep:             rec?.sleepScore       ?? null,
+      rhr:               rec?.restHr           ?? null,
+      spo2:              rec?.spo2             ?? null,
+      resp:              rec?.resp             ?? null,
+      sleepEfficiency:   rec?.sleepEfficiency  ?? null,
+      sleepDurationMins: rec?.sleepDurationMins ?? null,
+      sleepDeepMins:     rec?.sleepDeepMins    ?? null,
+      sleepRemMins:      rec?.sleepRemMins     ?? null,
+      sleepLightMins:    rec?.sleepLightMins   ?? null,
+      sleepAwakeMins:    rec?.sleepAwakeMins   ?? null,
     };
   }, [selectedDate, historyMap]);
 
-  // ── Sleep breakdown ──
-  const total = athlete.totalBedMs || 1;
-  const deepPct   = Math.round(athlete.totalSlowWaveMs / total * 100);
-  const remPct    = Math.round(athlete.totalRemMs       / total * 100);
-  const lightPct  = Math.round(athlete.totalLightMs     / total * 100);
+  // ── Sleep breakdown — computed from selected date's data ──
+  const sleepTotalMs = (dayVals.sleepDurationMins ?? 0) * 60_000;
+  const sleepBedMs   = sleepTotalMs || 1; // avoid div by zero
+  const hasSleepData = (dayVals.sleepDurationMins ?? 0) > 0;
+  const deepPct   = Math.round((dayVals.sleepDeepMins  ?? 0) * 60_000 / sleepBedMs * 100);
+  const remPct    = Math.round((dayVals.sleepRemMins   ?? 0) * 60_000 / sleepBedMs * 100);
+  const lightPct  = Math.round((dayVals.sleepLightMins ?? 0) * 60_000 / sleepBedMs * 100);
   const awakePct  = Math.max(0, 100 - deepPct - remPct - lightPct);
 
   const TF_OPTS: { key: TF; label: string }[] = [
@@ -458,9 +466,12 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
               <MetricPill label="Recovery"
                 value={dayVals.recovery != null ? String(dayVals.recovery) : "N/A"}
                 accent={dayVals.recovery != null ? (dayVals.recovery >= 70 ? "#059669" : dayVals.recovery >= 50 ? "#d97706" : "#dc2626") : undefined}
-                sub={athlete.statusNote} />
+                sub={dayVals.recovery != null
+                  ? (dayVals.recovery >= 67 ? "Good recovery" : dayVals.recovery >= 34 ? "Moderate recovery" : "Low recovery")
+                  : "No data for this date"} />
               <MetricPill label="HRV" value={dayVals.hrv != null ? `${dayVals.hrv} ms` : "N/A"} sub="Overnight avg" />
-              <MetricPill label="Sleep score" value={dayVals.sleep != null ? String(dayVals.sleep) : "N/A"} sub={`Eff ${athlete.sleepEfficiency}%`} />
+              <MetricPill label="Sleep score" value={dayVals.sleep != null ? String(dayVals.sleep) : "N/A"}
+                sub={dayVals.sleepEfficiency != null ? `Eff ${dayVals.sleepEfficiency}%` : "No sleep data"} />
               <MetricPill label="Resting HR" value={dayVals.rhr != null ? `${dayVals.rhr} bpm` : "N/A"} sub="Overnight avg" />
               <MetricPill label="SpO₂" value={dayVals.spo2 != null ? `${dayVals.spo2}%` : "N/A"} sub="Overnight" />
               <MetricPill label="Resp rate" value={dayVals.resp != null ? `${dayVals.resp} rpm` : "N/A"} sub="Overnight" />
@@ -471,43 +482,51 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
           <div className="border border-line rounded-lg overflow-hidden bg-canvas">
             <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
               <span className="text-sm font-medium text-ink">Sleep breakdown</span>
-              <span className="text-xs text-muted">{formatSleepDuration(athlete.totalBedMs)} in bed</span>
+              <span className="text-xs text-muted">
+                {hasSleepData ? `${formatSleepDuration(sleepTotalMs)} in bed` : dayLabel}
+              </span>
             </div>
-            <div className="px-4 py-4 space-y-3">
-              <div className="flex rounded-full overflow-hidden h-3 gap-px bg-line">
-                <div style={{ width: `${deepPct}%`,  backgroundColor: "#3b82f6" }} />
-                <div style={{ width: `${remPct}%`,   backgroundColor: "#8b5cf6" }} />
-                <div style={{ width: `${lightPct}%`, backgroundColor: "#93c5fd" }} />
-                <div style={{ width: `${awakePct}%`, backgroundColor: "#d1d5db" }} />
+            {hasSleepData ? (
+              <div className="px-4 py-4 space-y-3">
+                <div className="flex rounded-full overflow-hidden h-3 gap-px bg-line">
+                  <div style={{ width: `${deepPct}%`,  backgroundColor: "#3b82f6" }} />
+                  <div style={{ width: `${remPct}%`,   backgroundColor: "#8b5cf6" }} />
+                  <div style={{ width: `${lightPct}%`, backgroundColor: "#93c5fd" }} />
+                  <div style={{ width: `${awakePct}%`, backgroundColor: "#d1d5db" }} />
+                </div>
+                <div className="flex flex-wrap gap-5">
+                  {[
+                    { label: "Deep",  pct: deepPct,  ms: (dayVals.sleepDeepMins  ?? 0) * 60_000, color: "#3b82f6" },
+                    { label: "REM",   pct: remPct,   ms: (dayVals.sleepRemMins   ?? 0) * 60_000, color: "#8b5cf6" },
+                    { label: "Light", pct: lightPct, ms: (dayVals.sleepLightMins ?? 0) * 60_000, color: "#93c5fd" },
+                    { label: "Awake", pct: awakePct, ms: (dayVals.sleepAwakeMins ?? 0) * 60_000, color: "#d1d5db" },
+                  ].map(({ label, pct, ms, color }) => (
+                    <div key={label} className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: color }} />
+                      <span className="text-xs text-muted">{label}</span>
+                      <span className="text-xs font-medium text-ink">{formatSleepDuration(ms)}</span>
+                      <span className="text-xs text-muted">({pct}%)</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 gap-3 pt-1">
+                  {[
+                    { label: "Efficiency",  value: dayVals.sleepEfficiency != null ? `${dayVals.sleepEfficiency}%` : "N/A" },
+                    { label: "Duration",    value: dayVals.sleepDurationMins != null ? formatSleepDuration(dayVals.sleepDurationMins * 60_000) : "N/A" },
+                    { label: "Skin temp Δ", value: athlete.skinTemp != null ? `${athlete.skinTemp > 0 ? "+" : ""}${athlete.skinTemp.toFixed(1)}°C` : "N/A" },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="bg-surface rounded-md px-3 py-2">
+                      <p className="text-[10px] text-muted">{label}</p>
+                      <p className="text-sm font-semibold text-ink mt-0.5">{value}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-5">
-                {[
-                  { label: "Deep",  pct: deepPct,  ms: athlete.totalSlowWaveMs, color: "#3b82f6" },
-                  { label: "REM",   pct: remPct,   ms: athlete.totalRemMs,      color: "#8b5cf6" },
-                  { label: "Light", pct: lightPct, ms: athlete.totalLightMs,    color: "#93c5fd" },
-                  { label: "Awake", pct: awakePct, ms: athlete.totalAwakeMs,    color: "#d1d5db" },
-                ].map(({ label, pct, ms, color }) => (
-                  <div key={label} className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: color }} />
-                    <span className="text-xs text-muted">{label}</span>
-                    <span className="text-xs font-medium text-ink">{formatSleepDuration(ms)}</span>
-                    <span className="text-xs text-muted">({pct}%)</span>
-                  </div>
-                ))}
+            ) : (
+              <div className="px-4 py-6 flex items-center justify-center">
+                <p className="text-sm text-muted">No sleep data for {dayLabel}</p>
               </div>
-              <div className="grid grid-cols-3 gap-3 pt-1">
-                {[
-                  { label: "Efficiency",   value: `${athlete.sleepEfficiency}%` },
-                  { label: "Consistency",  value: `${athlete.sleepConsistency}%` },
-                  { label: "Skin temp Δ",  value: athlete.skinTemp != null ? `${athlete.skinTemp > 0 ? "+" : ""}${athlete.skinTemp.toFixed(1)}°C` : "N/A" },
-                ].map(({ label, value }) => (
-                  <div key={label} className="bg-surface rounded-md px-3 py-2">
-                    <p className="text-[10px] text-muted">{label}</p>
-                    <p className="text-sm font-semibold text-ink mt-0.5">{value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Trends */}
