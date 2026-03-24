@@ -23,6 +23,7 @@ export type AthleteColumnKey =
 type AthleteTableProps = {
   athletes: AthleteSummary[];
   visibleColumns?: AthleteColumnKey[];
+  columnOrder?: AthleteColumnKey[];
   state?: "default" | "loading" | "empty" | "error";
 };
 
@@ -112,7 +113,7 @@ const groupMeta = {
   Performance: { textClass: "text-brand" }
 } as const;
 
-export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns, state = "default" }: AthleteTableProps) {
+export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns, columnOrder, state = "default" }: AthleteTableProps) {
   if (state === "loading") {
     return (
       <div className="border border-line rounded-lg overflow-hidden">
@@ -142,7 +143,9 @@ export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns,
     );
   }
 
-  const activeColumns = columnDefinitions.filter((col) => visibleColumns.includes(col.key));
+  const orderedKeys = columnOrder ?? visibleColumns ?? defaultAthleteColumns;
+  const keyToCol = new Map(columnDefinitions.map(c => [c.key, c]));
+  const activeColumns = orderedKeys.map(key => keyToCol.get(key)).filter((c): c is ColumnDefinition => c !== undefined);
   const groups = ["Athlete", "Readiness", "Performance"] as const;
 
   return (

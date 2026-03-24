@@ -136,6 +136,7 @@ type SnapshotWindow = {
   label: string;          // e.g. "01 MAR – 14 MAR"
   startDayOffset: number; // days from today to first day (negative = past)
   days: number;           // total days in window
+  aggregate?: "point" | "avg"; // default "point"
 };
 
 function getSnapshotWindow(
@@ -187,16 +188,18 @@ function getSnapshotWindow(
  * Look up actual history data for a snapshot window.
  * For metrics with a historyField, searches recoveryHistory by date.
  * For performance metrics without historyField, returns the base value.
+ * aggregate "point" returns the max value; "avg" returns the mean (rounded to 1dp).
  */
 function getHistorySnapshot(
   athlete: AthleteSummary,
   historyField: keyof RecoveryHistoryDay | undefined,
   baseValue: number | null,
   startDayOffset: number,
-  days: number
+  days: number,
+  aggregate: "point" | "avg" = "point"
 ): number | null {
   if (!historyField) return baseValue;
-  let best: number | null = null;
+  const vals: number[] = [];
   for (let i = 0; i < Math.max(days, 1); i++) {
     const d = new Date();
     d.setDate(d.getDate() + startDayOffset + i);
@@ -204,11 +207,11 @@ function getHistorySnapshot(
     const day = athlete.recoveryHistory.find(r => r.date === dateStr);
     if (!day) continue;
     const val = day[historyField];
-    if (typeof val === "number" && !isNaN(val)) {
-      if (best === null || val > best) best = val;
-    }
+    if (typeof val === "number" && !isNaN(val)) vals.push(val);
   }
-  return best;
+  if (!vals.length) return null;
+  if (aggregate === "avg") return Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10;
+  return vals.reduce((best, v) => (v > best ? v : best), vals[0]);
 }
 
 // ── Chart helpers ─────────────────────────────────────────────────────────────
@@ -542,7 +545,7 @@ function SnapshotBarChart({
 }) {
   const data = useMemo(() => athletes.map((athlete) => ({
     name: athlete.name.split(" ")[0],
-    value: getHistorySnapshot(athlete, metric.historyField, metric.baseValue(athlete), win.startDayOffset, win.days),
+    value: getHistorySnapshot(athlete, metric.historyField, metric.baseValue(athlete), win.startDayOffset, win.days, win.aggregate ?? "point"),
     color: colorMap.get(athlete.id) ?? athleteColors[0],
     athleteId: athlete.id
   })), [athletes, metric, win, colorMap]);
@@ -698,7 +701,7 @@ function SnapshotTable({
             <tr key={metric.key} className={cn("border-b border-line last:border-b-0 transition-colors hover:bg-surface/60", rowIdx % 2 === 1 ? "bg-surface/40" : "bg-canvas")}>
               <td className="px-4 py-2.5 text-sm text-muted">{metric.label}</td>
               {athletes.map((a) => {
-                const val = getHistorySnapshot(a, metric.historyField, metric.baseValue(a), win.startDayOffset, win.days);
+                const val = getHistorySnapshot(a, metric.historyField, metric.baseValue(a), win.startDayOffset, win.days, win.aggregate ?? "point");
                 return (
                   <td key={`${a.id}-${metric.key}`} className="px-4 py-2.5 text-sm font-medium tabular text-ink">
                     {val != null ? `${tickFmt(val)}${metric.unit ? ` ${metric.unit}` : ""}` : "–"}
@@ -748,7 +751,7 @@ function PerfSnapshotTable({
         {metric.label}
       </td>
       {athletes.map((a) => {
-        const val = getHistorySnapshot(a, metric.historyField, metric.baseValue(a), win.startDayOffset, win.days);
+        const val = getHistorySnapshot(a, metric.historyField, metric.baseValue(a), win.startDayOffset, win.days, win.aggregate ?? "point");
         return (
           <td key={`${a.id}-${metric.key}`} className="px-4 py-2.5 text-sm font-medium tabular text-ink">
             {val != null ? `${tickFmt(val)}${metric.unit ? ` ${metric.unit}` : ""}` : "–"}
@@ -1054,6 +1057,248 @@ function MonthPickerModal({
   );
 }
 
+// ── Week/Month/Year period pickers ────────────────────────────────────────────
+
+function getMondayOf(d: Date): Date {
+  const copy = new Date(d);
+  const day = copy.getDay();
+  copy.setDate(copy.getDate() - (day === 0 ? 6 : day - 1));
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+const DAY_HEADERS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+
+function WeekPickerModal({
+  timeframeOffset,
+  onSelect,
+  onClose,
+}: {
+  timeframeOffset: number;
+  onSelect: (offset: number) => void;
+  onClose: () => void;
+}) {
+  const now = new Date();
+  const [viewYear, setViewYear] = useState(now.getFullYear());
+  const [viewMonth, setViewMonth] = useState(now.getMonth());
+
+  const nowMonday = getMondayOf(now);
+  const currentWeekMonday = getMondayOf(new Date(now.getFullYear(), now.getMonth(), now.getDate() + timeframeOffset * 7));
+
+  const canNextMonth = !(viewYear === now.getFullYear() && viewMonth >= now.getMonth());
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+    else setViewMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (!canNextMonth) return;
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+    else setViewMonth(m => m + 1);
+  };
+
+  // Build calendar grid: days for this month view
+  const firstDay = new Date(viewYear, viewMonth, 1);
+  // Start grid from Monday of the week containing the 1st
+  const gridStart = getMondayOf(firstDay);
+  // Build 6 weeks of days (42 days)
+  const days: Date[] = Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
+    return d;
+  });
+  // Group into weeks of 7
+  const weeks: Date[][] = [];
+  for (let i = 0; i < 42; i += 7) weeks.push(days.slice(i, i + 7));
+
+  const isFutureWeek = (monday: Date) => monday.getTime() > nowMonday.getTime();
+  const isActiveWeek = (monday: Date) => monday.getTime() === currentWeekMonday.getTime();
+
+  const handleClickDay = (day: Date) => {
+    const monday = getMondayOf(day);
+    if (isFutureWeek(monday)) return;
+    const offset = Math.round((monday.getTime() - nowMonday.getTime()) / (7 * 86400000));
+    onSelect(Math.min(0, offset));
+    onClose();
+  };
+
+  const [hoveredWeek, setHoveredWeek] = useState<number | null>(null);
+
+  return (
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="bg-canvas border border-line rounded-xl shadow-xl p-5 w-[340px]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-ink">Select week</h3>
+          <button type="button" onClick={onClose} className="text-muted hover:text-ink text-sm">✕</button>
+        </div>
+        {/* Month nav */}
+        <div className="flex items-center justify-between mb-3">
+          <button type="button" onClick={prevMonth}
+            className="px-2 py-1 text-xs text-muted hover:text-ink hover:bg-surfaceStrong rounded transition-colors">‹ Prev</button>
+          <span className="text-sm font-medium text-ink">{MONTH_SHORT[viewMonth]} {viewYear}</span>
+          <button type="button" onClick={nextMonth} disabled={!canNextMonth}
+            className={cn("px-2 py-1 text-xs rounded transition-colors", canNextMonth ? "text-muted hover:text-ink hover:bg-surfaceStrong" : "text-muted opacity-30 cursor-not-allowed")}>
+            Next ›
+          </button>
+        </div>
+        {/* Day headers */}
+        <div className="grid grid-cols-7 mb-1">
+          {DAY_HEADERS.map(h => (
+            <div key={h} className="text-center text-[10px] font-medium text-muted py-1">{h}</div>
+          ))}
+        </div>
+        {/* Weeks */}
+        {weeks.map((week, wi) => {
+          const monday = getMondayOf(week[0]);
+          const future = isFutureWeek(monday);
+          const active = isActiveWeek(monday);
+          const hovered = hoveredWeek === wi;
+          return (
+            <div key={wi}
+              className={cn(
+                "grid grid-cols-7 rounded-md transition-colors duration-75 mb-0.5",
+                !future && hovered ? "bg-blue/10" : "",
+                active ? "ring-1 ring-blue/40" : ""
+              )}
+              onMouseEnter={() => !future && setHoveredWeek(wi)}
+              onMouseLeave={() => setHoveredWeek(null)}
+            >
+              {week.map((day, di) => {
+                const inMonth = day.getMonth() === viewMonth;
+                const isToday = day.toDateString() === now.toDateString();
+                return (
+                  <button
+                    key={di}
+                    type="button"
+                    disabled={future}
+                    onClick={() => handleClickDay(day)}
+                    className={cn(
+                      "text-center py-1.5 text-xs rounded transition-colors",
+                      future ? "text-muted/30 cursor-not-allowed" : "cursor-pointer",
+                      !future && inMonth ? "text-ink" : "text-muted/50",
+                      isToday ? "font-semibold" : "",
+                      active && !future ? "text-blue font-semibold" : ""
+                    )}
+                  >
+                    {day.getDate()}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MonthYearPickerModal({
+  timeframeOffset,
+  onSelect,
+  onClose,
+}: {
+  timeframeOffset: number;
+  onSelect: (offset: number) => void;
+  onClose: () => void;
+}) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const [viewYear, setViewYear] = useState(currentYear);
+
+  const selectedDate = new Date(currentYear, now.getMonth() + timeframeOffset, 1);
+  const selectedYear = selectedDate.getFullYear();
+  const selectedMonth = selectedDate.getMonth();
+
+  const isFutureMonth = (year: number, month: number) =>
+    year > currentYear || (year === currentYear && month > now.getMonth());
+
+  const handleSelect = (month: number) => {
+    if (isFutureMonth(viewYear, month)) return;
+    const offset = (viewYear - currentYear) * 12 + (month - now.getMonth());
+    onSelect(Math.min(0, offset));
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="bg-canvas border border-line rounded-xl shadow-xl p-5 w-[300px]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-ink">Select month</h3>
+          <button type="button" onClick={onClose} className="text-muted hover:text-ink text-sm">✕</button>
+        </div>
+        {/* Year nav */}
+        <div className="flex items-center justify-between mb-3">
+          <button type="button" onClick={() => setViewYear(y => y - 1)}
+            className="px-2 py-1 text-xs text-muted hover:text-ink hover:bg-surfaceStrong rounded transition-colors">‹ {viewYear - 1}</button>
+          <span className="text-sm font-semibold text-ink">{viewYear}</span>
+          <button type="button" onClick={() => setViewYear(y => y + 1)} disabled={viewYear >= currentYear}
+            className={cn("px-2 py-1 text-xs rounded transition-colors", viewYear < currentYear ? "text-muted hover:text-ink hover:bg-surfaceStrong" : "text-muted opacity-30 cursor-not-allowed")}>
+            {viewYear + 1} ›
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-1.5">
+          {MONTH_SHORT.map((name, i) => {
+            const future = isFutureMonth(viewYear, i);
+            const active = viewYear === selectedYear && i === selectedMonth;
+            return (
+              <button key={name} type="button" disabled={future} onClick={() => handleSelect(i)}
+                className={cn(
+                  "rounded-md py-2 text-xs font-medium transition-colors duration-100",
+                  active ? "bg-blue text-white border border-blue" :
+                  future ? "text-muted opacity-30 cursor-not-allowed border border-transparent" :
+                  "border border-line text-ink hover:border-blue/40 hover:bg-blue/5 hover:text-blue"
+                )}>
+                {name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function YearPickerPanel({
+  timeframeOffset,
+  onSelect,
+  onClose,
+}: {
+  timeframeOffset: number;
+  onSelect: (offset: number) => void;
+  onClose: () => void;
+}) {
+  const currentYear = new Date().getFullYear();
+  const selectedYear = currentYear + timeframeOffset;
+  const years = Array.from({ length: 5 }, (_, i) => currentYear - 4 + i);
+
+  return (
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="bg-canvas border border-line rounded-xl shadow-xl p-5 w-[220px]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-ink">Select year</h3>
+          <button type="button" onClick={onClose} className="text-muted hover:text-ink text-sm">✕</button>
+        </div>
+        <div className="space-y-1">
+          {[...years].reverse().map(year => {
+            const active = year === selectedYear;
+            return (
+              <button key={year} type="button"
+                onClick={() => { onSelect(year - currentYear); onClose(); }}
+                className={cn(
+                  "flex w-full items-center justify-between px-3 py-2 rounded-md text-sm transition-colors duration-100",
+                  active ? "bg-blue/10 text-blue font-semibold" : "text-ink hover:bg-surfaceStrong"
+                )}>
+                {year}
+                {active && <span className="text-[10px] text-blue">Current</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── CompareWorkbench ──────────────────────────────────────────────────────────
 
 export function CompareWorkbench({
@@ -1077,15 +1322,23 @@ export function CompareWorkbench({
   const [snapshotView, setSnapshotView]   = useState<"bar" | "table">("bar");
 
   // Snapshot range state
-  const [snapDayOffset, setSnapDayOffset]   = useState(0);           // for readiness: single day (0 = today)
+  const [snapDayOffset, setSnapDayOffset]   = useState(0);           // for readiness day mode
   const [snapPeriod, setSnapPeriod]         = useState<SnapshotPeriod>("2weeks");
   const [snapPeriodOffset, setSnapPeriodOffset] = useState(0);      // for 2weeks / monthly
   const [snapCustomStart, setSnapCustomStart]   = useState(-13);    // day offset from today
   const [snapCustomEnd,   setSnapCustomEnd]     = useState(0);
 
+  // Snapshot readiness aggregation mode
+  const [snapReadMode, setSnapReadMode]     = useState<"day" | "week-avg" | "month-avg" | "year-avg">("day");
+  const [snapWeekOffset, setSnapWeekOffset] = useState(0);
+  const [snapMonthOffset, setSnapMonthOffset] = useState(0);
+  const [snapYearOffset, setSnapYearOffset] = useState(0);
+  const [showSnapPeriodPicker, setShowSnapPeriodPicker] = useState(false);
+
   // Timeframe state
   const [timeframeType, setTimeframeType] = useState(() => section === "readiness" ? "week" : "biweekly");
   const [timeframeOffset, setTimeframeOffset] = useState(0);
+  const [showPeriodPicker, setShowPeriodPicker] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [perfPageOffset, setPerfPageOffset] = useState(0);
   // Custom perf month selection
@@ -1111,13 +1364,48 @@ export function CompareWorkbench({
 
   const snapshotWindow = useMemo((): SnapshotWindow => {
     if (section === "readiness" && mode === "snapshot") {
-      const d = new Date(); d.setDate(d.getDate() + snapDayOffset);
-      const label = snapDayOffset === 0 ? "Today" : snapDayOffset === -1 ? "Yesterday"
-        : `${String(d.getDate()).padStart(2, "0")} ${MONTH_NAMES[d.getMonth()]}`;
-      return { label, startDayOffset: snapDayOffset, days: 1 };
+      const now = new Date();
+      const msPerDay = 86400000;
+
+      if (snapReadMode === "day") {
+        const d = new Date(); d.setDate(d.getDate() + snapDayOffset);
+        const label = snapDayOffset === 0 ? "Today" : snapDayOffset === -1 ? "Yesterday"
+          : `${String(d.getDate()).padStart(2, "0")} ${MONTH_NAMES[d.getMonth()]}`;
+        return { label, startDayOffset: snapDayOffset, days: 1, aggregate: "point" };
+      }
+
+      if (snapReadMode === "week-avg") {
+        const dow = now.getDay();
+        const mondayOff = dow === 0 ? 6 : dow - 1;
+        const monday = new Date(now);
+        monday.setDate(now.getDate() - mondayOff + snapWeekOffset * 7);
+        monday.setHours(0, 0, 0, 0);
+        const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+        const fmt = (d: Date) => `${String(d.getDate()).padStart(2, "0")} ${MONTH_NAMES[d.getMonth()]}`;
+        const startDayOffset = Math.round((monday.getTime() - now.getTime()) / msPerDay);
+        return { label: `${fmt(monday)} – ${fmt(sunday)}`, startDayOffset, days: 7, aggregate: "avg" };
+      }
+
+      if (snapReadMode === "month-avg") {
+        const d = new Date(now.getFullYear(), now.getMonth() + snapMonthOffset, 1);
+        const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+        const startDayOffset = Math.round((d.getTime() - now.getTime()) / msPerDay);
+        return {
+          label: `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`,
+          startDayOffset, days: daysInMonth, aggregate: "avg"
+        };
+      }
+
+      if (snapReadMode === "year-avg") {
+        const year = now.getFullYear() + snapYearOffset;
+        const jan1 = new Date(year, 0, 1);
+        const isLeap = (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0));
+        const startDayOffset = Math.round((jan1.getTime() - now.getTime()) / msPerDay);
+        return { label: `${year}`, startDayOffset, days: isLeap ? 366 : 365, aggregate: "avg" };
+      }
     }
     return getSnapshotWindow(snapPeriod, snapPeriodOffset, snapCustomStart, snapCustomEnd);
-  }, [section, mode, snapDayOffset, snapPeriod, snapPeriodOffset, snapCustomStart, snapCustomEnd]);
+  }, [section, mode, snapReadMode, snapDayOffset, snapWeekOffset, snapMonthOffset, snapYearOffset, snapPeriod, snapPeriodOffset, snapCustomStart, snapCustomEnd]);
 
   const perfPageInfo = useMemo(() => {
     if (section !== "performance" || mode !== "timeframe") return null;
@@ -1314,25 +1602,81 @@ export function CompareWorkbench({
           <div className="flex flex-wrap items-center gap-2">
 
             {/* Segmented options */}
-            {/* Readiness snapshot: single-day navigator + calendar picker */}
+            {/* Readiness snapshot: mode segmented + navigator */}
             {mode === "snapshot" && section === "readiness" ? (
-              <div className="flex items-center gap-2">
-                <DateNavCell
-                  label={snapshotWindow.label}
-                  onPrev={() => setSnapDayOffset(o => o - 1)}
-                  onNext={() => setSnapDayOffset(o => Math.min(0, o + 1))}
-                  disableNext={snapDayOffset >= 0}
-                />
-                <label className="relative flex items-center justify-center w-7 h-7 rounded-md border border-line text-muted hover:text-ink hover:bg-surfaceStrong transition-colors duration-100 cursor-pointer">
-                  <Calendar size={13} />
-                  <input type="date" max={new Date().toISOString().slice(0, 10)}
-                    value={(() => { const d = new Date(); d.setDate(d.getDate() + snapDayOffset); return d.toISOString().slice(0, 10); })()}
-                    onChange={e => {
-                      const diff = Math.round((new Date(e.target.value).getTime() - new Date(new Date().toISOString().slice(0, 10)).getTime()) / 86400000);
-                      setSnapDayOffset(Math.min(0, diff));
-                    }}
-                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
-                </label>
+              <div className="flex flex-col gap-2">
+                {/* Aggregation mode segmented control */}
+                <div className="inline-flex items-center bg-surfaceStrong rounded-md p-0.5 gap-0.5">
+                  {(["day", "week-avg", "month-avg", "year-avg"] as const).map(rm => (
+                    <button key={rm} type="button"
+                      onClick={() => setSnapReadMode(rm)}
+                      className={cn(
+                        "px-2.5 py-1 text-xs rounded-[5px] transition-colors duration-100 font-medium whitespace-nowrap",
+                        snapReadMode === rm ? "bg-canvas text-blue shadow-sm" : "text-muted hover:text-ink"
+                      )}>
+                      {rm === "day" ? "Day" : rm === "week-avg" ? "Week avg" : rm === "month-avg" ? "Month avg" : "Year avg"}
+                    </button>
+                  ))}
+                </div>
+                {/* Navigator row */}
+                <div className="flex items-center gap-2">
+                  {snapReadMode === "day" && (
+                    <>
+                      <DateNavCell
+                        label={snapshotWindow.label}
+                        onPrev={() => setSnapDayOffset(o => o - 1)}
+                        onNext={() => setSnapDayOffset(o => Math.min(0, o + 1))}
+                        disableNext={snapDayOffset >= 0}
+                      />
+                      <label className="relative flex items-center justify-center w-7 h-7 rounded-md border border-line text-muted hover:text-ink hover:bg-surfaceStrong transition-colors duration-100 cursor-pointer">
+                        <Calendar size={13} />
+                        <input type="date" max={new Date().toISOString().slice(0, 10)}
+                          value={(() => { const d = new Date(); d.setDate(d.getDate() + snapDayOffset); return d.toISOString().slice(0, 10); })()}
+                          onChange={e => {
+                            const diff = Math.round((new Date(e.target.value).getTime() - new Date(new Date().toISOString().slice(0, 10)).getTime()) / 86400000);
+                            setSnapDayOffset(Math.min(0, diff));
+                          }}
+                          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                      </label>
+                    </>
+                  )}
+                  {snapReadMode === "week-avg" && (
+                    <>
+                      <DateNavCell
+                        label={snapshotWindow.label}
+                        onPrev={() => setSnapWeekOffset(o => o - 1)}
+                        onNext={() => setSnapWeekOffset(o => Math.min(0, o + 1))}
+                        disableNext={snapWeekOffset >= 0}
+                      />
+                      <button type="button" onClick={() => setShowSnapPeriodPicker(true)}
+                        className="flex items-center justify-center w-7 h-7 rounded-md border border-line text-muted hover:text-ink hover:bg-surfaceStrong transition-colors duration-100">
+                        <Calendar size={13} />
+                      </button>
+                    </>
+                  )}
+                  {snapReadMode === "month-avg" && (
+                    <>
+                      <DateNavCell
+                        label={snapshotWindow.label}
+                        onPrev={() => setSnapMonthOffset(o => o - 1)}
+                        onNext={() => setSnapMonthOffset(o => Math.min(0, o + 1))}
+                        disableNext={snapMonthOffset >= 0}
+                      />
+                      <button type="button" onClick={() => setShowSnapPeriodPicker(true)}
+                        className="flex items-center justify-center w-7 h-7 rounded-md border border-line text-muted hover:text-ink hover:bg-surfaceStrong transition-colors duration-100">
+                        <Calendar size={13} />
+                      </button>
+                    </>
+                  )}
+                  {snapReadMode === "year-avg" && (
+                    <DateNavCell
+                      label={snapshotWindow.label}
+                      onPrev={() => setSnapYearOffset(o => o - 1)}
+                      onNext={() => setSnapYearOffset(o => Math.min(0, o + 1))}
+                      disableNext={snapYearOffset >= 0}
+                    />
+                  )}
+                </div>
               </div>
             ) : (
               <>
@@ -1387,10 +1731,16 @@ export function CompareWorkbench({
               </>
             )}
             {mode === "timeframe" && section === "readiness" && (
-              <DateNavCell label={periodInfo?.label ?? ""}
-                onPrev={() => setTimeframeOffset(o => o - 1)}
-                onNext={() => setTimeframeOffset(o => Math.min(0, o + 1))}
-                disableNext={timeframeOffset >= 0} />
+              <div className="flex items-center gap-2">
+                <DateNavCell label={periodInfo?.label ?? ""}
+                  onPrev={() => setTimeframeOffset(o => o - 1)}
+                  onNext={() => setTimeframeOffset(o => Math.min(0, o + 1))}
+                  disableNext={timeframeOffset >= 0} />
+                <button type="button" onClick={() => setShowPeriodPicker(true)}
+                  className="flex items-center justify-center w-7 h-7 rounded-md border border-line text-muted hover:text-ink hover:bg-surfaceStrong transition-colors duration-100">
+                  <Calendar size={13} />
+                </button>
+              </div>
             )}
             {mode === "timeframe" && section === "performance" && (timeframeType === "biweekly" || timeframeType === "monthly") && (
               <DateNavCell
@@ -1479,12 +1829,51 @@ export function CompareWorkbench({
 
       {renderContent()}
 
-      {/* Month picker modal */}
+      {/* Month picker modal (custom performance month compare) */}
       {showMonthPicker && (
         <MonthPickerModal
           value={selectedMonths}
           onChange={months => setSelectedMonths(months)}
           onClose={() => setShowMonthPicker(false)}
+        />
+      )}
+
+      {/* Timeframe period pickers (readiness) */}
+      {showPeriodPicker && section === "readiness" && timeframeType === "week" && (
+        <WeekPickerModal
+          timeframeOffset={timeframeOffset}
+          onSelect={setTimeframeOffset}
+          onClose={() => setShowPeriodPicker(false)}
+        />
+      )}
+      {showPeriodPicker && section === "readiness" && timeframeType === "month" && (
+        <MonthYearPickerModal
+          timeframeOffset={timeframeOffset}
+          onSelect={setTimeframeOffset}
+          onClose={() => setShowPeriodPicker(false)}
+        />
+      )}
+      {showPeriodPicker && section === "readiness" && timeframeType === "year" && (
+        <YearPickerPanel
+          timeframeOffset={timeframeOffset}
+          onSelect={setTimeframeOffset}
+          onClose={() => setShowPeriodPicker(false)}
+        />
+      )}
+
+      {/* Snapshot period pickers (readiness avg modes) */}
+      {showSnapPeriodPicker && section === "readiness" && snapReadMode === "week-avg" && (
+        <WeekPickerModal
+          timeframeOffset={snapWeekOffset}
+          onSelect={setSnapWeekOffset}
+          onClose={() => setShowSnapPeriodPicker(false)}
+        />
+      )}
+      {showSnapPeriodPicker && section === "readiness" && snapReadMode === "month-avg" && (
+        <MonthYearPickerModal
+          timeframeOffset={snapMonthOffset}
+          onSelect={setSnapMonthOffset}
+          onClose={() => setShowSnapPeriodPicker(false)}
         />
       )}
     </div>

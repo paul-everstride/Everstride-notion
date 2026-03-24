@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Activity,
@@ -707,15 +707,86 @@ function AiSummaryCard({ data, summaryMetrics }: { data: DashboardData; summaryM
 
 // ── Column editor panel ───────────────────────────────────────────────────────
 
+type ColGroup = "Athlete" | "Readiness" | "Performance";
+
+const EDITOR_GROUPS: { key: ColGroup; label: string; textClass: string }[] = [
+  { key: "Athlete",     label: "Athlete",     textClass: "text-muted"  },
+  { key: "Readiness",   label: "Readiness",   textClass: "text-blue"   },
+  { key: "Performance", label: "Performance", textClass: "text-brand"  },
+];
+
 function EditorPanel({
-  title, items, selected, onToggle, onClose
+  title, columnOrder, onReorder, onClose
 }: {
   title: string;
-  items: Array<{ key: string; label: string }>;
-  selected: string[];
-  onToggle: (key: string) => void;
+  columnOrder: AthleteColumnKey[];
+  onReorder: (newOrder: AthleteColumnKey[]) => void;
   onClose: () => void;
 }) {
+  const dragKey = useRef<AthleteColumnKey | null>(null);
+
+  // Build a lookup of all column defs from the imported array (at module level we have columnDefinitions already)
+  // We reference the same columnDefinitions used in athlete-table.tsx via columnOptions defined in this file
+  const colMeta = useMemo(() => {
+    const map = new Map<AthleteColumnKey, { label: string; group: ColGroup }>();
+    // We use columnOptions (which lists all keys + labels) and infer group from columnDefinitions
+    // Since columnDefinitions is not exported, we reconstruct group info here using columnOptions
+    const groupMap: Record<AthleteColumnKey, ColGroup> = {
+      name: "Athlete", age: "Athlete", weight: "Athlete", team: "Athlete",
+      recovery: "Readiness", sleep: "Readiness", rhr: "Readiness", hrv: "Readiness",
+      atl: "Performance", ctl: "Performance", tsb: "Performance",
+      vo2: "Performance", ftp: "Performance", polarized: "Performance", powerMax: "Performance",
+    };
+    for (const opt of columnOptions) {
+      map.set(opt.key, { label: opt.label, group: groupMap[opt.key] });
+    }
+    return map;
+  }, []);
+
+  const isActive = (key: AthleteColumnKey) => columnOrder.includes(key);
+
+  const toggleKey = (key: AthleteColumnKey) => {
+    if (key === "name") return; // locked
+    if (columnOrder.includes(key)) {
+      onReorder(columnOrder.filter(k => k !== key));
+    } else {
+      // Insert after the last key of the same group currently in columnOrder
+      const group = colMeta.get(key)?.group;
+      // All keys (in default order) for this group
+      const allGroupKeys = columnOptions.filter(o => colMeta.get(o.key)?.group === group).map(o => o.key);
+      // Find the last index in columnOrder that belongs to this group
+      let insertIdx = -1;
+      for (let i = columnOrder.length - 1; i >= 0; i--) {
+        if (allGroupKeys.includes(columnOrder[i])) { insertIdx = i + 1; break; }
+      }
+      if (insertIdx === -1) {
+        // No existing member of group — append at end
+        onReorder([...columnOrder, key]);
+      } else {
+        const next = [...columnOrder];
+        next.splice(insertIdx, 0, key);
+        onReorder(next);
+      }
+    }
+  };
+
+  const handleDragStart = (key: AthleteColumnKey) => { dragKey.current = key; };
+  const handleDrop = (targetKey: AthleteColumnKey) => {
+    const src = dragKey.current;
+    if (!src || src === targetKey) return;
+    // Only reorder within same group
+    if (colMeta.get(src)?.group !== colMeta.get(targetKey)?.group) return;
+    // Only allow reordering active columns
+    if (!columnOrder.includes(src) || !columnOrder.includes(targetKey)) return;
+    const next = [...columnOrder];
+    const fromIdx = next.indexOf(src);
+    const toIdx   = next.indexOf(targetKey);
+    next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, src);
+    onReorder(next);
+    dragKey.current = null;
+  };
+
   return (
     <div className="fixed inset-0 z-30 bg-black/20 backdrop-blur-sm" onClick={onClose}>
       <div className="absolute right-0 top-0 bottom-0 w-72 border-l border-line bg-canvas shadow-xl flex flex-col"
@@ -730,24 +801,57 @@ function EditorPanel({
             <X size={16} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-1">
-          {items.map((item) => {
-            const active = selected.includes(item.key);
+        <div className="flex-1 overflow-y-auto p-3 space-y-4">
+          {EDITOR_GROUPS.map(group => {
+            const groupCols = columnOptions.filter(o => colMeta.get(o.key)?.group === group.key);
             return (
-              <button key={item.key} type="button" onClick={() => onToggle(item.key)}
-                className={cn(
-                  "flex w-full items-center justify-between px-3 py-2 text-left text-sm rounded-md border transition-colors duration-100",
-                  active
-                    ? "border-brand/20 bg-brandSoft text-ink"
-                    : "border-transparent bg-surface text-muted hover:text-ink hover:bg-surfaceStrong"
-                )}>
-                <span>{item.label}</span>
-                <span className={cn("text-xs ml-2 font-medium", active ? "text-brand" : "text-muted/50")}>
-                  {active ? "On" : "Off"}
-                </span>
-              </button>
+              <div key={group.key}>
+                <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 px-1 ${group.textClass}`}>{group.label}</p>
+                <div className="space-y-0.5">
+                  {groupCols.map(item => {
+                    const active = isActive(item.key);
+                    const locked = item.key === "name";
+                    return (
+                      <div
+                        key={item.key}
+                        draggable={active && !locked}
+                        onDragStart={() => handleDragStart(item.key)}
+                        onDragOver={e => { e.preventDefault(); }}
+                        onDrop={() => handleDrop(item.key)}
+                        className={cn(
+                          "flex w-full items-center gap-2 px-2 py-2 text-left text-sm rounded-md border transition-colors duration-100",
+                          active
+                            ? "border-brand/20 bg-brandSoft text-ink"
+                            : "border-transparent bg-surface text-muted hover:text-ink hover:bg-surfaceStrong"
+                        )}>
+                        {/* Drag handle */}
+                        <span
+                          className={cn(
+                            "text-muted/40 cursor-grab select-none text-base leading-none shrink-0",
+                            (!active || locked) && "invisible"
+                          )}
+                          title="Drag to reorder">
+                          ⠿
+                        </span>
+                        <span className="flex-1">{item.label}</span>
+                        {locked ? (
+                          <span className="text-xs ml-2 font-medium text-muted/40">Locked</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => toggleKey(item.key)}
+                            className={cn("text-xs ml-2 font-medium shrink-0", active ? "text-brand" : "text-muted/50")}>
+                            {active ? "On" : "Off"}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
+
         </div>
       </div>
     </div>
@@ -760,7 +864,7 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
   const [search, setSearch]               = useState("");
   const [flaggedOnly, setFlaggedOnly]     = useState(false);
   const [showFieldsEditor, setShowFieldsEditor] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<AthleteColumnKey[]>(defaultAthleteColumns);
+  const [columnOrder, setColumnOrder] = useState<AthleteColumnKey[]>(defaultAthleteColumns);
   const [quickKeys, setQuickKeys]         = useState<string[]>(DEFAULT_QUICK_KEYS);
   const [showQuickPicker, setShowQuickPicker] = useState(false);
 
@@ -821,11 +925,6 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
     );
   };
 
-  const toggleColumn = (key: string) => {
-    setVisibleColumns(c =>
-      c.includes(key as AthleteColumnKey) ? c.filter(v => v !== key) : [...c, key as AthleteColumnKey]
-    );
-  };
 
   return (
     <div>
@@ -983,7 +1082,7 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
         {/* ── Roster table ── */}
         <AthleteTable
           athletes={filteredAthletes}
-          visibleColumns={visibleColumns}
+          columnOrder={columnOrder}
           state={filteredAthletes.length ? "default" : "empty"}
         />
 
@@ -1008,9 +1107,8 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
       {showFieldsEditor && (
         <EditorPanel
           title="Visible table columns"
-          items={columnOptions}
-          selected={visibleColumns}
-          onToggle={toggleColumn}
+          columnOrder={columnOrder}
+          onReorder={setColumnOrder}
           onClose={() => setShowFieldsEditor(false)}
         />
       )}
