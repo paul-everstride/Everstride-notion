@@ -130,6 +130,7 @@ export async function owGetUsers(): Promise<OWUser[]> {
 export async function owGetRecovery(userId: string, days = 730): Promise<OWRecoverySummary[]> {
   try {
     const endDate = new Date();
+    endDate.setDate(endDate.getDate() + 1); // +1 so end_date is exclusive of tomorrow → includes today
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
@@ -155,6 +156,7 @@ export async function owGetRecovery(userId: string, days = 730): Promise<OWRecov
  */
 export async function owGetSleep(userId: string, days = 730): Promise<OWSleepSummary[]> {
   const endDate = new Date();
+  endDate.setDate(endDate.getDate() + 1); // +1 so end_date is exclusive of tomorrow → includes today
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
 
