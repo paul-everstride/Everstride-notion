@@ -251,24 +251,24 @@ type CompareMetric = {
 
 // ── Series factories ──────────────────────────────────────────────────────────
 
-function readinessSeries(existingKey: keyof AthleteSummary, bv: (a: AthleteSummary) => number) {
+function readinessSeries(existingKey: keyof AthleteSummary, seedKey: string, bv: (a: AthleteSummary) => number) {
   return (athlete: AthleteSummary, timeframe: string): TrendPoint[] => {
     const base = bv(athlete);
     if (timeframe === "Last 7 days") return athlete[existingKey] as TrendPoint[];
-    if (timeframe === "Today") return genTrend(strHash(athlete.id + String(existingKey) + "today"), base, LABELS_TODAY, 0.03);
+    if (timeframe === "Today") return genTrend(strHash(athlete.id + seedKey + "today"), base, LABELS_TODAY, 0.03);
     const [type, offStr] = timeframe.split(":");
     const off = offStr !== undefined ? parseInt(offStr) : 0;
     if (type === "week") {
       const info = getPeriodInfo("week", off);
-      return genTrend(strHash(athlete.id + String(existingKey) + info.seedStr), base, info.dataLabels, 0.07);
+      return genTrend(strHash(athlete.id + seedKey + info.seedStr), base, info.dataLabels, 0.07);
     }
     if (type === "month") {
       const info = getPeriodInfo("month", off);
-      return genTrend(strHash(athlete.id + String(existingKey) + info.seedStr), base, info.dataLabels, 0.06);
+      return genTrend(strHash(athlete.id + seedKey + info.seedStr), base, info.dataLabels, 0.06);
     }
     if (type === "year") {
       const info = getPeriodInfo("year", off);
-      return genTrend(strHash(athlete.id + String(existingKey) + info.seedStr), base, info.dataLabels, 0.12);
+      return genTrend(strHash(athlete.id + seedKey + info.seedStr), base, info.dataLabels, 0.12);
     }
     return athlete[existingKey] as TrendPoint[];
   };
@@ -310,12 +310,12 @@ function genPerfSeries(bv: (a: AthleteSummary) => number, key: string) {
 // ── Metric definitions ────────────────────────────────────────────────────────
 
 const readinessMetrics: CompareMetric[] = [
-  { key: "recovery",  label: "Recovery score",   unit: "",    baseValue: (a) => a.recoveryScore ?? 0,  getSeries: readinessSeries("readinessTrend",    (a) => a.recoveryScore ?? 0),  renderCurrent: (a) => a.recoveryScore != null ? `${a.recoveryScore}` : "N/A" },
-  { key: "sleep",     label: "Sleep score",       unit: "",    baseValue: (a) => a.sleepScore,          getSeries: readinessSeries("sleepTrend",        (a) => a.sleepScore),           renderCurrent: (a) => `${a.sleepScore}` },
-  { key: "rhr",       label: "RHR",               unit: "bpm", baseValue: (a) => a.restHr ?? 0,         getSeries: readinessSeries("rhrTrend",          (a) => a.restHr ?? 0),          renderCurrent: (a) => a.restHr != null ? `${a.restHr} bpm` : "N/A" },
-  { key: "hrv",       label: "HRV",               unit: "ms",  baseValue: (a) => a.hrv ?? 0,            getSeries: readinessSeries("hrvTrend",          (a) => a.hrv ?? 0),             renderCurrent: (a) => a.hrv != null ? `${a.hrv} ms` : "N/A" },
-  { key: "atl",       label: "ATL",               unit: "",    baseValue: (a) => a.atl ?? 0,            getSeries: readinessSeries("atlTrend",          (a) => a.atl ?? 0),             renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
-  { key: "ctl",       label: "CTL",               unit: "",    baseValue: (a) => a.ctl ?? 0,            getSeries: readinessSeries("ctlTrend",          (a) => a.ctl ?? 0),             renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
+  { key: "rec",  label: "Recovery score", unit: "",    baseValue: (a) => a.recoveryScore ?? 0, getSeries: readinessSeries("readinessTrend", "rec",  (a) => a.recoveryScore ?? 0), renderCurrent: (a) => a.recoveryScore != null ? `${a.recoveryScore}` : "N/A" },
+  { key: "slp",  label: "Sleep score",    unit: "",    baseValue: (a) => a.sleepScore,        getSeries: readinessSeries("sleepTrend",    "slp",  (a) => a.sleepScore),         renderCurrent: (a) => `${a.sleepScore}` },
+  { key: "rhr",  label: "RHR",            unit: "bpm", baseValue: (a) => a.restHr ?? 0,       getSeries: readinessSeries("rhrTrend",      "rhr",  (a) => a.restHr ?? 0),       renderCurrent: (a) => a.restHr != null ? `${a.restHr} bpm` : "N/A" },
+  { key: "hrv",  label: "HRV",            unit: "ms",  baseValue: (a) => a.hrv ?? 0,          getSeries: readinessSeries("hrvTrend",      "hrv",  (a) => a.hrv ?? 0),          renderCurrent: (a) => a.hrv != null ? `${a.hrv} ms` : "N/A" },
+  { key: "atl",  label: "ATL",            unit: "",    baseValue: (a) => a.atl ?? 0,          getSeries: readinessSeries("atlTrend",      "atl",  (a) => a.atl ?? 0),          renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
+  { key: "ctl",  label: "CTL",            unit: "",    baseValue: (a) => a.ctl ?? 0,          getSeries: readinessSeries("ctlTrend",      "ctl",  (a) => a.ctl ?? 0),          renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
 ];
 
 const perfSnapshotMetrics: CompareMetric[] = [
