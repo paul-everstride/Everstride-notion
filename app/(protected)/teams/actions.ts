@@ -127,6 +127,27 @@ export async function deleteTeamAction(supabaseTeamId: string): Promise<{ succes
   }
 }
 
+export async function updateAthleteAction(
+  supabaseTeamId: string,
+  owUserId: string,
+  data: { athlete_name: string; athlete_email: string }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = createSupabaseServiceClient();
+    if (!supabase) return { success: false, error: "DB not configured" };
+    const { error } = await supabase
+      .from("team_athletes")
+      .update({ athlete_name: data.athlete_name, athlete_email: data.athlete_email })
+      .eq("team_id", supabaseTeamId)
+      .eq("ow_user_id", owUserId);
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/teams");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+}
+
 export async function deleteAthleteAction(
   supabaseTeamId: string,
   owUserId: string
