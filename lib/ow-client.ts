@@ -225,6 +225,15 @@ export async function owGetTeams(): Promise<OWTeam[]> {
   return res.json();
 }
 
+export async function owGetTeamMembers(teamId: string): Promise<OWUser[]> {
+  const res = await fetch(`${OW_API_URL}/api/v1/teams/${teamId}/users`, {
+    headers: { "X-Open-Wearables-API-Key": OW_API_KEY },
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export async function owAddTeamMember(teamId: string, userId: string): Promise<void> {
   const res = await fetch(`${OW_API_URL}/api/v1/teams/${teamId}/users/${userId}`, {
     method: "POST",

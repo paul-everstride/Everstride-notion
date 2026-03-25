@@ -12,6 +12,7 @@ import {
   owGetSleep,
   owGetBody,
   owGetTimeseries,
+  owGetTeamMembers,
   type OWRecoverySummary,
   type OWSleepSummary,
   type OWBodySummary,
@@ -343,25 +344,42 @@ async function getCoachAthleteIds(): Promise<string[] | null> {
   const supabase = createSupabaseServiceClient();
   if (!supabase) return null;
 
-  // Get all team IDs for this coach
+  // Get all teams for this coach (including their OW team IDs)
   const { data: teams } = await supabase
     .from("teams")
-    .select("id")
+    .select("id, ow_team_id")
     .eq("coach_id", user.id);
 
   if (!teams || teams.length === 0) return [];
 
+  // 1. Athletes registered via Everstride (Supabase source of truth)
   const teamIds = teams.map((t: { id: string }) => t.id);
-
-  // Get all OW user IDs in those teams
-  const { data: athletes } = await supabase
+  const { data: supabaseAthletes } = await supabase
     .from("team_athletes")
     .select("ow_user_id")
     .in("team_id", teamIds);
+  const supabaseIds = (supabaseAthletes ?? []).map((a: { ow_user_id: string }) => a.ow_user_id);
 
-  if (!athletes || athletes.length === 0) return [];
+  // 2. Athletes added directly in OW dashboard (fetch live from OW API)
+  const owTeamIds = teams
+    .map((t: { ow_team_id?: string | null }) => t.ow_team_id)
+    .filter(Boolean) as string[];
 
-  return athletes.map((a: { ow_user_id: string }) => a.ow_user_id);
+  const owMemberArrays = await Promise.all(
+    owTeamIds.map(async (teamId) => {
+      try {
+        const members = await owGetTeamMembers(teamId);
+        return members.map(m => m.id);
+      } catch {
+        return [];
+      }
+    })
+  );
+  const owIds = owMemberArrays.flat();
+
+  // Merge both sources, deduplicate
+  const allIds = [...new Set([...supabaseIds, ...owIds])];
+  return allIds.length > 0 ? allIds : [];
 }
 
 // ─── Core fetch logic (shared by cached + uncached paths) ─────────────────────
