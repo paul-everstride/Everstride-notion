@@ -67,19 +67,20 @@ export async function createAthleteAction(
     }
 
     const athleteName = `${data.first_name} ${data.last_name}`.trim();
+    const pairingLink = `${process.env.OW_FRONTEND_URL ?? "https://frontend-production-fdc3.up.railway.app"}/users/${owUser.id}/pair`;
 
     // Store in Supabase team_athletes with name, email and pairing link
-    await supabase
+    const { error: insertError } = await supabase
       .from("team_athletes")
       .insert({
         team_id: supabaseTeamId,
         ow_user_id: owUser.id,
         athlete_name: athleteName,
         athlete_email: data.email,
-        pairing_link: `${process.env.OW_FRONTEND_URL ?? "https://frontend-production-fdc3.up.railway.app"}/users/${owUser.id}/pair`,
+        pairing_link: pairingLink,
       });
 
-    const pairingLink = `${process.env.OW_FRONTEND_URL ?? "https://frontend-production-fdc3.up.railway.app"}/users/${owUser.id}/pair`;
+    if (insertError) return { success: false, error: `DB error: ${insertError.message}` };
 
     revalidatePath("/teams");
     return { success: true, userId: owUser.id, pairingLink };
