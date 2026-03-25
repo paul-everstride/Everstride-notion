@@ -51,7 +51,7 @@ export function AthleteHeroStrip({ name }: { name: string }) {
         src="/photos/cyclist-solo.jpg"
         alt=""
         fill
-        className="object-cover object-[center_42%] opacity-90"
+        className="object-cover object-[55%_68%] opacity-90"
         sizes="100vw"
         priority
       />
