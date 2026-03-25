@@ -200,7 +200,7 @@ export async function owGetBody(userId: string): Promise<OWBodySummary | null> {
 export async function owCreateTeam(name: string): Promise<OWTeam> {
   const res = await fetch(`${OW_API_URL}/api/v1/teams`, {
     method: "POST",
-    headers: { "X-API-Key": OW_API_KEY, "Content-Type": "application/json" },
+    headers: { "X-Open-Wearables-API-Key": OW_API_KEY, "Content-Type": "application/json" },
     body: JSON.stringify({ name }),
   });
   if (!res.ok) throw new Error(`OW createTeam failed: ${res.status}`);
@@ -209,7 +209,7 @@ export async function owCreateTeam(name: string): Promise<OWTeam> {
 
 export async function owGetTeams(): Promise<OWTeam[]> {
   const res = await fetch(`${OW_API_URL}/api/v1/teams`, {
-    headers: { "X-API-Key": OW_API_KEY },
+    headers: { "X-Open-Wearables-API-Key": OW_API_KEY },
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`OW getTeams failed: ${res.status}`);
@@ -219,7 +219,7 @@ export async function owGetTeams(): Promise<OWTeam[]> {
 export async function owAddTeamMember(teamId: string, userId: string): Promise<void> {
   const res = await fetch(`${OW_API_URL}/api/v1/teams/${teamId}/users/${userId}`, {
     method: "POST",
-    headers: { "X-API-Key": OW_API_KEY },
+    headers: { "X-Open-Wearables-API-Key": OW_API_KEY },
   });
   if (!res.ok) throw new Error(`OW addTeamMember failed: ${res.status}`);
 }
@@ -232,7 +232,7 @@ export async function owCreateUser(payload: {
 }): Promise<OWUser> {
   const res = await fetch(`${OW_API_URL}/api/v1/users`, {
     method: "POST",
-    headers: { "X-API-Key": OW_API_KEY, "Content-Type": "application/json" },
+    headers: { "X-Open-Wearables-API-Key": OW_API_KEY, "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error(`OW createUser failed: ${res.status}`);
