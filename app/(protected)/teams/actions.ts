@@ -95,7 +95,7 @@ export async function deleteTeamAction(supabaseTeamId: string): Promise<{ succes
     const supabase = createSupabaseServiceClient();
     if (!supabase) return { success: false, error: "DB not configured" };
 
-    // Get OW team ID
+    // Get OW team ID and all athletes in this team
     const { data: team } = await supabase
       .from("teams")
       .select("ow_team_id")
@@ -103,7 +103,17 @@ export async function deleteTeamAction(supabaseTeamId: string): Promise<{ succes
       .eq("coach_id", user.id)
       .single();
 
-    // Delete from OW (also cascades members)
+    const { data: athletes } = await supabase
+      .from("team_athletes")
+      .select("ow_user_id")
+      .eq("team_id", supabaseTeamId);
+
+    // Delete each athlete from OW
+    if (athletes) {
+      await Promise.all(athletes.map(a => owDeleteUser(a.ow_user_id)));
+    }
+
+    // Delete the OW team (cascades member associations)
     if (team?.ow_team_id) await owDeleteTeam(team.ow_team_id);
 
     // Delete from Supabase (cascades team_athletes)
