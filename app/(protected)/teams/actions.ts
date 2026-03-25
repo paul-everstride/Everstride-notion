@@ -66,10 +66,18 @@ export async function createAthleteAction(
       await owAddTeamMember(team.ow_team_id, owUser.id);
     }
 
-    // Store in Supabase team_athletes
+    const athleteName = `${data.first_name} ${data.last_name}`.trim();
+
+    // Store in Supabase team_athletes with name, email and pairing link
     await supabase
       .from("team_athletes")
-      .insert({ team_id: supabaseTeamId, ow_user_id: owUser.id });
+      .insert({
+        team_id: supabaseTeamId,
+        ow_user_id: owUser.id,
+        athlete_name: athleteName,
+        athlete_email: data.email,
+        pairing_link: `${process.env.OW_FRONTEND_URL ?? "https://frontend-production-fdc3.up.railway.app"}/users/${owUser.id}/pair`,
+      });
 
     const pairingLink = `${process.env.OW_FRONTEND_URL ?? "https://frontend-production-fdc3.up.railway.app"}/users/${owUser.id}/pair`;
 
