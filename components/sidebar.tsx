@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/lib/types";
-import { LayoutDashboard, ArrowLeftRight, Users, User, Eye, ChevronRight } from "lucide-react";
+import { LayoutDashboard, ArrowLeftRight, Users, User, Eye, ChevronRight, Shield, LogOut } from "lucide-react";
 
 type NavChild = { href: string; label: string };
 type NavItem = { href: string; label: string; icon: React.ReactNode; children?: NavChild[] };
@@ -20,7 +20,8 @@ const coachItems: NavItem[] = [
       { href: "/compare/performance", label: "Performance" }
     ]
   },
-  { href: "/athletes", label: "Athletes", icon: <Users size={15} /> }
+  { href: "/athletes", label: "Athletes", icon: <Users size={15} /> },
+  { href: "/teams",    label: "Teams",    icon: <Shield size={15} /> },
 ];
 
 const athleteItems: NavItem[] = [
@@ -96,8 +97,17 @@ export function Sidebar({ role }: { role: AppRole }) {
       </nav>
 
       {/* Footer */}
-      <div className="px-3 py-3 border-t border-line">
+      <div className="px-3 py-3 border-t border-line space-y-1">
         <p className="text-xs text-muted capitalize">{role}</p>
+        <form action="/api/auth/logout" method="POST">
+          <button
+            type="submit"
+            className="flex items-center gap-2 text-xs text-muted hover:text-ink transition w-full py-1"
+          >
+            <LogOut size={13} />
+            Sign out
+          </button>
+        </form>
       </div>
     </aside>
   );

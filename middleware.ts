@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
-const protectedMatchers = ["/dashboard", "/compare", "/athletes", "/me"];
+const protectedMatchers = ["/dashboard", "/compare", "/athletes", "/me", "/teams"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -53,5 +53,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/compare/:path*", "/athletes/:path*", "/me/:path*"]
+  matcher: ["/dashboard/:path*", "/compare/:path*", "/athletes/:path*", "/me/:path*", "/teams/:path*"]
 };

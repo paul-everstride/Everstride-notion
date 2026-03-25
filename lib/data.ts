@@ -1,6 +1,7 @@
 /**
  * Data layer for Everstride.
- * Pulls all athlete data from the Open Wearables API on Railway.
+ * Pulls athlete data from the Open Wearables API, filtered by the
+ * logged-in coach's team assignments stored in Supabase.
  */
 
 import type { AthleteSummary, DashboardData, RecoveryHistoryDay, TrendPoint } from "@/lib/types";
@@ -15,6 +16,8 @@ import {
   type OWBodySummary,
   type OWTimeseriesPoint,
 } from "@/lib/ow-client";
+import { getCurrentUser } from "@/lib/auth";
+import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
 // ─── Trend helpers ─────────────────────────────────────────────────────────────
 
@@ -328,14 +331,60 @@ const emptyDashboard: DashboardData = {
 
 // ─── Public API ────────────────────────────────────────────────────────────────
 
+/**
+ * Get the OW user IDs that belong to the current coach's teams.
+ * Returns null if Supabase is not configured (fall back to all users).
+ */
+async function getCoachAthleteIds(): Promise<string[] | null> {
+  const user = await getCurrentUser();
+  if (!user || user.id === "local-demo-user") return null;
+
+  const supabase = createSupabaseServiceClient();
+  if (!supabase) return null;
+
+  // Get all team IDs for this coach
+  const { data: teams } = await supabase
+    .from("teams")
+    .select("id")
+    .eq("coach_id", user.id);
+
+  if (!teams || teams.length === 0) return [];
+
+  const teamIds = teams.map((t: { id: string }) => t.id);
+
+  // Get all OW user IDs in those teams
+  const { data: athletes } = await supabase
+    .from("team_athletes")
+    .select("ow_user_id")
+    .in("team_id", teamIds);
+
+  if (!athletes || athletes.length === 0) return [];
+
+  return athletes.map((a: { ow_user_id: string }) => a.ow_user_id);
+}
+
 export async function getDashboardData(): Promise<DashboardData> {
   try {
-    const users = await owGetUsers();
+    const [users, allowedIds] = await Promise.all([
+      owGetUsers(),
+      getCoachAthleteIds(),
+    ]);
+
     if (!users.length) return emptyDashboard;
+
+    // If the coach has teams configured, filter to only their athletes.
+    // If allowedIds is null it means Supabase isn't configured — show all (dev mode).
+    // If allowedIds is [] the coach has teams but no athletes yet — show none.
+    const filteredUsers =
+      allowedIds === null
+        ? users
+        : users.filter((u) => allowedIds.includes(u.id));
+
+    if (!filteredUsers.length) return emptyDashboard;
 
     const athletes = (
       await Promise.all(
-        users.map(async (user) => {
+        filteredUsers.map(async (user) => {
           try {
             const [recovery, sleep, body, timeseries] = await Promise.all([
               owGetRecovery(user.id),
