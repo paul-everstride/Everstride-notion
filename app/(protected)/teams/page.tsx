@@ -8,7 +8,7 @@ export default async function TeamsPage() {
   const supabase = createSupabaseServerClient();
 
   let teams: { id: string; name: string; ow_team_id?: string | null }[] = [];
-  let initialAthletes: Record<string, { ow_user_id: string; athlete_name?: string | null; athlete_email?: string | null; pairing_link?: string | null }[]> = {};
+  let initialAthletes: Record<string, { ow_user_id: string; athlete_name?: string | null; athlete_email?: string | null; pairing_link?: string | null; avatar_url?: string | null }[]> = {};
 
   if (supabase) {
     const { data: teamsData } = await supabase
@@ -32,7 +32,7 @@ export default async function TeamsPage() {
       const teamIds = teams.map(t => t.id);
       const { data: athletesData } = await supabase
         .from("team_athletes")
-        .select("team_id, ow_user_id, athlete_name, athlete_email, pairing_link")
+        .select("team_id, ow_user_id, athlete_name, athlete_email, pairing_link, avatar_url")
         .in("team_id", teamIds)
         .order("created_at", { ascending: false });
 

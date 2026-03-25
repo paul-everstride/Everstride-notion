@@ -130,14 +130,19 @@ export async function deleteTeamAction(supabaseTeamId: string): Promise<{ succes
 export async function updateAthleteAction(
   supabaseTeamId: string,
   owUserId: string,
-  data: { athlete_name: string; athlete_email: string }
+  data: { athlete_name: string; athlete_email: string; avatar_url?: string }
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = createSupabaseServiceClient();
     if (!supabase) return { success: false, error: "DB not configured" };
+    const updateData: Record<string, string> = {
+      athlete_name: data.athlete_name,
+      athlete_email: data.athlete_email,
+    };
+    if (data.avatar_url !== undefined) updateData.avatar_url = data.avatar_url;
     const { error } = await supabase
       .from("team_athletes")
-      .update({ athlete_name: data.athlete_name, athlete_email: data.athlete_email })
+      .update(updateData)
       .eq("team_id", supabaseTeamId)
       .eq("ow_user_id", owUserId);
     if (error) return { success: false, error: error.message };
