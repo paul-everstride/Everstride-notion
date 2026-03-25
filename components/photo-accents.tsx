@@ -91,22 +91,22 @@ export function ComparePhotoStrip({ title }: { title: string }) {
   );
 }
 
-// ── Dashboard: background texture for the team stats strip ───────────────────
-// Render this as the FIRST child inside the stats strip div (which must have `relative` added).
-// The photo sits behind the stat content as a subtle environmental texture.
+// ── Dashboard: background for Quick view / Attention / AI Summary section ─────
+// Wrap the cards grid in a `relative overflow-hidden rounded-2xl` div and
+// render this as the first child. Cards float on top with their own bg-canvas.
 
-export function DashboardStatsBg() {
+export function DashboardSectionBg() {
   return (
     <>
       <Image
-        src="/photos/desert-landscape.jpg"
+        src="/photos/crosswalk-runner.jpg"
         alt=""
         fill
-        className="object-cover object-[center_58%] opacity-40"
+        className="object-cover object-[center_25%] opacity-75"
         sizes="100vw"
       />
-      {/* light canvas wash so stat text stays legible */}
-      <div className="absolute inset-0 bg-canvas/55" />
+      {/* Dark wash — enough to keep card borders/labels legible at the edges */}
+      <div className="absolute inset-0 bg-black/35" />
     </>
   );
 }

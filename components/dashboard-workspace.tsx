@@ -24,6 +24,7 @@ import { AthleteTable, type AthleteColumnKey, defaultAthleteColumns } from "@/co
 import { RecoveryBadge } from "@/components/recovery-badge";
 import type { AthleteSummary, DashboardData } from "@/lib/types";
 import { cn, formatSignedNumber } from "@/lib/utils";
+import { DashboardSectionBg } from "@/components/photo-accents";
 
 // ── Column config ──────────────────────────────────────────────────────────────
 
@@ -997,7 +998,9 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
       <div className="px-6 py-5 space-y-5">
 
         {/* ── Top section ── */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+        <div className="relative overflow-hidden rounded-2xl">
+          <DashboardSectionBg />
+          <div className="relative z-10 grid grid-cols-1 gap-4 lg:grid-cols-4 p-4">
 
           {/* 2×2 metric cards */}
           <div className="lg:col-span-2 flex flex-col gap-2">
@@ -1060,6 +1063,7 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
             <AiSummaryCard data={dashboard} summaryMetrics={summaryMetrics} />
           </div>
 
+          </div>
         </div>
 
         {/* ── Table controls ── */}
