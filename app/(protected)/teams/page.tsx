@@ -30,11 +30,27 @@ export default async function TeamsPage() {
 
     if (teams.length > 0) {
       const teamIds = teams.map(t => t.id);
-      const { data: athletesData } = await supabase
+
+      // Try with avatar_url first; fall back without it if the column doesn't exist yet
+      let athletesData: { team_id: string; ow_user_id: string; athlete_name?: string | null; athlete_email?: string | null; pairing_link?: string | null; avatar_url?: string | null }[] | null = null;
+
+      const { data: withAvatar, error: avatarErr } = await supabase
         .from("team_athletes")
         .select("team_id, ow_user_id, athlete_name, athlete_email, pairing_link, avatar_url")
         .in("team_id", teamIds)
         .order("created_at", { ascending: false });
+
+      if (!avatarErr) {
+        athletesData = withAvatar;
+      } else {
+        // avatar_url column not yet added — fall back to base columns
+        const { data: withoutAvatar } = await supabase
+          .from("team_athletes")
+          .select("team_id, ow_user_id, athlete_name, athlete_email, pairing_link")
+          .in("team_id", teamIds)
+          .order("created_at", { ascending: false });
+        athletesData = withoutAvatar;
+      }
 
       for (const team of teams) {
         initialAthletes[team.id] = (athletesData ?? [])
