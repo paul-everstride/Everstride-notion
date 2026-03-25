@@ -53,7 +53,7 @@ export default async function TeamsPage() {
           Manage your teams and add athletes — pairing links are generated automatically.
         </p>
       </div>
-      <div className="px-6 py-6">
+      <div className="px-6 py-6 max-w-6xl">
         <TeamsClient
           coachId={user.id}
           initialTeams={teams}
