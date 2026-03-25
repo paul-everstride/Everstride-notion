@@ -1005,9 +1005,9 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
           {/* 2×2 metric cards */}
           <div className="lg:col-span-2 flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted">Quick view</span>
+              <span className="text-xs text-white">Quick view</span>
               <button type="button" onClick={() => setShowQuickPicker(true)}
-                className="flex items-center gap-1.5 text-xs font-medium text-muted border border-line rounded-md px-2 py-1 hover:text-ink hover:border-ink/30 hover:bg-surfaceStrong transition-colors duration-100">
+                className="flex items-center gap-1.5 text-xs font-medium text-white border border-white/30 rounded-md px-2 py-1 hover:text-white hover:border-white/60 hover:bg-white/10 transition-colors duration-100">
                 <Pencil size={11} />
                 Edit
               </button>
@@ -1015,16 +1015,16 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
             <div className="grid grid-cols-2 gap-3 flex-1">
               {activeQuickMetrics.map(m => {
                 const athlete = m.pick(dashboard.athletes);
-                return athlete ? (
+                return (
                   <MetricCard key={m.key}
                     icon={m.icon}
                     label={m.label}
-                    value={m.value(athlete)}
-                    athleteName={athlete.name}
-                    secondary={m.secondary(athlete)}
+                    value={athlete ? m.value(athlete) : "—"}
+                    athleteName={athlete ? athlete.name : "No data yet"}
+                    secondary={athlete ? m.secondary(athlete) : "—"}
                     accentColor={m.accentColor}
                   />
-                ) : null;
+                );
               })}
               {/* Empty slot placeholders */}
               {Array.from({ length: Math.max(0, 4 - activeQuickMetrics.length) }).map((_, i) => (
@@ -1040,9 +1040,9 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
           {/* Attention monitor */}
           <div className="lg:col-span-1 flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted">Attention</span>
+              <span className="text-xs text-white">Attention</span>
               <button type="button" onClick={() => setShowAttentionEdit(true)}
-                className="flex items-center gap-1.5 text-xs font-medium text-muted border border-line rounded-md px-2 py-1 hover:text-ink hover:border-ink/30 hover:bg-surfaceStrong transition-colors duration-100">
+                className="flex items-center gap-1.5 text-xs font-medium text-white border border-white/30 rounded-md px-2 py-1 hover:text-white hover:border-white/60 hover:bg-white/10 transition-colors duration-100">
                 <Pencil size={11} />
                 Edit
               </button>
@@ -1053,9 +1053,9 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
           {/* AI summary */}
           <div className="lg:col-span-1 flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted">AI Summary</span>
+              <span className="text-xs text-white">AI Summary</span>
               <button type="button" onClick={() => setShowSummaryEdit(true)}
-                className="flex items-center gap-1.5 text-xs font-medium text-muted border border-line rounded-md px-2 py-1 hover:text-ink hover:border-ink/30 hover:bg-surfaceStrong transition-colors duration-100">
+                className="flex items-center gap-1.5 text-xs font-medium text-white border border-white/30 rounded-md px-2 py-1 hover:text-white hover:border-white/60 hover:bg-white/10 transition-colors duration-100">
                 <Pencil size={11} />
                 Edit
               </button>
