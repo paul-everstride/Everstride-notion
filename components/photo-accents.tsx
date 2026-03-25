@@ -72,7 +72,7 @@ export function AthleteHeroStrip({ name }: { name: string }) {
 
 export function ComparePhotoStrip({ title, section }: { title: string; section?: "readiness" | "performance" }) {
   const photo = section === "readiness" ? "/photos/sauna.jpg" : "/photos/cyclists-race.jpg";
-  const position = section === "readiness" ? "object-[center_40%]" : "object-[center_32%]";
+  const position = section === "readiness" ? "object-[center_65%]" : "object-[center_32%]";
   return (
     <div className="relative h-[110px] overflow-hidden bg-black rounded-2xl mx-4 mt-4 shadow-md">
       <Image
