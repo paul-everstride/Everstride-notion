@@ -4,8 +4,7 @@ import { useState, useTransition, useRef } from "react";
 import { Plus, UserPlus, ChevronDown, ChevronRight, Loader2, Trash2, X, Pencil, Mail, ExternalLink, Copy, Check, Camera } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { createTeamAction, createAthleteAction, deleteTeamAction, deleteAthleteAction, updateAthleteAction } from "./actions";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { createTeamAction, createAthleteAction, deleteTeamAction, deleteAthleteAction, updateAthleteAction, uploadAvatarAction } from "./actions";
 
 interface Team { id: string; name: string; ow_team_id?: string | null; }
 interface TeamAthlete {
@@ -71,9 +70,9 @@ function Avatar({ name, avatarUrl, size = 64 }: { name: string; avatarUrl?: stri
 // ── Edit modal ───────────────────────────────────────────────────────────────
 
 function EditAthleteModal({
-  athlete, teamId, coachId, onClose, onSave,
+  athlete, teamId, onClose, onSave,
 }: {
-  athlete: TeamAthlete; teamId: string; coachId: string;
+  athlete: TeamAthlete; teamId: string;
   onClose: () => void;
   onSave: (name: string, email: string, avatarUrl?: string) => void;
 }) {
@@ -88,14 +87,11 @@ function EditAthleteModal({
   async function handlePhoto(file: File) {
     setUploading(true); setError(null);
     try {
-      const supabase = createSupabaseBrowserClient();
-      if (!supabase) throw new Error("Supabase not configured");
-      const ext = file.name.split(".").pop();
-      const path = `${coachId}/${athlete.ow_user_id}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
-      if (upErr) throw upErr;
-      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-      setAvatarUrl(data.publicUrl);
+      const fd = new FormData();
+      fd.append("file", file);
+      const result = await uploadAvatarAction(athlete.ow_user_id, fd);
+      if (!result.success) throw new Error(result.error);
+      setAvatarUrl(result.url ?? null);
     } catch (e) {
       setError(`Upload failed: ${String(e)}`);
     }
@@ -189,8 +185,8 @@ function EditAthleteModal({
 
 // ── Athlete card ─────────────────────────────────────────────────────────────
 
-function AthleteCard({ athlete, teamId, coachId, onDelete, onUpdate }: {
-  athlete: TeamAthlete; teamId: string; coachId: string;
+function AthleteCard({ athlete, teamId, onDelete, onUpdate }: {
+  athlete: TeamAthlete; teamId: string;
   onDelete: () => void;
   onUpdate: (name: string, email: string, avatarUrl?: string) => void;
 }) {
@@ -224,7 +220,7 @@ function AthleteCard({ athlete, teamId, coachId, onDelete, onUpdate }: {
 
       {showEdit && (
         <EditAthleteModal
-          athlete={athlete} teamId={teamId} coachId={coachId}
+          athlete={athlete} teamId={teamId}
           onClose={() => setShowEdit(false)}
           onSave={onUpdate}
         />
@@ -435,7 +431,6 @@ export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontend
                           key={a.ow_user_id}
                           athlete={a}
                           teamId={team.id}
-                          coachId={coachId}
                           onDelete={() => setConfirmDeleteAthlete({ teamId: team.id, owUserId: a.ow_user_id, name: a.athlete_name ?? "this athlete" })}
                           onUpdate={(name, email, avatarUrl) => setAthletes(p => ({
                             ...p,

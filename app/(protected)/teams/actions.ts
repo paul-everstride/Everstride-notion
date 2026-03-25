@@ -127,6 +127,35 @@ export async function deleteTeamAction(supabaseTeamId: string): Promise<{ succes
   }
 }
 
+export async function uploadAvatarAction(
+  owUserId: string,
+  formData: FormData
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    const user = await requireAuthenticatedUser();
+    const supabase = createSupabaseServiceClient();
+    if (!supabase) return { success: false, error: "DB not configured" };
+
+    const file = formData.get("file") as File | null;
+    if (!file) return { success: false, error: "No file provided" };
+
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const path = `${user.id}/${owUserId}.${ext}`;
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    const { error: upErr } = await supabase.storage
+      .from("avatars")
+      .upload(path, buffer, { upsert: true, contentType: file.type });
+
+    if (upErr) return { success: false, error: upErr.message };
+
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    return { success: true, url: data.publicUrl };
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+}
+
 export async function updateAthleteAction(
   supabaseTeamId: string,
   owUserId: string,
