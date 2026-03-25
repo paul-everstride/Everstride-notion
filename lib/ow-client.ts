@@ -239,6 +239,22 @@ export async function owCreateUser(payload: {
   return res.json();
 }
 
+export async function owDeleteTeam(teamId: string): Promise<void> {
+  const res = await fetch(`${OW_API_URL}/api/v1/teams/${teamId}`, {
+    method: "DELETE",
+    headers: { "X-Open-Wearables-API-Key": OW_API_KEY },
+  });
+  if (!res.ok && res.status !== 404) throw new Error(`OW deleteTeam failed: ${res.status}`);
+}
+
+export async function owDeleteUser(userId: string): Promise<void> {
+  const res = await fetch(`${OW_API_URL}/api/v1/users/${userId}`, {
+    method: "DELETE",
+    headers: { "X-Open-Wearables-API-Key": OW_API_KEY },
+  });
+  if (!res.ok && res.status !== 404) throw new Error(`OW deleteUser failed: ${res.status}`);
+}
+
 // ─── Timeseries ────────────────────────────────────────────────────────────────
 
 export interface OWTimeseriesPoint {

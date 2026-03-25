@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, UserPlus, Copy, Check, ChevronDown, ChevronRight, Loader2, Shield } from "lucide-react";
-import { createTeamAction, createAthleteAction } from "./actions";
+import { Plus, UserPlus, Copy, Check, ChevronDown, ChevronRight, Loader2, Shield, Trash2 } from "lucide-react";
+import { createTeamAction, createAthleteAction, deleteTeamAction, deleteAthleteAction } from "./actions";
 
 interface Team {
   id: string;
@@ -47,6 +47,11 @@ export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontend
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // Confirm dialog state
+  const [confirmDeleteTeam, setConfirmDeleteTeam] = useState<string | null>(null); // supabase team id
+  const [confirmDeleteAthlete, setConfirmDeleteAthlete] = useState<{ teamId: string; owUserId: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // Athlete form state per team
   const [athleteForm, setAthleteForm] = useState<Record<string, {
     first_name: string; last_name: string; email: string; external_user_id: string;
@@ -62,6 +67,37 @@ export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontend
       ...prev,
       [teamId]: { ...getAthleteForm(teamId), [field]: value }
     }));
+  }
+
+  async function handleDeleteTeam() {
+    if (!confirmDeleteTeam) return;
+    setIsDeleting(true);
+    const result = await deleteTeamAction(confirmDeleteTeam);
+    setIsDeleting(false);
+    setConfirmDeleteTeam(null);
+    if (result.success) {
+      setTeams(prev => prev.filter(t => t.id !== confirmDeleteTeam));
+      setAthletes(prev => { const n = { ...prev }; delete n[confirmDeleteTeam]; return n; });
+      if (expandedTeam === confirmDeleteTeam) setExpandedTeam(null);
+    } else {
+      setError(result.error ?? "Failed to delete team");
+    }
+  }
+
+  async function handleDeleteAthlete() {
+    if (!confirmDeleteAthlete) return;
+    setIsDeleting(true);
+    const result = await deleteAthleteAction(confirmDeleteAthlete.teamId, confirmDeleteAthlete.owUserId);
+    setIsDeleting(false);
+    setConfirmDeleteAthlete(null);
+    if (result.success) {
+      setAthletes(prev => ({
+        ...prev,
+        [confirmDeleteAthlete.teamId]: (prev[confirmDeleteAthlete.teamId] ?? []).filter(a => a.ow_user_id !== confirmDeleteAthlete.owUserId),
+      }));
+    } else {
+      setError(result.error ?? "Failed to delete athlete");
+    }
   }
 
   async function handleCreateTeam() {
@@ -159,6 +195,13 @@ export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontend
                   <Shield className="h-4 w-4 text-muted shrink-0" />
                   <span className="text-sm font-medium text-ink flex-1">{team.name}</span>
                   <span className="rounded-full bg-line px-2 py-0.5 text-xs text-muted">{teamAthletes.length}</span>
+                  <button
+                    onClick={e => { e.stopPropagation(); setConfirmDeleteTeam(team.id); }}
+                    className="ml-2 p-1 rounded text-muted hover:text-red-500 hover:bg-red-50 transition"
+                    title="Delete team"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </button>
 
                 {expanded && (
@@ -218,6 +261,7 @@ export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontend
                             <th className="px-5 py-2 text-left font-medium">Athlete</th>
                             <th className="px-5 py-2 text-left font-medium">ID</th>
                             <th className="px-5 py-2 text-left font-medium">Pairing link</th>
+                            <th className="px-5 py-2" />
                           </tr>
                         </thead>
                         <tbody>
@@ -238,6 +282,15 @@ export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontend
                                   <span className="text-xs text-muted">—</span>
                                 )}
                               </td>
+                              <td className="px-3 py-3">
+                                <button
+                                  onClick={() => setConfirmDeleteAthlete({ teamId: team.id, owUserId: a.ow_user_id, name: a.athlete_name ?? "this athlete" })}
+                                  className="p-1 rounded text-muted hover:text-red-500 hover:bg-red-50 transition"
+                                  title="Delete athlete"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -248,6 +301,39 @@ export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontend
               </div>
             );
           })}
+        </div>
+      )}
+      {/* Confirm delete team */}
+      {confirmDeleteTeam && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="rounded-xl border border-line bg-surface shadow-xl p-6 max-w-sm w-full mx-4">
+            <p className="text-sm font-semibold text-ink mb-1">Delete team?</p>
+            <p className="text-sm text-muted mb-5">This will permanently delete the team and all its athletes from Everstride and Open Wearables. This cannot be undone.</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setConfirmDeleteTeam(null)} className="px-4 py-2 rounded-lg border border-line text-sm text-ink hover:bg-surfaceStrong transition">Cancel</button>
+              <button onClick={handleDeleteTeam} disabled={isDeleting} className="px-4 py-2 rounded-lg bg-red-600 text-sm text-white hover:bg-red-700 disabled:opacity-50 transition flex items-center gap-1.5">
+                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Delete team
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm delete athlete */}
+      {confirmDeleteAthlete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="rounded-xl border border-line bg-surface shadow-xl p-6 max-w-sm w-full mx-4">
+            <p className="text-sm font-semibold text-ink mb-1">Delete athlete?</p>
+            <p className="text-sm text-muted mb-5"><span className="font-medium text-ink">{confirmDeleteAthlete.name}</span> will be permanently removed from this team and deleted from Open Wearables. This cannot be undone.</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setConfirmDeleteAthlete(null)} className="px-4 py-2 rounded-lg border border-line text-sm text-ink hover:bg-surfaceStrong transition">Cancel</button>
+              <button onClick={handleDeleteAthlete} disabled={isDeleting} className="px-4 py-2 rounded-lg bg-red-600 text-sm text-white hover:bg-red-700 disabled:opacity-50 transition flex items-center gap-1.5">
+                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Delete athlete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

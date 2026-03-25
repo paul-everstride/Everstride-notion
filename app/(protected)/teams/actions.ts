@@ -2,7 +2,7 @@
 
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
-import { owCreateTeam, owGetTeams, owCreateUser, owAddTeamMember } from "@/lib/ow-client";
+import { owCreateTeam, owGetTeams, owCreateUser, owAddTeamMember, owDeleteTeam, owDeleteUser } from "@/lib/ow-client";
 import { revalidatePath } from "next/cache";
 
 export interface CreateTeamResult {
@@ -84,6 +84,60 @@ export async function createAthleteAction(
 
     revalidatePath("/teams");
     return { success: true, userId: owUser.id, pairingLink };
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+}
+
+export async function deleteTeamAction(supabaseTeamId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await requireAuthenticatedUser();
+    const supabase = createSupabaseServiceClient();
+    if (!supabase) return { success: false, error: "DB not configured" };
+
+    // Get OW team ID
+    const { data: team } = await supabase
+      .from("teams")
+      .select("ow_team_id")
+      .eq("id", supabaseTeamId)
+      .eq("coach_id", user.id)
+      .single();
+
+    // Delete from OW (also cascades members)
+    if (team?.ow_team_id) await owDeleteTeam(team.ow_team_id);
+
+    // Delete from Supabase (cascades team_athletes)
+    const { error } = await supabase.from("teams").delete().eq("id", supabaseTeamId).eq("coach_id", user.id);
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/teams");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+}
+
+export async function deleteAthleteAction(
+  supabaseTeamId: string,
+  owUserId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = createSupabaseServiceClient();
+    if (!supabase) return { success: false, error: "DB not configured" };
+
+    // Delete from OW
+    await owDeleteUser(owUserId);
+
+    // Delete from Supabase team_athletes
+    const { error } = await supabase
+      .from("team_athletes")
+      .delete()
+      .eq("team_id", supabaseTeamId)
+      .eq("ow_user_id", owUserId);
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/teams");
+    return { success: true };
   } catch (e) {
     return { success: false, error: String(e) };
   }
