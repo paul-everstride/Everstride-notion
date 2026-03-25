@@ -1577,7 +1577,7 @@ export function CompareWorkbench({
     <div className="border border-line">
 
       {/* ── Photo header strip ── */}
-      <ComparePhotoStrip title={section === "readiness" ? "Readiness & Recovery" : "Performance"} />
+      <ComparePhotoStrip title={section === "readiness" ? "Readiness & Recovery" : "Performance"} section={section} />
 
       {/* ── Control toolbar ── */}
       <div className="bg-surface border-b border-line px-4 py-3 space-y-3">

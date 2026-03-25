@@ -70,14 +70,16 @@ export function AthleteHeroStrip({ name }: { name: string }) {
 // ── Compare page: inset rounded photo card ────────────────────────────────────
 // Sits at the top of the compare workbench with rounded corners and visible imagery
 
-export function ComparePhotoStrip({ title }: { title: string }) {
+export function ComparePhotoStrip({ title, section }: { title: string; section?: "readiness" | "performance" }) {
+  const photo = section === "readiness" ? "/photos/sauna.jpg" : "/photos/cyclists-race.jpg";
+  const position = section === "readiness" ? "object-[center_40%]" : "object-[center_32%]";
   return (
     <div className="relative h-[110px] overflow-hidden bg-black rounded-2xl mx-4 mt-4 shadow-md">
       <Image
-        src="/photos/cyclists-race.jpg"
+        src={photo}
         alt=""
         fill
-        className="object-cover object-[center_32%] opacity-90"
+        className={`object-cover ${position} opacity-90`}
         sizes="100vw"
       />
       {/* dark overlay — photo stays fully visible */}
