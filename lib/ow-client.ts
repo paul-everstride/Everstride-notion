@@ -197,6 +197,15 @@ export async function owGetBody(userId: string): Promise<OWBodySummary | null> {
   }
 }
 
+export async function owRegisterCoach(email: string, name?: string): Promise<void> {
+  const res = await fetch(`${OW_API_URL}/api/v1/coaches`, {
+    method: "POST",
+    headers: { "X-Open-Wearables-API-Key": OW_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ email, name: name ?? null }),
+  });
+  // Don't throw on error — coach registration is best-effort
+}
+
 export async function owCreateTeam(name: string, coachEmail?: string): Promise<OWTeam> {
   const res = await fetch(`${OW_API_URL}/api/v1/teams`, {
     method: "POST",
@@ -237,6 +246,16 @@ export async function owCreateUser(payload: {
   });
   if (!res.ok) throw new Error(`OW createUser failed: ${res.status}`);
   return res.json();
+}
+
+/** Update a team's coach_email (used to backfill existing teams). */
+export async function owUpdateTeam(teamId: string, update: { coach_email?: string }): Promise<void> {
+  const res = await fetch(`${OW_API_URL}/api/v1/teams/${teamId}`, {
+    method: "PATCH",
+    headers: { "X-Open-Wearables-API-Key": OW_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify(update),
+  });
+  // Best-effort — don't throw
 }
 
 export async function owDeleteTeam(teamId: string): Promise<void> {

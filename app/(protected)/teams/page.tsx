@@ -1,5 +1,6 @@
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { owUpdateTeam } from "@/lib/ow-client";
 import { TeamsClient } from "./teams-client";
 
 export default async function TeamsPage() {
@@ -17,6 +18,15 @@ export default async function TeamsPage() {
       .order("created_at", { ascending: true });
 
     teams = teamsData ?? [];
+
+    // Backfill coach_email on OW teams that were created before this field existed
+    if (teams.length > 0 && user.email) {
+      await Promise.allSettled(
+        teams
+          .filter(t => t.ow_team_id)
+          .map(t => owUpdateTeam(t.ow_team_id!, { coach_email: user.email! }))
+      );
+    }
 
     if (teams.length > 0) {
       const teamIds = teams.map(t => t.id);

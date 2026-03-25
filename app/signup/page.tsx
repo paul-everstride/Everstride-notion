@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { LoginPhotoPanel } from "@/components/photo-accents";
+import { registerCoachAction } from "./actions";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -40,6 +41,9 @@ export default function SignupPage() {
       setLoading(false);
       return;
     }
+
+    // Register coach in OW backend (best-effort, does not block signup)
+    await registerCoachAction(email, name);
 
     // Signed up + auto-signed in → go straight to dashboard
     router.push("/dashboard");
