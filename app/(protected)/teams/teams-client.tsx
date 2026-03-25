@@ -5,6 +5,7 @@ import { Plus, UserPlus, ChevronDown, ChevronRight, Loader2, Trash2, X, Pencil, 
 import Link from "next/link";
 import Image from "next/image";
 import { createTeamAction, createAthleteAction, deleteTeamAction, deleteAthleteAction, updateAthleteAction, uploadAvatarAction } from "./actions";
+import { getTeamColor } from "@/lib/team-colors";
 
 interface Team { id: string; name: string; ow_team_id?: string | null; }
 interface TeamAthlete {
@@ -357,14 +358,16 @@ export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontend
           const form = getForm(team.id);
           const addingHere = showAddAthlete === team.id;
 
+          const teamColor = getTeamColor(team.ow_team_id ?? team.id, 'light');
           return (
             <div key={team.id}>
               {/* Team header — light, prominent heading style */}
-              <div className="flex items-center gap-3 border-b-2 border-zinc-200 pb-3 mb-5">
+              <div className="flex items-center gap-3 pb-3 mb-5" style={{ borderBottom: `2px solid ${teamColor.border}` }}>
                 <button onClick={() => toggleTeam(team.id)} className="flex items-center gap-2 flex-1 min-w-0 text-left group">
                   {expanded
                     ? <ChevronDown className="h-4 w-4 text-muted shrink-0 group-hover:text-ink transition" />
                     : <ChevronRight className="h-4 w-4 text-muted shrink-0 group-hover:text-ink transition" />}
+                  <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: teamColor.text }} />
                   <span className="text-lg font-bold text-ink truncate">{team.name}</span>
                   <span className="text-xs text-muted bg-zinc-100 rounded-full px-2.5 py-0.5 shrink-0">
                     {teamAthletes.length} {teamAthletes.length === 1 ? "athlete" : "athletes"}
