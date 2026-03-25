@@ -570,7 +570,7 @@ function AttentionMonitor({ athletes }: { athletes: AthleteSummary[] }) {
 
   return (
     <div className={cn(
-      "border rounded-lg flex flex-col flex-1 overflow-hidden",
+      "border rounded-lg flex flex-col flex-1 overflow-hidden bg-canvas",
       allClear ? "border-success/20" : "border-danger/20"
     )}>
       <div className="flex items-center gap-2.5 border-b border-line px-4 py-3">
@@ -671,7 +671,7 @@ function AiSummaryCard({ data, summaryMetrics }: { data: DashboardData; summaryM
   if (summaryMetrics.includes("vo2"))  sentences.push(avgVo2 != null ? `Team VO2 avg ${avgVo2}.` : "Team VO2 data not yet available.");
 
   return (
-    <div className="border border-warning/20 rounded-lg flex flex-col flex-1 overflow-hidden">
+    <div className="border border-warning/20 rounded-lg flex flex-col flex-1 overflow-hidden bg-canvas">
       <div className="flex items-center gap-2.5 border-b border-line px-4 py-3">
         <Sparkles size={14} className="text-warning shrink-0" />
         <span className="text-sm font-medium text-ink flex-1">AI Summary</span>
