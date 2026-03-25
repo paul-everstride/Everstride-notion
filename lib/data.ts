@@ -4,6 +4,7 @@
  * logged-in coach's team assignments stored in Supabase.
  */
 
+import { unstable_cache } from "next/cache";
 import type { AthleteSummary, DashboardData, RecoveryHistoryDay, TrendPoint } from "@/lib/types";
 import {
   owGetUsers,
@@ -363,76 +364,83 @@ async function getCoachAthleteIds(): Promise<string[] | null> {
   return athletes.map((a: { ow_user_id: string }) => a.ow_user_id);
 }
 
+// ─── Core fetch logic (shared by cached + uncached paths) ─────────────────────
+
+async function fetchAthletesFromOW(userIds: string[]): Promise<DashboardData> {
+  const users = await owGetUsers();
+  if (!users.length) return emptyDashboard;
+
+  const filtered = userIds.length > 0
+    ? users.filter((u) => userIds.includes(u.id))
+    : users;
+
+  if (!filtered.length) return emptyDashboard;
+
+  const athletes = (
+    await Promise.all(
+      filtered.map(async (user) => {
+        try {
+          const [recovery, sleep, body, timeseries] = await Promise.all([
+            owGetRecovery(user.id),
+            owGetSleep(user.id),
+            owGetBody(user.id),
+            owGetTimeseries(user.id),
+          ]);
+          if (!sleep.length && !Object.keys(timeseries).length) return null;
+          return toAthleteSummary(
+            user.id, user.first_name, user.last_name,
+            user.email, user.created_at,
+            recovery, sleep, body, timeseries
+          );
+        } catch { return null; }
+      })
+    )
+  )
+    .filter((a): a is AthleteSummary => a !== null)
+    .sort((a, b) => (b.recoveryScore ?? 0) - (a.recoveryScore ?? 0));
+
+  if (!athletes.length) return emptyDashboard;
+
+  const withRecovery = athletes.filter((a) => a.recoveryScore != null);
+  const withHrv      = athletes.filter((a) => a.hrv != null);
+
+  return {
+    athletes,
+    teamAverageRecovery: withRecovery.length
+      ? Math.round(withRecovery.reduce((s, a) => s + (a.recoveryScore ?? 0), 0) / withRecovery.length)
+      : 0,
+    teamAverageSleep: Math.round(
+      athletes.reduce((s, a) => s + a.sleepScore, 0) / athletes.length
+    ),
+    teamAverageHrv: withHrv.length
+      ? Math.round(withHrv.reduce((s, a) => s + (a.hrv ?? 0), 0) / withHrv.length)
+      : 0,
+    attentionAthletes: athletes.filter(
+      (a) => (a.recoveryScore != null && a.recoveryScore < 60) || a.sleepScore < 65
+    ),
+  };
+}
+
+// Cache wrapper — keyed by sorted athlete IDs, revalidates every 5 minutes
+const fetchAthletesCached = unstable_cache(
+  fetchAthletesFromOW,
+  ["dashboard-athletes"],
+  { revalidate: 300 }
+);
+
 export async function getDashboardData(): Promise<DashboardData> {
   try {
-    const [users, allowedIds] = await Promise.all([
-      owGetUsers(),
-      getCoachAthleteIds(),
-    ]);
+    const allowedIds = await getCoachAthleteIds();
 
-    if (!users.length) return emptyDashboard;
+    if (allowedIds === null) {
+      // Dev mode / Supabase not configured — skip cache, show all
+      return fetchAthletesFromOW([]);
+    }
 
-    // If the coach has teams configured, filter to only their athletes.
-    // If allowedIds is null it means Supabase isn't configured — show all (dev mode).
-    // If allowedIds is [] the coach has teams but no athletes yet — show none.
-    const filteredUsers =
-      allowedIds === null
-        ? users
-        : users.filter((u) => allowedIds.includes(u.id));
+    if (allowedIds.length === 0) return emptyDashboard;
 
-    if (!filteredUsers.length) return emptyDashboard;
-
-    const athletes = (
-      await Promise.all(
-        filteredUsers.map(async (user) => {
-          try {
-            const [recovery, sleep, body, timeseries] = await Promise.all([
-              owGetRecovery(user.id),
-              owGetSleep(user.id),
-              owGetBody(user.id),
-              owGetTimeseries(user.id),
-            ]);
-            if (!sleep.length && !Object.keys(timeseries).length) return null;
-            return toAthleteSummary(
-              user.id,
-              user.first_name,
-              user.last_name,
-              user.email,
-              user.created_at,
-              recovery,
-              sleep,
-              body,
-              timeseries
-            );
-          } catch {
-            return null;
-          }
-        })
-      )
-    )
-      .filter((a): a is AthleteSummary => a !== null)
-      .sort((a, b) => (b.recoveryScore ?? 0) - (a.recoveryScore ?? 0));
-
-    if (!athletes.length) return emptyDashboard;
-
-    const withRecovery = athletes.filter((a) => a.recoveryScore != null);
-    const withHrv      = athletes.filter((a) => a.hrv != null);
-
-    return {
-      athletes,
-      teamAverageRecovery: withRecovery.length
-        ? Math.round(withRecovery.reduce((s, a) => s + (a.recoveryScore ?? 0), 0) / withRecovery.length)
-        : 0,
-      teamAverageSleep: Math.round(
-        athletes.reduce((s, a) => s + a.sleepScore, 0) / athletes.length
-      ),
-      teamAverageHrv: withHrv.length
-        ? Math.round(withHrv.reduce((s, a) => s + (a.hrv ?? 0), 0) / withHrv.length)
-        : 0,
-      attentionAthletes: athletes.filter(
-        (a) => (a.recoveryScore != null && a.recoveryScore < 60) || a.sleepScore < 65
-      ),
-    };
+    // Sort IDs so same set of athletes always hits the same cache entry
+    return fetchAthletesCached([...allowedIds].sort());
   } catch {
     return emptyDashboard;
   }
