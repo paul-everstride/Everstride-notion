@@ -197,11 +197,11 @@ export async function owGetBody(userId: string): Promise<OWBodySummary | null> {
   }
 }
 
-export async function owCreateTeam(name: string): Promise<OWTeam> {
+export async function owCreateTeam(name: string, coachEmail?: string): Promise<OWTeam> {
   const res = await fetch(`${OW_API_URL}/api/v1/teams`, {
     method: "POST",
     headers: { "X-Open-Wearables-API-Key": OW_API_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, coach_email: coachEmail ?? null }),
   });
   if (!res.ok) throw new Error(`OW createTeam failed: ${res.status}`);
   return res.json();

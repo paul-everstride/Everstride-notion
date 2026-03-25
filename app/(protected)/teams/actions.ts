@@ -24,8 +24,8 @@ export async function createTeamAction(name: string): Promise<CreateTeamResult> 
     const supabase = createSupabaseServiceClient();
     if (!supabase) return { success: false, error: "DB not configured" };
 
-    // Create in OW (handles duplicate names automatically with suffix)
-    const owTeam = await owCreateTeam(name);
+    // Create in OW — pass coach email so it's visible in OW dashboard
+    const owTeam = await owCreateTeam(name, user.email ?? undefined);
 
     // Store in Supabase with the coach's original name
     const { data, error } = await supabase
