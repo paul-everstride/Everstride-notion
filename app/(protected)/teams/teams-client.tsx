@@ -1,100 +1,117 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Trash2, UserPlus, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { useState, useTransition } from "react";
+import { Plus, UserPlus, Copy, Check, ChevronDown, ChevronRight, Loader2, Shield } from "lucide-react";
+import { createTeamAction, createAthleteAction } from "./actions";
 
 interface Team {
   id: string;
   name: string;
+  ow_team_id?: string | null;
 }
 
 interface TeamAthlete {
-  team_id: string;
   ow_user_id: string;
+  athlete_name?: string | null;
+  athlete_email?: string | null;
+  pairing_link?: string | null;
+  created_at?: string;
 }
 
 interface Props {
   coachId: string;
   initialTeams: Team[];
-  initialTeamAthletes: TeamAthlete[];
+  initialAthletes: Record<string, TeamAthlete[]>;
+  owFrontendUrl: string;
 }
 
-export function TeamsClient({ coachId, initialTeams, initialTeamAthletes }: Props) {
-  const [teams, setTeams] = useState<Team[]>(initialTeams);
-  const [teamAthletes, setTeamAthletes] = useState<TeamAthlete[]>(initialTeamAthletes);
-  const [newTeamName, setNewTeamName] = useState("");
-  const [expandedTeam, setExpandedTeam] = useState<string | null>(
-    initialTeams[0]?.id ?? null
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+  return (
+    <button onClick={copy} className="ml-1 text-muted hover:text-ink transition p-0.5 rounded shrink-0" title="Copy link">
+      {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
   );
-  const [newAthleteId, setNewAthleteId] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(false);
-  const [athleteLoading, setAthleteLoading] = useState<string | null>(null);
+}
+
+export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontendUrl }: Props) {
+  const [teams, setTeams] = useState<Team[]>(initialTeams);
+  const [athletes, setAthletes] = useState<Record<string, TeamAthlete[]>>(initialAthletes);
+  const [expandedTeam, setExpandedTeam] = useState<string | null>(initialTeams[0]?.id ?? null);
+  const [newTeamName, setNewTeamName] = useState("");
+  const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const supabase = createSupabaseBrowserClient();
+  // Athlete form state per team
+  const [athleteForm, setAthleteForm] = useState<Record<string, {
+    first_name: string; last_name: string; email: string; external_user_id: string;
+  }>>({});
+  const [athletePending, setAthletePending] = useState<string | null>(null);
 
-  async function createTeam() {
-    if (!newTeamName.trim() || !supabase) return;
-    setLoading(true);
+  function getAthleteForm(teamId: string) {
+    return athleteForm[teamId] ?? { first_name: "", last_name: "", email: "", external_user_id: "" };
+  }
+
+  function setAthleteField(teamId: string, field: string, value: string) {
+    setAthleteForm(prev => ({
+      ...prev,
+      [teamId]: { ...getAthleteForm(teamId), [field]: value }
+    }));
+  }
+
+  async function handleCreateTeam() {
+    if (!newTeamName.trim()) return;
     setError(null);
+    startTransition(async () => {
+      const result = await createTeamAction(newTeamName.trim());
+      if (result.success && result.teamId) {
+        const newTeam = { id: result.teamId, name: newTeamName.trim() };
+        setTeams(prev => [...prev, newTeam]);
+        setAthletes(prev => ({ ...prev, [result.teamId!]: [] }));
+        setExpandedTeam(result.teamId);
+        setNewTeamName("");
+      } else {
+        setError(result.error ?? "Failed to create team");
+      }
+    });
+  }
 
-    const { data, error: err } = await supabase
-      .from("teams")
-      .insert({ name: newTeamName.trim(), coach_id: coachId })
-      .select("id, name")
-      .single();
-
-    if (err) {
-      setError(err.message);
-    } else if (data) {
-      setTeams((prev) => [...prev, data]);
-      setExpandedTeam(data.id);
-      setNewTeamName("");
+  async function handleCreateAthlete(teamId: string) {
+    const form = getAthleteForm(teamId);
+    if (!form.first_name.trim() || !form.last_name.trim() || !form.email.trim()) {
+      setError("First name, last name and email are required.");
+      return;
     }
-    setLoading(false);
-  }
-
-  async function deleteTeam(teamId: string) {
-    if (!supabase) return;
-    await supabase.from("teams").delete().eq("id", teamId);
-    setTeams((prev) => prev.filter((t) => t.id !== teamId));
-    setTeamAthletes((prev) => prev.filter((a) => a.team_id !== teamId));
-  }
-
-  async function addAthlete(teamId: string) {
-    const owId = newAthleteId[teamId]?.trim();
-    if (!owId || !supabase) return;
-    setAthleteLoading(teamId);
     setError(null);
-
-    const { error: err } = await supabase
-      .from("team_athletes")
-      .insert({ team_id: teamId, ow_user_id: owId });
-
-    if (err) {
-      setError(err.message.includes("unique") ? "That athlete is already in this team." : err.message);
+    setAthletePending(teamId);
+    const result = await createAthleteAction(teamId, {
+      first_name: form.first_name.trim(),
+      last_name: form.last_name.trim(),
+      email: form.email.trim(),
+      external_user_id: form.external_user_id.trim() || `${form.first_name[0]}${form.last_name[0]}`.toUpperCase(),
+    });
+    if (result.success && result.userId) {
+      const newAthlete: TeamAthlete = {
+        ow_user_id: result.userId,
+        athlete_name: `${form.first_name} ${form.last_name}`.trim(),
+        athlete_email: form.email,
+        pairing_link: result.pairingLink,
+      };
+      setAthletes(prev => ({ ...prev, [teamId]: [newAthlete, ...(prev[teamId] ?? [])] }));
+      setAthleteForm(prev => ({ ...prev, [teamId]: { first_name: "", last_name: "", email: "", external_user_id: "" } }));
     } else {
-      setTeamAthletes((prev) => [...prev, { team_id: teamId, ow_user_id: owId }]);
-      setNewAthleteId((prev) => ({ ...prev, [teamId]: "" }));
+      setError(result.error ?? "Failed to create athlete");
     }
-    setAthleteLoading(null);
-  }
-
-  async function removeAthlete(teamId: string, owUserId: string) {
-    if (!supabase) return;
-    await supabase
-      .from("team_athletes")
-      .delete()
-      .eq("team_id", teamId)
-      .eq("ow_user_id", owUserId);
-    setTeamAthletes((prev) =>
-      prev.filter((a) => !(a.team_id === teamId && a.ow_user_id === owUserId))
-    );
+    setAthletePending(null);
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-3xl space-y-6">
       {/* Create team */}
       <div className="rounded-xl border border-line bg-surface p-5">
         <p className="text-sm font-medium text-ink mb-3">New team</p>
@@ -102,117 +119,130 @@ export function TeamsClient({ coachId, initialTeams, initialTeamAthletes }: Prop
           <input
             type="text"
             value={newTeamName}
-            onChange={(e) => setNewTeamName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && createTeam()}
+            onChange={e => setNewTeamName(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleCreateTeam()}
             placeholder="e.g. Triathlon Squad"
             className="flex-1 rounded-lg border border-line bg-canvas px-3.5 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand transition"
           />
           <button
-            onClick={createTeam}
-            disabled={loading || !newTeamName.trim()}
+            onClick={handleCreateTeam}
+            disabled={isPending || !newTeamName.trim()}
             className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition"
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             Create
           </button>
         </div>
       </div>
 
       {error && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5">
-          {error}
-        </p>
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5">{error}</p>
       )}
 
-      {/* Teams list */}
       {teams.length === 0 ? (
-        <p className="text-sm text-muted py-4">No teams yet. Create your first team above.</p>
+        <p className="text-sm text-muted py-4">No teams yet. Create one above.</p>
       ) : (
-        <div className="space-y-3">
-          {teams.map((team) => {
-            const athletes = teamAthletes.filter((a) => a.team_id === team.id);
+        <div className="space-y-4">
+          {teams.map(team => {
+            const teamAthletes = athletes[team.id] ?? [];
             const expanded = expandedTeam === team.id;
+            const form = getAthleteForm(team.id);
 
             return (
               <div key={team.id} className="rounded-xl border border-line bg-surface overflow-hidden">
-                {/* Team header */}
-                <div className="flex items-center justify-between px-5 py-3.5">
-                  <button
-                    onClick={() => setExpandedTeam(expanded ? null : team.id)}
-                    className="flex items-center gap-2 text-sm font-medium text-ink hover:text-brand transition"
-                  >
-                    {expanded ? (
-                      <ChevronUp className="h-4 w-4 text-muted" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-muted" />
-                    )}
-                    {team.name}
-                    <span className="ml-1 rounded-full bg-line px-2 py-0.5 text-xs text-muted font-normal">
-                      {athletes.length}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => deleteTeam(team.id)}
-                    className="text-muted hover:text-red-500 transition p-1 rounded"
-                    title="Delete team"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
+                {/* Header */}
+                <button
+                  onClick={() => setExpandedTeam(expanded ? null : team.id)}
+                  className="w-full flex items-center gap-2.5 px-5 py-4 text-left hover:bg-surfaceStrong transition"
+                >
+                  {expanded ? <ChevronDown className="h-4 w-4 text-muted shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted shrink-0" />}
+                  <Shield className="h-4 w-4 text-muted shrink-0" />
+                  <span className="text-sm font-medium text-ink flex-1">{team.name}</span>
+                  <span className="rounded-full bg-line px-2 py-0.5 text-xs text-muted">{teamAthletes.length}</span>
+                </button>
 
-                {/* Expanded content */}
                 {expanded && (
-                  <div className="border-t border-line px-5 py-4 space-y-4">
-                    {/* Athletes list */}
-                    {athletes.length === 0 ? (
-                      <p className="text-xs text-muted">No athletes yet. Add one below.</p>
-                    ) : (
-                      <ul className="space-y-1.5">
-                        {athletes.map((a) => (
-                          <li
-                            key={a.ow_user_id}
-                            className="flex items-center justify-between rounded-lg border border-line bg-canvas px-3 py-2"
-                          >
-                            <span className="text-xs font-mono text-ink">{a.ow_user_id}</span>
-                            <button
-                              onClick={() => removeAthlete(team.id, a.ow_user_id)}
-                              className="text-muted hover:text-red-500 transition p-0.5 rounded"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    {/* Add athlete */}
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={newAthleteId[team.id] ?? ""}
-                        onChange={(e) =>
-                          setNewAthleteId((prev) => ({ ...prev, [team.id]: e.target.value }))
-                        }
-                        onKeyDown={(e) => e.key === "Enter" && addAthlete(team.id)}
-                        placeholder="OW User ID (e.g. usr_abc123)"
-                        className="flex-1 rounded-lg border border-line bg-canvas px-3 py-2 text-xs text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand transition font-mono"
-                      />
+                  <div className="border-t border-line">
+                    {/* Add athlete form */}
+                    <div className="px-5 py-4 border-b border-line bg-canvas/50">
+                      <p className="text-xs font-medium text-muted uppercase tracking-wider mb-3">Add athlete</p>
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={form.first_name}
+                          onChange={e => setAthleteField(team.id, "first_name", e.target.value)}
+                          placeholder="First name *"
+                          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand transition"
+                        />
+                        <input
+                          type="text"
+                          value={form.last_name}
+                          onChange={e => setAthleteField(team.id, "last_name", e.target.value)}
+                          placeholder="Last name *"
+                          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand transition"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mb-3">
+                        <input
+                          type="email"
+                          value={form.email}
+                          onChange={e => setAthleteField(team.id, "email", e.target.value)}
+                          placeholder="Email *"
+                          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand transition"
+                        />
+                        <input
+                          type="text"
+                          value={form.external_user_id}
+                          onChange={e => setAthleteField(team.id, "external_user_id", e.target.value)}
+                          placeholder="ID / initials (e.g. JDO)"
+                          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-muted font-mono focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand transition"
+                        />
+                      </div>
                       <button
-                        onClick={() => addAthlete(team.id)}
-                        disabled={athleteLoading === team.id || !newAthleteId[team.id]?.trim()}
-                        className="inline-flex items-center gap-1 rounded-lg border border-brand text-brand px-3 py-2 text-xs font-medium hover:bg-brand hover:text-white disabled:opacity-50 transition"
+                        onClick={() => handleCreateAthlete(team.id)}
+                        disabled={athletePending === team.id}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition"
                       >
-                        {athleteLoading === team.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <UserPlus className="h-3.5 w-3.5" />
-                        )}
-                        Add
+                        {athletePending === team.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                        Add to team
                       </button>
                     </div>
-                    <p className="text-xs text-muted">
-                      Find the OW User ID on the athlete&apos;s profile page in the Open Wearables dashboard.
-                    </p>
+
+                    {/* Athletes table */}
+                    {teamAthletes.length === 0 ? (
+                      <div className="px-5 py-4 text-sm text-muted">No athletes yet. Add one above.</div>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-line text-xs text-muted uppercase tracking-wider">
+                            <th className="px-5 py-2 text-left font-medium">Athlete</th>
+                            <th className="px-5 py-2 text-left font-medium">ID</th>
+                            <th className="px-5 py-2 text-left font-medium">Pairing link</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {teamAthletes.map(a => (
+                            <tr key={a.ow_user_id} className="border-b border-line last:border-0 hover:bg-surfaceStrong transition">
+                              <td className="px-5 py-3">
+                                <p className="font-medium text-ink">{a.athlete_name ?? "—"}</p>
+                                <p className="text-xs text-muted">{a.athlete_email ?? "—"}</p>
+                              </td>
+                              <td className="px-5 py-3 font-mono text-xs text-muted">{a.ow_user_id.slice(0, 8)}…</td>
+                              <td className="px-5 py-3">
+                                {a.pairing_link ? (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-xs text-muted truncate max-w-[200px]">{a.pairing_link}</span>
+                                    <CopyButton text={a.pairing_link} />
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-muted">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 )}
               </div>

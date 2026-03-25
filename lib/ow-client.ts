@@ -17,6 +17,12 @@ export interface OWUser {
   external_user_id: string | null;
 }
 
+export interface OWTeam {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
 export interface OWRecoverySummary {
   date: string;
   recovery_score: number | null;
@@ -189,6 +195,48 @@ export async function owGetBody(userId: string): Promise<OWBodySummary | null> {
   } catch {
     return null;
   }
+}
+
+export async function owCreateTeam(name: string): Promise<OWTeam> {
+  const res = await fetch(`${OW_API_URL}/api/v1/teams`, {
+    method: "POST",
+    headers: { "X-API-Key": OW_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(`OW createTeam failed: ${res.status}`);
+  return res.json();
+}
+
+export async function owGetTeams(): Promise<OWTeam[]> {
+  const res = await fetch(`${OW_API_URL}/api/v1/teams`, {
+    headers: { "X-API-Key": OW_API_KEY },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`OW getTeams failed: ${res.status}`);
+  return res.json();
+}
+
+export async function owAddTeamMember(teamId: string, userId: string): Promise<void> {
+  const res = await fetch(`${OW_API_URL}/api/v1/teams/${teamId}/users/${userId}`, {
+    method: "POST",
+    headers: { "X-API-Key": OW_API_KEY },
+  });
+  if (!res.ok) throw new Error(`OW addTeamMember failed: ${res.status}`);
+}
+
+export async function owCreateUser(payload: {
+  first_name: string;
+  last_name: string;
+  email: string;
+  external_user_id: string;
+}): Promise<OWUser> {
+  const res = await fetch(`${OW_API_URL}/api/v1/users`, {
+    method: "POST",
+    headers: { "X-API-Key": OW_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`OW createUser failed: ${res.status}`);
+  return res.json();
 }
 
 // ─── Timeseries ────────────────────────────────────────────────────────────────
