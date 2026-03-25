@@ -24,7 +24,6 @@ import { AthleteTable, type AthleteColumnKey, defaultAthleteColumns } from "@/co
 import { RecoveryBadge } from "@/components/recovery-badge";
 import type { AthleteSummary, DashboardData } from "@/lib/types";
 import { cn, formatSignedNumber } from "@/lib/utils";
-import { DashboardStatsBg } from "@/components/photo-accents";
 
 // ── Column config ──────────────────────────────────────────────────────────────
 
@@ -972,8 +971,7 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
           const avgVo2 = vo2Athletes.length ? Math.round(vo2Athletes.reduce((s, a) => s + (a.vo2Max ?? 0), 0) / vo2Athletes.length) : 0;
           const flagged = dashboard.attentionAthletes.length;
           return (
-            <div className="relative flex flex-wrap mt-4 border border-line rounded-lg overflow-hidden bg-canvas">
-              <DashboardStatsBg />
+            <div className="flex flex-wrap mt-4 border border-line rounded-lg overflow-hidden bg-canvas">
               <StatDonut pct={dashboard.teamAverageRecovery} color="#e16b2b"
                 value={dashboard.teamAverageRecovery > 0 ? String(dashboard.teamAverageRecovery) : "N/A"} label="Recovery" />
               <StatDonut pct={dashboard.teamAverageSleep} color="#6366f1"

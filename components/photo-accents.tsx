@@ -42,11 +42,11 @@ export function LoginPhotoPanel() {
 }
 
 // ── Athlete detail: hero card behind athlete name ─────────────────────────────
-// Full-width at top of panel, rounded bottom corners, dark overlay only (no white wash)
+// Inset card with all-corners rounding, dark overlay only
 
 export function AthleteHeroStrip({ name }: { name: string }) {
   return (
-    <div className="relative h-[155px] overflow-hidden bg-black rounded-b-2xl shadow-sm">
+    <div className="relative h-[155px] overflow-hidden bg-black rounded-2xl mx-4 mt-4 shadow-md">
       <Image
         src="/photos/cyclist-solo.jpg"
         alt=""
