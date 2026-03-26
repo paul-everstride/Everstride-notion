@@ -1,6 +1,6 @@
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { owUpdateTeam } from "@/lib/ow-client";
+import { owUpdateTeam, owGetTeamMembers } from "@/lib/ow-client";
 import { TeamsClient } from "./teams-client";
 
 export default async function TeamsPage() {
@@ -52,9 +52,32 @@ export default async function TeamsPage() {
         athletesData = withoutAvatar;
       }
 
+      // Merge Supabase athletes with athletes added directly in OW dashboard
       for (const team of teams) {
-        initialAthletes[team.id] = (athletesData ?? [])
-          .filter(a => a.team_id === team.id);
+        const supabaseAthletes = (athletesData ?? []).filter(a => a.team_id === team.id);
+        const supabaseIds = new Set(supabaseAthletes.map(a => a.ow_user_id));
+
+        // Fetch live OW team members for athletes added via OW dashboard
+        let owOnlyAthletes: typeof supabaseAthletes = [];
+        if (team.ow_team_id) {
+          try {
+            const owMembers = await owGetTeamMembers(team.ow_team_id);
+            owOnlyAthletes = owMembers
+              .filter(m => !supabaseIds.has(m.id))
+              .map(m => ({
+                team_id: team.id,
+                ow_user_id: m.id,
+                athlete_name: [m.first_name, m.last_name].filter(Boolean).join(" ") || null,
+                athlete_email: m.email ?? null,
+                pairing_link: null,
+                avatar_url: null,
+              }));
+          } catch {
+            // OW unreachable — skip
+          }
+        }
+
+        initialAthletes[team.id] = [...supabaseAthletes, ...owOnlyAthletes];
       }
     }
   }
