@@ -275,6 +275,19 @@ export async function owDeleteTeam(teamId: string): Promise<void> {
   if (!res.ok && res.status !== 404) throw new Error(`OW deleteTeam failed: ${res.status}`);
 }
 
+/** Update a user's name and/or email in OW. */
+export async function owUpdateUser(
+  userId: string,
+  update: { first_name?: string; last_name?: string; email?: string }
+): Promise<void> {
+  const res = await fetch(`${OW_API_URL}/api/v1/users/${userId}`, {
+    method: "PATCH",
+    headers: { "X-Open-Wearables-API-Key": OW_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify(update),
+  });
+  // Best-effort — don't throw so Supabase update still succeeds
+}
+
 export async function owDeleteUser(userId: string): Promise<void> {
   const res = await fetch(`${OW_API_URL}/api/v1/users/${userId}`, {
     method: "DELETE",

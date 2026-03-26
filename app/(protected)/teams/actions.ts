@@ -2,7 +2,7 @@
 
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
-import { owCreateTeam, owGetTeams, owCreateUser, owAddTeamMember, owDeleteTeam, owDeleteUser } from "@/lib/ow-client";
+import { owCreateTeam, owGetTeams, owCreateUser, owAddTeamMember, owDeleteTeam, owDeleteUser, owUpdateUser } from "@/lib/ow-client";
 import { revalidatePath } from "next/cache";
 
 export interface CreateTeamResult {
@@ -169,6 +169,17 @@ export async function updateAthleteAction(
       athlete_email: data.athlete_email,
     };
     if (data.avatar_url !== undefined) updateData.avatar_url = data.avatar_url;
+
+    // Sync name + email to OW so both apps stay in sync
+    const nameParts = data.athlete_name.trim().split(/\s+/);
+    const firstName = nameParts[0] ?? "";
+    const lastName = nameParts.slice(1).join(" ") || "";
+    await owUpdateUser(owUserId, {
+      first_name: firstName,
+      last_name: lastName,
+      email: data.athlete_email,
+    });
+
     const { error } = await supabase
       .from("team_athletes")
       .update(updateData)
