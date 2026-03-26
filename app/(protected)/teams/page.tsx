@@ -6,6 +6,7 @@ import { TeamsClient } from "./teams-client";
 export default async function TeamsPage() {
   const user = await requireAuthenticatedUser();
   const supabase = createSupabaseServerClient();
+  const owFrontendUrl = process.env.OW_FRONTEND_URL ?? "https://frontend-production-fdc3.up.railway.app";
 
   let teams: { id: string; name: string; ow_team_id?: string | null }[] = [];
   let initialAthletes: Record<string, { ow_user_id: string; athlete_name?: string | null; athlete_email?: string | null; pairing_link?: string | null; avatar_url?: string | null }[]> = {};
@@ -69,7 +70,7 @@ export default async function TeamsPage() {
                 ow_user_id: m.id,
                 athlete_name: [m.first_name, m.last_name].filter(Boolean).join(" ") || null,
                 athlete_email: m.email ?? null,
-                pairing_link: null,
+                pairing_link: `${owFrontendUrl}/users/${m.id}/pair`,
                 avatar_url: null,
               }));
           } catch {
@@ -81,8 +82,6 @@ export default async function TeamsPage() {
       }
     }
   }
-
-  const owFrontendUrl = process.env.OW_FRONTEND_URL ?? "https://frontend-production-fdc3.up.railway.app";
 
   return (
     <div>
