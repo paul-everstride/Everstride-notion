@@ -241,26 +241,22 @@ function AthleteCard({ athlete, teamId, onDelete, onUpdate, onRefreshNeeded }: {
     <>
       <div className="flex flex-col rounded-2xl border border-line bg-white overflow-hidden shadow-sm hover:shadow-md hover:border-zinc-300 transition-all duration-150 group">
         <Link href={`/athletes/${athlete.ow_user_id}`} className="flex flex-col items-center pt-8 pb-5 px-5 gap-3">
-          {/* Avatar with optional "data active" badge */}
+          {/* Avatar with active/inactive status badge */}
           <div className="relative">
             <Avatar name={name} avatarUrl={localAvatarUrl} size={72} />
-            {athlete.has_data && (
-              <span className="absolute bottom-0.5 right-0.5 flex h-3.5 w-3.5 items-center justify-center">
+            <span className="absolute bottom-0.5 right-0.5 flex h-3.5 w-3.5 items-center justify-center">
+              {athlete.has_data && (
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
-              </span>
-            )}
+              )}
+              <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ring-2 ring-white ${athlete.has_data ? "bg-emerald-500" : "bg-zinc-300"}`} />
+            </span>
           </div>
           <div className="text-center">
             <p className="text-sm font-semibold text-ink group-hover:text-brand transition-colors leading-snug">{name}</p>
-            {athlete.has_data ? (
-              <p className="text-xs font-medium text-emerald-600 mt-0.5">Active</p>
-            ) : (
-              <p className="text-xs text-muted mt-0.5 flex items-center justify-center gap-1">
-                <Mail className="h-3 w-3 shrink-0" />
-                <span className="truncate max-w-[140px]">{athlete.athlete_email ?? "—"}</span>
-              </p>
-            )}
+            <p className={`text-xs font-medium mt-0.5 flex items-center justify-center gap-1 ${athlete.has_data ? "text-emerald-600" : "text-zinc-400"}`}>
+              <span className={`inline-block w-1.5 h-1.5 rounded-full ${athlete.has_data ? "bg-emerald-500" : "bg-zinc-300"}`} />
+              {athlete.has_data ? "Active" : "Inactive"}
+            </p>
           </div>
         </Link>
         <div className="border-t border-line flex items-stretch divide-x divide-line mt-auto">
