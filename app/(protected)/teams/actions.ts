@@ -181,6 +181,27 @@ export async function uploadAvatarAction(
   }
 }
 
+/** Persists avatar_url immediately after upload — no need to click Save separately */
+export async function saveAvatarUrlAction(
+  owUserId: string,
+  avatarUrl: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = createSupabaseServiceClient();
+    if (!supabase) return { success: false, error: "DB not configured" };
+    const { error } = await supabase
+      .from("team_athletes")
+      .update({ avatar_url: avatarUrl })
+      .eq("ow_user_id", owUserId);
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/teams");
+    revalidateTag("dashboard-athletes");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+}
+
 export async function updateAthleteAction(
   supabaseTeamId: string,
   owUserId: string,
@@ -195,16 +216,7 @@ export async function updateAthleteAction(
     };
     if (data.avatar_url !== undefined) updateData.avatar_url = data.avatar_url;
 
-    // Sync name + email to OW so both apps stay in sync
-    const nameParts = data.athlete_name.trim().split(/\s+/);
-    const firstName = nameParts[0] ?? "";
-    const lastName = nameParts.slice(1).join(" ") || "";
-    await owUpdateUser(owUserId, {
-      first_name: firstName,
-      last_name: lastName,
-      email: data.athlete_email,
-    });
-
+    // Write to Supabase first — this must not be blocked by OW sync
     const { error } = await supabase
       .from("team_athletes")
       .update(updateData)
@@ -212,7 +224,18 @@ export async function updateAthleteAction(
       .eq("ow_user_id", owUserId);
     if (error) return { success: false, error: error.message };
     revalidatePath("/teams");
-    revalidateTag("dashboard-athletes"); // busts unstable_cache so athletes + detail pages reflect changes immediately
+    revalidateTag("dashboard-athletes");
+
+    // Sync name + email to OW best-effort — never blocks the DB save
+    try {
+      const nameParts = data.athlete_name.trim().split(/\s+/);
+      await owUpdateUser(owUserId, {
+        first_name: nameParts[0] ?? "",
+        last_name: nameParts.slice(1).join(" ") || "",
+        email: data.athlete_email,
+      });
+    } catch { /* OW sync failure is non-fatal */ }
+
     return { success: true };
   } catch (e) {
     return { success: false, error: String(e) };

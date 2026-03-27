@@ -4,7 +4,7 @@ import { useState, useTransition, useRef } from "react";
 import { Plus, UserPlus, ChevronDown, ChevronRight, Loader2, Trash2, X, Pencil, Mail, ExternalLink, Copy, Check, Camera } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { createTeamAction, createAthleteAction, deleteTeamAction, deleteAthleteAction, updateAthleteAction, uploadAvatarAction } from "./actions";
+import { createTeamAction, createAthleteAction, deleteTeamAction, deleteAthleteAction, updateAthleteAction, uploadAvatarAction, saveAvatarUrlAction } from "./actions";
 import { getTeamColor } from "@/lib/team-colors";
 
 interface Team { id: string; name: string; ow_team_id?: string | null; }
@@ -102,8 +102,14 @@ function EditAthleteModal({
     const fd = new FormData();
     fd.append("file", file);
     const result = await uploadAvatarAction(athlete.ow_user_id, fd);
-    if (result.success) {
-      setAvatarUrl(result.url ?? null);
+    if (result.success && result.url) {
+      // Immediately persist the URL to DB — don't wait for Save button
+      const saveResult = await saveAvatarUrlAction(athlete.ow_user_id, result.url);
+      if (saveResult.success) {
+        setAvatarUrl(result.url);
+      } else {
+        setError(saveResult.error ?? "Photo uploaded but failed to save. Please try again.");
+      }
     } else {
       setError(result.error ?? "Upload failed.");
     }
