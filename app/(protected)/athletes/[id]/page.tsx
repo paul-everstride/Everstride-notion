@@ -18,9 +18,18 @@ export default async function AthleteDetailPage({ params }: { params: { id: stri
               className="text-sm text-muted border border-line rounded-md px-3 py-1.5 hover:text-ink hover:border-ink/30 transition-colors duration-100">
               ← Athletes
             </Link>
+            {athlete.avatarUrl ? (
+              <img src={athlete.avatarUrl} alt={athlete.name} className="w-10 h-10 rounded-full object-cover border border-line shrink-0" />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-surfaceStrong border border-line flex items-center justify-center shrink-0">
+                <span className="text-sm font-semibold text-muted">
+                  {athlete.name.split(" ").map((w: string) => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase()}
+                </span>
+              </div>
+            )}
             <div>
               <h1 className="text-xl font-semibold text-ink">{athlete.name}</h1>
-              <p className="text-sm text-muted mt-0.5">{athlete.email} · {athlete.team}</p>
+              <p className="text-sm text-muted mt-0.5">{athlete.email ?? athlete.team}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

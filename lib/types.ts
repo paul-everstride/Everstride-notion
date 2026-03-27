@@ -67,6 +67,7 @@ export type AthleteSummary = {
   userId: string;
   name: string;
   email: string | null;
+  avatarUrl: string | null;
   age: number | null;
   weightKg: number | null;
   heightCm: number | null;

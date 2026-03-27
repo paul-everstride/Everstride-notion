@@ -44,7 +44,8 @@ export function LoginPhotoPanel() {
 // ── Athlete detail: hero card behind athlete name ─────────────────────────────
 // Inset card with all-corners rounding, dark overlay only
 
-export function AthleteHeroStrip({ name }: { name: string }) {
+export function AthleteHeroStrip({ name, avatarUrl }: { name: string; avatarUrl?: string | null }) {
+  const initials = name.split(" ").map(w => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
   return (
     <div className="relative h-[155px] overflow-hidden bg-black rounded-2xl mx-4 mt-4 shadow-md">
       <Image
@@ -62,6 +63,18 @@ export function AthleteHeroStrip({ name }: { name: string }) {
       <div className="absolute bottom-5 left-6">
         <p className="text-white/50 text-[10px] font-semibold uppercase tracking-[0.2em] mb-1">Athlete</p>
         <h1 className="text-white text-2xl font-semibold tracking-tight leading-none drop-shadow">{name}</h1>
+      </div>
+      {/* Avatar portrait — top right */}
+      <div className="absolute top-4 right-5">
+        {avatarUrl ? (
+          <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/30 shadow-lg">
+            <Image src={avatarUrl} alt={name} width={64} height={64} className="object-cover w-full h-full" />
+          </div>
+        ) : (
+          <div className="w-16 h-16 rounded-full bg-white/15 border-2 border-white/25 flex items-center justify-center shadow-lg">
+            <span className="text-white text-lg font-semibold">{initials}</span>
+          </div>
+        )}
       </div>
     </div>
   );

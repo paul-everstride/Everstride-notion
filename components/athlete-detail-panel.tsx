@@ -532,7 +532,7 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
   return (
     <div>
       {/* Athlete hero photo strip */}
-      <AthleteHeroStrip name={athlete.name} />
+      <AthleteHeroStrip name={athlete.name} avatarUrl={athlete.avatarUrl} />
 
       {/* Tab bar */}
       <div className="border-b border-line bg-canvas px-6">

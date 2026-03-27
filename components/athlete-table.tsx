@@ -76,23 +76,35 @@ const columnDefinitions: ColumnDefinition[] = [
     key: "name",
     group: "Athlete",
     label: "Name",
-    render: (athlete) => (
-      <div className="flex items-center justify-between gap-3 min-w-[160px]">
-        <div>
-          <p className="m-0 font-medium text-ink text-sm">{athlete.name}</p>
-          <p className="mt-0.5 text-xs text-muted truncate max-w-[140px]">{athlete.email}</p>
+    render: (athlete) => {
+      const initials = athlete.name.split(" ").map((w: string) => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
+      return (
+        <div className="flex items-center justify-between gap-3 min-w-[180px]">
+          <div className="flex items-center gap-2.5">
+            {athlete.avatarUrl ? (
+              <img src={athlete.avatarUrl} alt={athlete.name} className="w-8 h-8 rounded-full object-cover shrink-0 border border-line" />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-surfaceStrong border border-line flex items-center justify-center shrink-0">
+                <span className="text-[10px] font-semibold text-muted">{initials}</span>
+              </div>
+            )}
+            <div>
+              <p className="m-0 font-medium text-ink text-sm">{athlete.name}</p>
+              <p className="mt-0.5 text-xs text-muted truncate max-w-[120px]">{athlete.email ?? "—"}</p>
+            </div>
+          </div>
+          <Link
+            href={`/athletes/${athlete.id}`}
+            className="shrink-0 text-xs text-blue hover:text-blue/80 transition-colors duration-100"
+          >
+            ↗
+          </Link>
         </div>
-        <Link
-          href={`/athletes/${athlete.id}`}
-          className="shrink-0 text-xs text-blue hover:text-blue/80 transition-colors duration-100"
-        >
-          ↗
-        </Link>
-      </div>
-    )
+      );
+    }
   },
   { key: "age",      group: "Athlete",      label: "Age",     align: "right", render: (a) => <span className="tabular">{a.age ?? "—"}</span> },
-  { key: "weight",   group: "Athlete",      label: "Wt (kg)", align: "right", render: (a) => <span className="tabular">{a.weightKg}</span> },
+  { key: "weight",   group: "Athlete",      label: "Wt (kg)", align: "right", render: (a) => <span className="tabular">{formatWeight(a.weightKg)}</span> },
   { key: "team",     group: "Athlete",      label: "Team",    render: (a) => <span className="text-muted text-xs">{a.team}</span> },
   { key: "recovery", group: "Readiness",    label: "REC",     align: "right", render: (a) => <RecoveryCell score={a.recoveryScore} /> },
   { key: "sleep",    group: "Readiness",    label: "SLP",     align: "right", render: (a) => <span className="tabular">{a.sleepScore}</span> },

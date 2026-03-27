@@ -99,7 +99,8 @@ function toAthleteSummary(
   recovery: OWRecoverySummary[],
   sleep: OWSleepSummary[],
   body: OWBodySummary | null,
-  timeseries: Record<string, OWTimeseriesPoint[]>
+  timeseries: Record<string, OWTimeseriesPoint[]>,
+  avatarUrl: string | null = null
 ): AthleteSummary {
   const latestSleep = sleep[0] ?? null;
 
@@ -281,6 +282,7 @@ function toAthleteSummary(
     userId,
     name,
     email: email ?? null,
+    avatarUrl,
     age,
     weightKg,
     heightCm,
@@ -400,6 +402,21 @@ async function fetchAthletesFromOW(userIds: string[]): Promise<DashboardData> {
 
   if (!filtered.length) return emptyDashboard;
 
+  // Fetch avatar URLs from Supabase for all athletes in one query
+  const avatarMap = new Map<string, string | null>();
+  try {
+    const supabase = createSupabaseServiceClient();
+    if (supabase) {
+      const { data: avatarRows } = await supabase
+        .from("team_athletes")
+        .select("ow_user_id, avatar_url")
+        .in("ow_user_id", filtered.map(u => u.id));
+      for (const row of avatarRows ?? []) {
+        if (row.ow_user_id) avatarMap.set(row.ow_user_id, row.avatar_url ?? null);
+      }
+    }
+  } catch { /* avatar fetch is best-effort */ }
+
   const athletes = (
     await Promise.all(
       filtered.map(async (user) => {
@@ -414,7 +431,8 @@ async function fetchAthletesFromOW(userIds: string[]): Promise<DashboardData> {
           return toAthleteSummary(
             user.id, user.first_name, user.last_name,
             user.email, user.created_at,
-            recovery, sleep, body, timeseries
+            recovery, sleep, body, timeseries,
+            avatarMap.get(user.id) ?? null
           );
         } catch { return null; }
       })
