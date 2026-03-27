@@ -212,19 +212,32 @@ function toAthleteSummary(
     };
   });
 
-  // ── Sleep metrics — real WHOOP data ───────────────────────────────────────
-  const sleepEfficiency = latestSleep?.efficiency_percent ?? 0;
-  const durationMinutes = latestSleep?.duration_minutes ?? 0;
-  const sleepDurationScore = Math.min(100, Math.round((durationMinutes / 480) * 100));
-  const sleepScore =
-    sleepEfficiency > 0
-      ? Math.round((sleepEfficiency + sleepDurationScore) / 2)
-      : sleepDurationScore;
-  const sleepConsistency = Math.min(100, Math.round(sleepScore * 0.95));
+  // ── Sleep metrics — recency-gated, same rule as recovery ─────────────────
+  // Only show headline sleep values if the latest sleep record is from
+  // today or yesterday. Stale data (days/weeks old) renders as null → "—".
+  const isSleepRecent = isRecent(latestSleep?.date);
+  const sleepEfficiency: number | null =
+    isSleepRecent && (latestSleep?.efficiency_percent ?? 0) > 0
+      ? latestSleep!.efficiency_percent
+      : null;
+  const durationMinutes = isSleepRecent ? (latestSleep?.duration_minutes ?? 0) : 0;
+  const sleepDurationScore = durationMinutes > 0
+    ? Math.min(100, Math.round((durationMinutes / 480) * 100))
+    : null;
+  const sleepScore: number | null = (() => {
+    if (!isSleepRecent) return null;
+    const eff = latestSleep?.efficiency_percent ?? 0;
+    const dur = durationMinutes;
+    const durScore = Math.min(100, Math.round((dur / 480) * 100));
+    if (eff > 0) return Math.round((eff + durScore) / 2);
+    return durScore > 0 ? durScore : null;
+  })();
+  const sleepConsistency: number | null =
+    sleepScore != null ? Math.min(100, Math.round(sleepScore * 0.95)) : null;
 
-  // Sleep stages (OW stores minutes → milliseconds)
-  const stages = latestSleep?.stages;
-  const totalBedMs = (latestSleep?.time_in_bed_minutes ?? durationMinutes) * 60_000;
+  // Sleep stages — only meaningful when sleep data is recent
+  const stages = isSleepRecent ? (latestSleep?.stages ?? null) : null;
+  const totalBedMs = isSleepRecent ? (latestSleep?.time_in_bed_minutes ?? durationMinutes) * 60_000 : 0;
   const totalRemMs = (stages?.rem_minutes ?? 0) * 60_000;
   const totalSlowWaveMs = (stages?.deep_minutes ?? 0) * 60_000;
   const totalLightMs = (stages?.light_minutes ?? 0) * 60_000;
@@ -248,13 +261,13 @@ function toAthleteSummary(
   const readinessTrend     = trendFromTS(ts_recovery, 30);
   const rhrTrend           = trendFromTS(ts_rhr, 30);
   const hrvTrend           = trendFromTS(ts_hrv, 30);
-  const sleepEfficiencyTrend = trendFromSleep(sleep, (s) => s.efficiency_percent, sleepEfficiency, 30);
+  const sleepEfficiencyTrend = trendFromSleep(sleep, (s) => s.efficiency_percent, sleepEfficiency ?? 0, 30);
   const sleepTrend = trendFromSleep(sleep, (s) => {
     const eff = s.efficiency_percent ?? 0;
     const dur = s.duration_minutes ?? 0;
     const durScore = Math.min(100, Math.round((dur / 480) * 100));
     return eff > 0 ? Math.round((eff + durScore) / 2) : durScore;
-  }, sleepScore, 30);
+  }, sleepScore ?? 0, 30);
 
   // Performance trends — flat/empty until power meter data arrives
   const tssTrend: TrendPoint[]    = [];
@@ -453,14 +466,17 @@ async function fetchAthletesFromOW(userIds: string[]): Promise<DashboardData> {
     teamAverageRecovery: withRecovery.length
       ? Math.round(withRecovery.reduce((s, a) => s + (a.recoveryScore ?? 0), 0) / withRecovery.length)
       : 0,
-    teamAverageSleep: Math.round(
-      athletes.reduce((s, a) => s + a.sleepScore, 0) / athletes.length
-    ),
+    teamAverageSleep: (() => {
+      const withSleep = athletes.filter(a => a.sleepScore != null);
+      return withSleep.length
+        ? Math.round(withSleep.reduce((s, a) => s + (a.sleepScore ?? 0), 0) / withSleep.length)
+        : 0;
+    })(),
     teamAverageHrv: withHrv.length
       ? Math.round(withHrv.reduce((s, a) => s + (a.hrv ?? 0), 0) / withHrv.length)
       : 0,
     attentionAthletes: athletes.filter(
-      (a) => (a.recoveryScore != null && a.recoveryScore < 60) || a.sleepScore < 65
+      (a) => (a.recoveryScore != null && a.recoveryScore < 60) || (a.sleepScore != null && a.sleepScore < 65)
     ),
   };
 }

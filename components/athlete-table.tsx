@@ -107,7 +107,7 @@ const columnDefinitions: ColumnDefinition[] = [
   { key: "weight",   group: "Athlete",      label: "Wt (kg)", align: "right", render: (a) => <span className="tabular">{formatWeight(a.weightKg)}</span> },
   { key: "team",     group: "Athlete",      label: "Team",    render: (a) => <span className="text-muted text-xs">{a.team}</span> },
   { key: "recovery", group: "Readiness",    label: "REC",     align: "right", render: (a) => <RecoveryCell score={a.recoveryScore} /> },
-  { key: "sleep",    group: "Readiness",    label: "SLP",     align: "right", render: (a) => <span className="tabular">{a.sleepScore}</span> },
+  { key: "sleep",    group: "Readiness",    label: "SLP",     align: "right", render: (a) => <span className="tabular">{a.sleepScore != null ? a.sleepScore : "—"}</span> },
   { key: "rhr",      group: "Readiness",    label: "RHR",     align: "right", render: (a) => <span className="tabular">{a.restHr != null ? a.restHr : "—"}</span> },
   { key: "hrv",      group: "Readiness",    label: "HRV",     align: "right", render: (a) => <span className="tabular">{a.hrv != null ? a.hrv : "—"}</span> },
   { key: "atl",      group: "Performance",  label: "ATL",     align: "right", render: (a) => <span className="tabular">{a.atl != null ? a.atl : "—"}</span> },

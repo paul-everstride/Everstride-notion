@@ -254,18 +254,18 @@ const QUICK_METRICS: QuickMetricDef[] = [
     label: "Highest Sleep",
     icon: <Moon size={16} />,
     accentColor: "#8b5cf6",
-    pick: athletes => [...athletes].sort((a, b) => b.sleepScore - a.sleepScore)[0],
-    value: a => `${a.sleepScore}`,
-    secondary: a => `Eff ${a.sleepEfficiency}% · HRV ${a.hrv != null ? `${a.hrv} ms` : "N/A"}`,
+    pick: athletes => [...athletes].filter(a => a.sleepScore != null).sort((a, b) => (b.sleepScore ?? 0) - (a.sleepScore ?? 0))[0],
+    value: a => a.sleepScore != null ? `${a.sleepScore}` : "N/A",
+    secondary: a => `Eff ${a.sleepEfficiency != null ? `${a.sleepEfficiency}%` : "N/A"} · HRV ${a.hrv != null ? `${a.hrv} ms` : "N/A"}`,
   },
   {
     key: "lowest_sleep",
     label: "Lowest Sleep",
     icon: <Moon size={16} />,
     accentColor: "#dc2626",
-    pick: athletes => [...athletes].sort((a, b) => a.sleepScore - b.sleepScore)[0],
-    value: a => `${a.sleepScore}`,
-    secondary: a => `Eff ${a.sleepEfficiency}% · HRV ${a.hrv != null ? `${a.hrv} ms` : "N/A"}`,
+    pick: athletes => [...athletes].filter(a => a.sleepScore != null).sort((a, b) => (a.sleepScore ?? 0) - (b.sleepScore ?? 0))[0],
+    value: a => a.sleepScore != null ? `${a.sleepScore}` : "N/A",
+    secondary: a => `Eff ${a.sleepEfficiency != null ? `${a.sleepEfficiency}%` : "N/A"} · HRV ${a.hrv != null ? `${a.hrv} ms` : "N/A"}`,
   },
   {
     key: "highest_ctl",
@@ -365,7 +365,7 @@ function athleteNeedsAttention(a: AthleteSummary, metrics: AttentionMetricKey[])
     if (m === "tsb")      return a.tsb != null && a.tsb < -10;
     if (m === "hrv")      return a.hrv != null && a.hrv < 50;
     if (m === "rhr")      return a.restHr != null && a.restHr > 65;
-    if (m === "sleep")    return a.sleepScore < 60;
+    if (m === "sleep")    return a.sleepScore != null && a.sleepScore < 60;
     if (m === "spo2")     return a.spo2 != null && a.spo2 < 95;
     if (m === "atl")      return a.atl != null && a.atl > 100;
     return false;
@@ -976,7 +976,7 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
               <StatDonut pct={dashboard.teamAverageRecovery} color="#e16b2b"
                 value={dashboard.teamAverageRecovery > 0 ? String(dashboard.teamAverageRecovery) : "N/A"} label="Recovery" />
               <StatDonut pct={dashboard.teamAverageSleep} color="#6366f1"
-                value={String(dashboard.teamAverageSleep)} label="Sleep" />
+                value={dashboard.teamAverageSleep > 0 ? String(dashboard.teamAverageSleep) : "N/A"} label="Sleep" />
               <StatGradientLine
                 values={hrvAthletes.map(a => a.hrv as number)}
                 avg={dashboard.teamAverageHrv > 0 ? dashboard.teamAverageHrv : avgRhr} min={20} max={120}

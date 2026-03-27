@@ -38,7 +38,7 @@ export default async function MePage() {
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <MetricCard title="Recovery" value={athlete.recoveryScore != null ? `${athlete.recoveryScore}` : "N/A"} detail={athlete.statusNote} accent />
           <MetricCard title="HRV" value={athlete.hrv != null ? `${athlete.hrv} ms` : "N/A"} detail="Latest sync" />
-          <MetricCard title="Sleep score" value={`${athlete.sleepScore}`} detail={`Efficiency ${athlete.sleepEfficiency}%`} />
+          <MetricCard title="Sleep score" value={athlete.sleepScore != null ? `${athlete.sleepScore}` : "N/A"} detail={athlete.sleepEfficiency != null ? `Efficiency ${athlete.sleepEfficiency}%` : "No recent data"} />
           <MetricCard title="Time in bed" value={formatSleepDuration(athlete.totalBedMs)} detail={`RHR ${athlete.restHr != null ? `${athlete.restHr} bpm` : "N/A"}`} />
         </div>
 
@@ -47,8 +47,8 @@ export default async function MePage() {
           {[
             { label: "SpO2",      value: athlete.spo2 != null ? `${athlete.spo2}%` : "N/A" },
             { label: "Resp rate", value: athlete.respirationRate != null ? `${athlete.respirationRate} rpm` : "N/A" },
-            { label: "Sleep eff", value: `${athlete.sleepEfficiency}%` },
-            { label: "Consistency", value: `${athlete.sleepConsistency}%` },
+            { label: "Sleep eff",   value: athlete.sleepEfficiency != null ? `${athlete.sleepEfficiency}%` : "N/A" },
+            { label: "Consistency", value: athlete.sleepConsistency != null ? `${athlete.sleepConsistency}%` : "N/A" },
             { label: "REM",       value: formatSleepDuration(athlete.totalRemMs) },
             { label: "Deep",      value: formatSleepDuration(athlete.totalSlowWaveMs) },
           ].map((item) => (

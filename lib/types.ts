@@ -73,7 +73,7 @@ export type AthleteSummary = {
   heightCm: number | null;
   team: string;
   recoveryScore: number | null;
-  sleepScore: number;
+  sleepScore: number | null;
   restHr: number | null;
   hrv: number | null;
   tss: number | null;
@@ -85,8 +85,8 @@ export type AthleteSummary = {
   powerMax: number | null;
   polarizedZones: PolarizedZones;
   spo2: number | null;
-  sleepConsistency: number;
-  sleepEfficiency: number;
+  sleepConsistency: number | null;
+  sleepEfficiency: number | null;
   respirationRate: number | null;
   skinTemp: number | null;
   totalBedMs: number;

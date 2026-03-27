@@ -312,7 +312,7 @@ function readinessSeries(historyField: keyof RecoveryHistoryDay, trendKey: keyof
 
 const readinessMetrics: CompareMetric[] = [
   { key: "rec",  label: "Recovery score", unit: "",    barDomain: [0, 100],  historyField: "recoveryScore", baseValue: (a) => a.recoveryScore ?? 0, getSeries: readinessSeries("recoveryScore", "readinessTrend"), renderCurrent: (a) => a.recoveryScore != null ? `${a.recoveryScore}` : "–" },
-  { key: "slp",  label: "Sleep score",    unit: "",    barDomain: [0, 100],  historyField: "sleepScore",    baseValue: (a) => a.sleepScore,         getSeries: readinessSeries("sleepScore",    "sleepTrend"),     renderCurrent: (a) => `${a.sleepScore}` },
+  { key: "slp",  label: "Sleep score",    unit: "",    barDomain: [0, 100],  historyField: "sleepScore",    baseValue: (a) => a.sleepScore ?? 0,    getSeries: readinessSeries("sleepScore",    "sleepTrend"),     renderCurrent: (a) => a.sleepScore != null ? `${a.sleepScore}` : "–" },
   { key: "rhr",  label: "RHR",            unit: "bpm", barDomain: [30, 80],  historyField: "restHr",        baseValue: (a) => a.restHr ?? 0,        getSeries: readinessSeries("restHr",        "rhrTrend"),       renderCurrent: (a) => a.restHr != null ? `${a.restHr} bpm` : "–" },
   { key: "hrv",  label: "HRV",            unit: "ms",  barDomain: [0, 150],  historyField: "hrv",           baseValue: (a) => a.hrv ?? 0,           getSeries: readinessSeries("hrv",           "hrvTrend"),       renderCurrent: (a) => a.hrv != null ? `${a.hrv} ms` : "–" },
 ];
@@ -325,7 +325,7 @@ const perfSnapshotMetrics: CompareMetric[] = [
   { key: "balance",        label: "TSB",              unit: "",   baseValue: (a) => Math.abs(a.tsb ?? 0)+10, getSeries: () => [], renderCurrent: (a) => a.tsb != null ? formatSignedNumber(a.tsb) : "N/A" },
   { key: "atl",            label: "ATL",              unit: "",   baseValue: (a) => a.atl ?? 0,              getSeries: () => [], renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
   { key: "ctl",            label: "CTL",              unit: "",   baseValue: (a) => a.ctl ?? 0,              getSeries: () => [], renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
-  { key: "sleepEfficiency",label: "Sleep efficiency", unit: "%",  barDomain: [0, 100], baseValue: (a) => a.sleepEfficiency, getSeries: readinessSeries("sleepEfficiency", "sleepEfficiencyTrend"), renderCurrent: (a) => a.sleepEfficiency != null ? `${a.sleepEfficiency}%` : "N/A" },
+  { key: "sleepEfficiency",label: "Sleep efficiency", unit: "%",  barDomain: [0, 100], baseValue: (a) => a.sleepEfficiency ?? 0, getSeries: readinessSeries("sleepEfficiency", "sleepEfficiencyTrend"), renderCurrent: (a) => a.sleepEfficiency != null ? `${a.sleepEfficiency}%` : "N/A" },
 ];
 
 const powerCurveMetrics: CompareMetric[] = [
@@ -347,7 +347,7 @@ const fitnessMetrics: CompareMetric[] = [
 const loadMetrics: CompareMetric[] = [
   { key: "atl",            label: "ATL",              unit: "",  baseValue: (a) => a.atl ?? 0,        getSeries: () => [], renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
   { key: "ctl",            label: "CTL",              unit: "",  baseValue: (a) => a.ctl ?? 0,        getSeries: () => [], renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
-  { key: "sleepEfficiency",label: "Sleep efficiency", unit: "%", barDomain: [0, 100], baseValue: (a) => a.sleepEfficiency, getSeries: readinessSeries("sleepEfficiency", "sleepEfficiencyTrend"), renderCurrent: (a) => a.sleepEfficiency != null ? `${a.sleepEfficiency}%` : "N/A" },
+  { key: "sleepEfficiency",label: "Sleep efficiency", unit: "%", barDomain: [0, 100], baseValue: (a) => a.sleepEfficiency ?? 0, getSeries: readinessSeries("sleepEfficiency", "sleepEfficiencyTrend"), renderCurrent: (a) => a.sleepEfficiency != null ? `${a.sleepEfficiency}%` : "N/A" },
 ];
 
 const PERF_SECTIONS = [

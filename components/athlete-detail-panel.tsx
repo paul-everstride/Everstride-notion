@@ -977,8 +977,8 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
             {
               title: "Sleep & Biometrics",
               rows: [
-                { label: "Sleep efficiency",   value: `${athlete.sleepEfficiency}%` },
-                { label: "Sleep consistency",  value: `${athlete.sleepConsistency}%` },
+                { label: "Sleep efficiency",   value: athlete.sleepEfficiency != null ? `${athlete.sleepEfficiency}%` : "N/A" },
+                { label: "Sleep consistency",  value: athlete.sleepConsistency != null ? `${athlete.sleepConsistency}%` : "N/A" },
                 { label: "REM sleep",          value: formatSleepDuration(athlete.totalRemMs) },
                 { label: "Deep sleep",         value: formatSleepDuration(athlete.totalSlowWaveMs) },
                 { label: "Light sleep",        value: formatSleepDuration(athlete.totalLightMs) },
