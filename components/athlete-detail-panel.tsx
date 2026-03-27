@@ -698,26 +698,35 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
 
           {/* Trends */}
           <SectionHeader title="Readiness trends" sub="Historical view" controls={<TimeframeBar />} />
-          <div className="grid gap-4 lg:grid-cols-2">
-            {trendData.recovery && <SectionChart title="Recovery score"  data={trendData.recovery} color="#e16b2b" tickInterval={trendData.tickInterval} />}
-            {trendData.sleep    && <SectionChart title="Sleep score"     data={trendData.sleep}    color="#3b82f6" tickInterval={trendData.tickInterval} />}
-            {trendData.hrv ? (
-              <SectionChart title="HRV" data={trendData.hrv} color="#059669" sub="ms" tickInterval={trendData.tickInterval} />
-            ) : (
-              <div className="border border-line rounded-lg bg-canvas px-4 py-6 flex items-center justify-center">
-                <p className="text-sm text-muted">HRV data not available from this device</p>
-              </div>
-            )}
-            {trendData.rhr ? (
-              <SectionChart title="Resting HR" data={trendData.rhr} color="#d97706" sub="bpm" tickInterval={trendData.tickInterval} />
-            ) : (
-              <div className="border border-line rounded-lg bg-canvas px-4 py-6 flex items-center justify-center">
-                <p className="text-sm text-muted">Resting HR data not available from this device</p>
-              </div>
-            )}
-            {trendData.spo2     && <SectionChart title="SpO₂"            data={trendData.spo2}     color="#8b5cf6" sub="%" tickInterval={trendData.tickInterval} />}
-            {trendData.sleepEff && <SectionChart title="Sleep efficiency" data={trendData.sleepEff} color="#06b6d4" sub="%" tickInterval={trendData.tickInterval} />}
-          </div>
+          {(!trendData.recovery && !trendData.sleep && !trendData.hrv && !trendData.rhr) ? (
+            <div className="border border-line rounded-lg bg-canvas px-6 py-10 flex flex-col items-center justify-center gap-2 text-center">
+              <p className="text-sm font-medium text-ink">No data for this period</p>
+              <p className="text-xs text-muted max-w-xs">
+                {athlete.name.split(" ")[0]}'s wearable hasn't synced recently. Try a longer timeframe or check that their WHOOP is connected.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {trendData.recovery && <SectionChart title="Recovery score"  data={trendData.recovery} color="#e16b2b" tickInterval={trendData.tickInterval} />}
+              {trendData.sleep    && <SectionChart title="Sleep score"     data={trendData.sleep}    color="#3b82f6" tickInterval={trendData.tickInterval} />}
+              {trendData.hrv ? (
+                <SectionChart title="HRV" data={trendData.hrv} color="#059669" sub="ms" tickInterval={trendData.tickInterval} />
+              ) : (
+                <div className="border border-line rounded-lg bg-canvas px-4 py-6 flex items-center justify-center">
+                  <p className="text-sm text-muted">HRV data not available from this device</p>
+                </div>
+              )}
+              {trendData.rhr ? (
+                <SectionChart title="Resting HR" data={trendData.rhr} color="#d97706" sub="bpm" tickInterval={trendData.tickInterval} />
+              ) : (
+                <div className="border border-line rounded-lg bg-canvas px-4 py-6 flex items-center justify-center">
+                  <p className="text-sm text-muted">Resting HR data not available from this device</p>
+                </div>
+              )}
+              {trendData.spo2     && <SectionChart title="SpO₂"            data={trendData.spo2}     color="#8b5cf6" sub="%" tickInterval={trendData.tickInterval} />}
+              {trendData.sleepEff && <SectionChart title="Sleep efficiency" data={trendData.sleepEff} color="#06b6d4" sub="%" tickInterval={trendData.tickInterval} />}
+            </div>
+          )}
         </div>
       )}
 

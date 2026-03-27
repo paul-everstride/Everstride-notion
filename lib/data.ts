@@ -47,6 +47,8 @@ function fullDayLabel(dateStr: string): string {
 /**
  * Build a trend array (oldest→newest) from the last N sleep items.
  * Items are expected newest-first.
+ * Only includes items within the last N calendar days — so stale data
+ * from months ago is never shown when "7d" or "30d" is selected.
  */
 function trendFromSleep(
   items: OWSleepSummary[],
@@ -54,7 +56,8 @@ function trendFromSleep(
   fallback: number | null,
   n = 30
 ): TrendPoint[] {
-  const slice = items.slice(0, n).reverse(); // oldest first
+  const cutoff = new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+  const slice = items.filter(item => item.date >= cutoff).slice(0, n).reverse(); // oldest first
   return slice.map((item) => ({
     label: dateLabel(item.date),
     value: getValue(item) ?? fallback ?? 0,
@@ -64,12 +67,15 @@ function trendFromSleep(
 /**
  * Build a trend array (oldest→newest) from timeseries points.
  * Points are expected newest-first.
+ * Only includes items within the last N calendar days — so stale data
+ * from months ago is never shown when "7d" or "30d" is selected.
  */
 function trendFromTS(
   items: OWTimeseriesPoint[],
   n = 30
 ): TrendPoint[] {
-  const slice = items.slice(0, n).reverse(); // oldest first
+  const cutoff = new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+  const slice = items.filter(item => item.date >= cutoff).slice(0, n).reverse(); // oldest first
   return slice.map((item) => ({
     label: dateLabel(item.date),
     value: item.value,
