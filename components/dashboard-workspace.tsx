@@ -900,7 +900,7 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
     return dashboard.athletes.filter(athlete => {
       if (flaggedOnly && !attentionIds.has(athlete.id)) return false;
       if (!query) return true;
-      return [athlete.name, athlete.email, athlete.team].some(v => v.toLowerCase().includes(query));
+      return [athlete.name, athlete.email, athlete.team].some(v => v != null && v.toLowerCase().includes(query));
     });
   }, [attentionIds, dashboard.athletes, flaggedOnly, search]);
 

@@ -230,7 +230,7 @@ function toAthleteSummary(
   const totalAwakeMs = (stages?.awake_minutes ?? 0) * 60_000;
 
   // ── Body data ─────────────────────────────────────────────────────────────
-  const weightKg = body?.slow_changing.weight_kg ?? 70;
+  const weightKg = body?.slow_changing.weight_kg ?? null;
   const heightCm = body?.slow_changing.height_cm ?? null;
   const age: number | null = body?.slow_changing.age ?? null;
 
@@ -280,7 +280,7 @@ function toAthleteSummary(
     id: userId,
     userId,
     name,
-    email: email ?? `${name.toLowerCase().replace(/\s+/g, ".")}@everstride.ai`,
+    email: email ?? null,
     age,
     weightKg,
     heightCm,

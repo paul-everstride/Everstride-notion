@@ -16,8 +16,8 @@ export function formatSleepDuration(totalMilliseconds: number) {
   return formatMinutes(totalMinutes);
 }
 
-export function formatWeight(weightKg: number) {
-  return `${weightKg} kg`;
+export function formatWeight(weightKg: number | null | undefined) {
+  return weightKg != null ? `${weightKg} kg` : "N/A";
 }
 
 export function formatSignedNumber(value: number, suffix = "") {

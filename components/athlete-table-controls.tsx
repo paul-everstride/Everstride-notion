@@ -26,7 +26,7 @@ export function AthleteTableControls({ athletes, attentionIdList, attentionCount
     return athletes.filter(athlete => {
       if (flaggedOnly && !attentionIds.has(athlete.id)) return false;
       if (!query) return true;
-      return [athlete.name, athlete.email, athlete.team].some(v => v.toLowerCase().includes(query));
+      return [athlete.name, athlete.email, athlete.team].some(v => v != null && v.toLowerCase().includes(query));
     });
   }, [athletes, attentionIds, flaggedOnly, search]);
 
