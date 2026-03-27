@@ -302,6 +302,7 @@ export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontend
 
   const [error, setError] = useState<string | null>(null);
   const [confirmDeleteTeam, setConfirmDeleteTeam] = useState<{ id: string; name: string } | null>(null);
+  const [deleteTeamInput, setDeleteTeamInput] = useState("");
   const [confirmDeleteAthlete, setConfirmDeleteAthlete] = useState<{ teamId: string; owUserId: string; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -317,7 +318,7 @@ export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontend
     if (!confirmDeleteTeam) return;
     setIsDeleting(true);
     const r = await deleteTeamAction(confirmDeleteTeam.id);
-    setIsDeleting(false); setConfirmDeleteTeam(null);
+    setIsDeleting(false); setConfirmDeleteTeam(null); setDeleteTeamInput("");
     if (r.success) {
       setTeams(p => p.filter(t => t.id !== confirmDeleteTeam.id));
       setAthletes(p => { const n = { ...p }; delete n[confirmDeleteTeam.id]; return n; });
@@ -514,16 +515,31 @@ export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontend
         })}
       </div>
 
-      {/* Confirm delete team */}
+      {/* Confirm delete team — requires typing "delete" */}
       {confirmDeleteTeam && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4">
-            <p className="text-base font-semibold text-ink mb-2">Delete &ldquo;{confirmDeleteTeam.name}&rdquo;?</p>
-            <p className="text-sm text-muted mb-6">This permanently deletes the team and all its athletes from Everstride and Open Wearables.</p>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <Trash2 className="h-4 w-4 text-red-600" />
+              </div>
+              <p className="text-base font-semibold text-ink">Delete &ldquo;{confirmDeleteTeam.name}&rdquo;?</p>
+            </div>
+            <p className="text-sm text-muted mb-4">This permanently deletes the team and all its athletes from Everstride and Open Wearables. <span className="font-medium text-ink">This cannot be undone.</span></p>
+            <p className="text-xs text-muted mb-1.5">Type <span className="font-mono font-semibold text-ink">delete</span> to confirm</p>
+            <input
+              type="text"
+              value={deleteTeamInput}
+              onChange={e => setDeleteTeamInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && deleteTeamInput === "delete" && handleDeleteTeam()}
+              placeholder="delete"
+              autoFocus
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm text-ink font-mono focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400 transition mb-4"
+            />
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setConfirmDeleteTeam(null)} className="px-4 py-2 rounded-xl border border-line text-sm text-ink hover:bg-surfaceStrong transition">Cancel</button>
-              <button onClick={handleDeleteTeam} disabled={isDeleting}
-                className="px-4 py-2 rounded-xl bg-red-600 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition flex items-center gap-1.5">
+              <button onClick={() => { setConfirmDeleteTeam(null); setDeleteTeamInput(""); }} className="px-4 py-2 rounded-xl border border-line text-sm text-ink hover:bg-surfaceStrong transition">Cancel</button>
+              <button onClick={handleDeleteTeam} disabled={isDeleting || deleteTeamInput !== "delete"}
+                className="px-4 py-2 rounded-xl bg-red-600 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40 transition flex items-center gap-1.5">
                 {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete team
               </button>
             </div>

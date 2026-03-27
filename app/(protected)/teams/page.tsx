@@ -119,7 +119,7 @@ export default async function TeamsPage() {
   return (
     <div>
       <div className="border-b border-line bg-canvas px-6 py-5">
-        <h1 className="text-xl font-semibold text-ink">Teams</h1>
+        <h1 className="text-xl font-semibold text-ink">Team Settings</h1>
         <p className="text-sm text-muted mt-0.5">
           Manage your teams and add athletes — pairing links are generated automatically.
         </p>

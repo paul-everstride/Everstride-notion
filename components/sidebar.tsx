@@ -4,7 +4,24 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/lib/types";
-import { LayoutDashboard, ArrowLeftRight, Users, User, Eye, ChevronRight, Shield, LogOut } from "lucide-react";
+import { LayoutDashboard, ArrowLeftRight, Users, User, Eye, ChevronRight, LogOut } from "lucide-react";
+
+/** Shield outline with a small gear/cog inside — custom Team Settings icon */
+function ShieldSettingsIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {/* Shield */}
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      {/* Gear: centre circle */}
+      <circle cx="12" cy="11.5" r="1.7" strokeWidth="1.5" />
+      {/* Gear: 4 spokes (N/S/E/W) */}
+      <line x1="12" y1="8.6"  x2="12" y2="9.8"  strokeWidth="1.4" />
+      <line x1="12" y1="13.2" x2="12" y2="14.4" strokeWidth="1.4" />
+      <line x1="9.1"  y1="11.5" x2="10.3" y2="11.5" strokeWidth="1.4" />
+      <line x1="13.7" y1="11.5" x2="14.9" y2="11.5" strokeWidth="1.4" />
+    </svg>
+  );
+}
 
 type NavChild = { href: string; label: string };
 type NavItem = { href: string; label: string; icon: React.ReactNode; children?: NavChild[] };
@@ -21,7 +38,7 @@ const coachItems: NavItem[] = [
     ]
   },
   { href: "/athletes", label: "Athletes", icon: <Users size={15} /> },
-  { href: "/teams",    label: "Teams",    icon: <Shield size={15} /> },
+  { href: "/teams",    label: "Team Settings", icon: <ShieldSettingsIcon size={15} /> },
 ];
 
 const athleteItems: NavItem[] = [
