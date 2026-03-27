@@ -3,6 +3,7 @@ import { RecoveryBadge } from "@/components/recovery-badge";
 import { AthleteDetailPanel } from "@/components/athlete-detail-panel";
 import { getAthleteById } from "@/lib/data";
 import Link from "next/link";
+import { AthleteHeaderClient } from "./athlete-header-client";
 
 export default async function AthleteDetailPage({ params }: { params: { id: string } }) {
   const athlete = await getAthleteById(params.id);
@@ -13,26 +14,20 @@ export default async function AthleteDetailPage({ params }: { params: { id: stri
       {/* Header */}
       <div className="border-b border-line bg-canvas px-6 py-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <Link href="/athletes"
-              className="text-sm text-muted border border-line rounded-md px-3 py-1.5 hover:text-ink hover:border-ink/30 transition-colors duration-100">
+              className="text-sm text-muted border border-line rounded-md px-3 py-1.5 hover:text-ink hover:border-ink/30 transition-colors duration-100 shrink-0">
               ← Athletes
             </Link>
-            {athlete.avatarUrl ? (
-              <img src={athlete.avatarUrl} alt={athlete.name} className="w-10 h-10 rounded-full object-cover border border-line shrink-0" />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-surfaceStrong border border-line flex items-center justify-center shrink-0">
-                <span className="text-sm font-semibold text-muted">
-                  {athlete.name.split(" ").map((w: string) => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase()}
-                </span>
-              </div>
-            )}
-            <div>
-              <h1 className="text-xl font-semibold text-ink">{athlete.name}</h1>
-              <p className="text-sm text-muted mt-0.5">{athlete.email ?? athlete.team}</p>
-            </div>
+            <AthleteHeaderClient
+              athleteId={athlete.userId}
+              initialName={athlete.name}
+              initialAvatarUrl={athlete.avatarUrl}
+              email={athlete.email}
+              team={athlete.team}
+            />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {athlete.recoveryScore != null && <RecoveryBadge score={athlete.recoveryScore} />}
             <button type="button"
               className="text-sm font-medium text-brand border border-brand/30 rounded-md px-3 py-1.5 hover:bg-brandSoft transition-colors duration-100">

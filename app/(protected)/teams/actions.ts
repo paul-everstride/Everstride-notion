@@ -327,3 +327,63 @@ export async function getTeamAthletesAction(supabaseTeamId: string) {
     return [];
   }
 }
+
+/**
+ * Update an athlete's name and/or avatar from the athlete detail page.
+ * Automatically resolves the correct team by looking up the coach's teams.
+ */
+export async function updateAthleteProfileAction(
+  owUserId: string,
+  data: { athlete_name?: string; avatar_url?: string }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await requireAuthenticatedUser();
+    const supabase = createSupabaseServiceClient();
+    if (!supabase) return { success: false, error: "DB not configured" };
+
+    // Find all teams belonging to this coach
+    const { data: teams } = await supabase
+      .from("teams")
+      .select("id")
+      .eq("coach_id", user.id);
+    if (!teams?.length) return { success: false, error: "No teams found" };
+
+    const teamIds = teams.map((t: { id: string }) => t.id);
+
+    // Find the team this athlete is already associated with
+    const { data: existing } = await supabase
+      .from("team_athletes")
+      .select("team_id")
+      .eq("ow_user_id", owUserId)
+      .in("team_id", teamIds)
+      .limit(1)
+      .maybeSingle();
+
+    const teamId = existing?.team_id ?? teams[0].id;
+
+    const { error } = await supabase
+      .from("team_athletes")
+      .upsert(
+        { team_id: teamId, ow_user_id: owUserId, ...data },
+        { onConflict: "team_id,ow_user_id" }
+      );
+    if (error) return { success: false, error: error.message };
+
+    // Best-effort OW name sync
+    if (data.athlete_name) {
+      try {
+        const parts = data.athlete_name.trim().split(/\s+/);
+        await owUpdateUser(owUserId, {
+          first_name: parts[0] ?? "",
+          last_name: parts.slice(1).join(" ") || "",
+        });
+      } catch { /* non-fatal */ }
+    }
+
+    revalidatePath(`/athletes/${owUserId}`);
+    revalidateTag("dashboard-athletes");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+}

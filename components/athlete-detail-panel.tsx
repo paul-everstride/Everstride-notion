@@ -12,7 +12,7 @@ import { AthleteHeroStrip } from "@/components/photo-accents";
 
 // ── Detail table column config ────────────────────────────────────────────────
 
-type DetailColKey = "date" | "recovery" | "hrv" | "rhr" | "spo2" | "skinTemp" | "sleepScore" | "sleepEfficiency" | "sleepDuration" | "sleepDeep" | "sleepRem";
+type DetailColKey = "date" | "recovery" | "hrv" | "rhr" | "spo2" | "resp" | "skinTemp" | "sleepScore" | "sleepEfficiency" | "sleepDuration" | "sleepDeep" | "sleepRem";
 
 const DETAIL_COL_DEFS: Array<{ key: DetailColKey; label: string; header: string }> = [
   { key: "date",            label: "Date",             header: "Date"         },
@@ -20,6 +20,7 @@ const DETAIL_COL_DEFS: Array<{ key: DetailColKey; label: string; header: string 
   { key: "hrv",             label: "HRV (ms)",         header: "HRV (ms)"     },
   { key: "rhr",             label: "Resting HR",       header: "Resting HR"   },
   { key: "spo2",            label: "SpO₂",             header: "SpO₂"         },
+  { key: "resp",            label: "Resp Rate",        header: "Resp (rpm)"   },
   { key: "skinTemp",        label: "Skin Temp",        header: "Skin Temp"    },
   { key: "sleepScore",      label: "Sleep Score",      header: "Sleep Score"  },
   { key: "sleepEfficiency", label: "Sleep Efficiency", header: "Sleep Eff."   },
@@ -46,6 +47,8 @@ function renderDetailCell(key: DetailColKey, day: RecoveryHistoryDay): React.Rea
       return day.restHr != null ? `${day.restHr} bpm` : <span className="text-muted">—</span>;
     case "spo2":
       return day.spo2 != null ? `${day.spo2}%` : <span className="text-muted">—</span>;
+    case "resp":
+      return day.resp != null ? `${day.resp} rpm` : <span className="text-muted">—</span>;
     case "skinTemp":
       return day.skinTempC != null ? `${day.skinTempC}°C` : <span className="text-muted">—</span>;
     case "sleepScore":
@@ -307,7 +310,7 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
     const tickInterval = n <= 10 ? 0 : n <= 35 ? 4 : n <= 95 ? 13 : n <= 190 ? 25 : 59;
 
     if (filtered.length === 0) {
-      return { tickInterval, recovery: null, sleep: null, hrv: null, rhr: null, spo2: null, sleepEff: null, ftp: null, vo2: null, power: null, tss: null, atl: null, ctl: null, tsb: null };
+      return { tickInterval, recovery: null, sleep: null, hrv: null, rhr: null, spo2: null, resp: null, sleepEff: null, ftp: null, vo2: null, power: null, tss: null, atl: null, ctl: null, tsb: null };
     }
 
     /** Map a field from recoveryHistory to a TrendPoint array; returns null if no values */
@@ -325,6 +328,7 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
       hrv:      toTrend(d => d.hrv),
       rhr:      toTrend(d => d.restHr),
       spo2:     toTrend(d => d.spo2),
+      resp:     toTrend(d => d.resp),
       sleepEff: toTrend(d => d.sleepEfficiency),
       ftp:      null,
       vo2:      null,
@@ -410,6 +414,7 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
     const withHrv  = h.filter(d => d.hrv != null);
     const withRhr  = h.filter(d => d.restHr != null);
     const withSpo2 = h.filter(d => d.spo2 != null);
+    const withResp = h.filter(d => d.resp != null);
     const avg = (arr: number[]) =>
       arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : null;
     const avgSpo2Raw = withSpo2.length
@@ -419,6 +424,7 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
       avgHrv:       avg(withHrv.map(d => d.hrv!)),
       avgRhr:       avg(withRhr.map(d => d.restHr!)),
       avgSpo2:      avgSpo2Raw != null ? Math.round(avgSpo2Raw * 10) / 10 : null,
+      avgResp:      withResp.length ? Math.round(withResp.reduce((s, d) => s + (d.resp ?? 0), 0) / withResp.length * 10) / 10 : null,
       daysTracked:  h.length,
       greenCount:   withRec.filter(d => (d.recoveryScore ?? 0) >= 67).length,
       yellowCount:  withRec.filter(d => (d.recoveryScore ?? 0) >= 34 && (d.recoveryScore ?? 0) < 67).length,
@@ -651,6 +657,7 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
                 </div>
               )}
               {trendData.spo2     && <SectionChart title="SpO₂"            data={trendData.spo2}     color="#8b5cf6" sub="%" tickInterval={trendData.tickInterval} pct />}
+              {trendData.resp     && <SectionChart title="Resp rate"        data={trendData.resp}     color="#ec4899" sub="rpm" tickInterval={trendData.tickInterval} />}
               {trendData.sleepEff && <SectionChart title="Sleep efficiency" data={trendData.sleepEff} color="#06b6d4" sub="%" tickInterval={trendData.tickInterval} pct />}
             </div>
           )}
@@ -680,6 +687,12 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
                 label: "Avg Resting HR",
                 value: recStats.avgRhr != null ? `${recStats.avgRhr} bpm` : "N/A",
                 color: "#d97706",
+              },
+              {
+                label: "Avg Resp Rate",
+                value: recStats.avgResp != null ? `${recStats.avgResp} rpm` : "N/A",
+                sub: "breaths / min",
+                color: "#ec4899",
               },
               {
                 label: "Days Tracked",

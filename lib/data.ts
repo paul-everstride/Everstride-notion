@@ -218,7 +218,7 @@ function toAthleteSummary(
   const isSleepRecent = isRecent(latestSleep?.date);
   const sleepEfficiency: number | null =
     isSleepRecent && (latestSleep?.efficiency_percent ?? 0) > 0
-      ? latestSleep!.efficiency_percent
+      ? Math.round(latestSleep!.efficiency_percent!)
       : null;
   const durationMinutes = isSleepRecent ? (latestSleep?.duration_minutes ?? 0) : 0;
   const sleepDurationScore = durationMinutes > 0
