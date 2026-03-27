@@ -182,13 +182,15 @@ const MN = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","D
 
 // ── Chart helpers ────────────────────────────────────────────────────────────
 
-function domain(data: TrendPoint[]): [number, number] {
+function domain(data: TrendPoint[], isPct = false): [number, number] {
   const vals = data.map(d => d.value);
-  if (!vals.length) return [0, 100];
+  if (!vals.length) return [0, isPct ? 100 : 100];
   const mn = Math.min(...vals), mx = Math.max(...vals);
   const range = mx - mn;
   const pad = range < 1 ? Math.max(mx * 0.2, 5) : range * 0.18;
-  return [Math.floor(mn - pad), Math.ceil(mx + pad)];
+  const lo = Math.max(0, Math.floor(mn - pad));
+  const hi = isPct ? 100 : Math.ceil(mx + pad);
+  return [lo, hi];
 }
 function tfmt(v: number): string {
   if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
@@ -209,10 +211,10 @@ function MetricPill({ label, value, sub, accent }: { label: string; value: strin
   );
 }
 
-function SectionChart({ title, data, color, height = 200, sub, tickInterval = 0 }: {
-  title: string; data: TrendPoint[]; color: string; height?: number; sub?: string; tickInterval?: number;
+function SectionChart({ title, data, color, height = 200, sub, tickInterval = 0, pct = false }: {
+  title: string; data: TrendPoint[]; color: string; height?: number; sub?: string; tickInterval?: number; pct?: boolean;
 }) {
-  const dm = domain(data);
+  const dm = domain(data, pct);
   const avg = data.length ? data.reduce((s, d) => s + d.value, 0) / data.length : 0;
   const latest = data[data.length - 1]?.value ?? 0;
   const gid = `adg-${color.replace("#", "")}-${title.replace(/\s/g, "")}`;
@@ -632,8 +634,8 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
             </div>
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
-              {trendData.recovery && <SectionChart title="Recovery score"  data={trendData.recovery} color="#e16b2b" tickInterval={trendData.tickInterval} />}
-              {trendData.sleep    && <SectionChart title="Sleep score"     data={trendData.sleep}    color="#3b82f6" tickInterval={trendData.tickInterval} />}
+              {trendData.recovery && <SectionChart title="Recovery score"  data={trendData.recovery} color="#e16b2b" tickInterval={trendData.tickInterval} pct />}
+              {trendData.sleep    && <SectionChart title="Sleep score"     data={trendData.sleep}    color="#3b82f6" tickInterval={trendData.tickInterval} pct />}
               {trendData.hrv ? (
                 <SectionChart title="HRV" data={trendData.hrv} color="#059669" sub="ms" tickInterval={trendData.tickInterval} />
               ) : (
@@ -648,8 +650,8 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
                   <p className="text-sm text-muted">Resting HR data not available from this device</p>
                 </div>
               )}
-              {trendData.spo2     && <SectionChart title="SpO₂"            data={trendData.spo2}     color="#8b5cf6" sub="%" tickInterval={trendData.tickInterval} />}
-              {trendData.sleepEff && <SectionChart title="Sleep efficiency" data={trendData.sleepEff} color="#06b6d4" sub="%" tickInterval={trendData.tickInterval} />}
+              {trendData.spo2     && <SectionChart title="SpO₂"            data={trendData.spo2}     color="#8b5cf6" sub="%" tickInterval={trendData.tickInterval} pct />}
+              {trendData.sleepEff && <SectionChart title="Sleep efficiency" data={trendData.sleepEff} color="#06b6d4" sub="%" tickInterval={trendData.tickInterval} pct />}
             </div>
           )}
         </div>

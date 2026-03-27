@@ -15,29 +15,6 @@ import { ComparePhotoStrip } from "@/components/photo-accents";
 
 const athleteColors = ["#e16b2b", "#3b82f6", "#059669", "#d97706", "#dc2626", "#8b5cf6"];
 
-// ── Deterministic generators ──────────────────────────────────────────────────
-
-function strHash(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-
-function lcg(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => { s = (Math.imul(1664525, s) + 1013904223) >>> 0; return s / 4294967295; };
-}
-
-function genTrend(seed: number, base: number, labels: string[], variance = 0.07): TrendPoint[] {
-  const rng = lcg(seed);
-  let val = base;
-  return labels.map((label) => {
-    val += (rng() - 0.5) * base * variance;
-    val = Math.max(base * 0.72, Math.min(base * 1.28, val));
-    return { label, value: Math.round(val * 10) / 10 };
-  });
-}
-
 // ── Labels ────────────────────────────────────────────────────────────────────
 
 const LABELS_TODAY    = ["04:00","07:00","10:00","13:00","16:00","19:00","22:00","NOW"];
@@ -217,23 +194,23 @@ function getHistorySnapshot(
 
 // ── Chart helpers ─────────────────────────────────────────────────────────────
 
-function chartDomain(data: Record<string, number | string>[]): [number, number] {
+function chartDomain(data: Record<string, number | string>[], pct = false): [number, number] {
   const nums = data.flatMap(row =>
     Object.entries(row).filter(([k]) => k !== "label").map(([, v]) => Number(v)).filter(v => !isNaN(v))
   );
-  if (!nums.length) return [0, 100];
+  if (!nums.length) return [0, pct ? 100 : 100];
   const min = Math.min(...nums), max = Math.max(...nums);
   const range = max - min;
   const pad = range < 1 ? Math.max(max * 0.2, 5) : range * 0.2;
-  return [Math.floor(min - pad), Math.ceil(max + pad)];
+  return [Math.max(0, Math.floor(min - pad)), pct ? 100 : Math.ceil(max + pad)];
 }
 
-function scalarDomain(values: number[]): [number, number] {
-  if (!values.length) return [0, 100];
+function scalarDomain(values: number[], pct = false): [number, number] {
+  if (!values.length) return [0, pct ? 100 : 100];
   const min = Math.min(...values), max = Math.max(...values);
   const range = max - min;
   const pad = range < 1 ? Math.max(max * 0.2, 5) : range * 0.2;
-  return [Math.floor(min - pad), Math.ceil(max + pad)];
+  return [Math.max(0, Math.floor(min - pad)), pct ? 100 : Math.ceil(max + pad)];
 }
 
 function tickFmt(v: number): string {
@@ -331,39 +308,6 @@ function readinessSeries(historyField: keyof RecoveryHistoryDay, trendKey: keyof
   };
 }
 
-function genPerfSeries(bv: (a: AthleteSummary) => number, key: string) {
-  return (athlete: AthleteSummary, timeframe: string): TrendPoint[] => {
-    const base = bv(athlete);
-    const [type, p2, p3] = timeframe.split(":");
-    if (type === "biweekly") {
-      const page = p2 !== undefined ? parseInt(p2) : 0;
-      const { labels, seedStr } = getBiweeklyPageLabels(page);
-      return genTrend(strHash(athlete.id + key + seedStr), base, labels, 0.09);
-    }
-    if (type === "monthly") {
-      const yearOff = p2 !== undefined ? parseInt(p2) : 0;
-      const { labels, seedStr } = getMonthlyPageLabels(yearOff);
-      return genTrend(strHash(athlete.id + key + seedStr), base, labels, 0.11);
-    }
-    if (type === "yearly") {
-      return genTrend(strHash(athlete.id + key + "5year"), base, LABELS_5YEAR, 0.16);
-    }
-    if (type === "months" && p2) {
-      // p2 = comma-separated YYYY-MM months, e.g. "2025-03,2024-03,2025-02"
-      const monthList = p2.split(",").filter(Boolean);
-      if (!monthList.length) return genTrend(strHash(athlete.id + key + timeframe), base, LABELS_BIWEEKLY, 0.05);
-      const years = monthList.map(m => parseMonthStr(m).year);
-      const allSameYear = years.every(y => y === years[0]);
-      const labels = monthList.map(m => {
-        const { year, month } = parseMonthStr(m);
-        return allSameYear ? MONTH_SHORT[month - 1] : `${MONTH_SHORT[month - 1]} '${String(year).slice(2)}`;
-      });
-      return genTrend(strHash(athlete.id + key + p2), base, labels, 0.1);
-    }
-    return genTrend(strHash(athlete.id + key + timeframe), base, LABELS_BIWEEKLY, 0.05);
-  };
-}
-
 // ── Metric definitions ────────────────────────────────────────────────────────
 
 const readinessMetrics: CompareMetric[] = [
@@ -374,36 +318,36 @@ const readinessMetrics: CompareMetric[] = [
 ];
 
 const perfSnapshotMetrics: CompareMetric[] = [
-  { key: "power",          label: "Power max",        unit: "w",  baseValue: (a) => a.powerMax ?? 0,         getSeries: genPerfSeries((a) => a.powerMax ?? 0,         "power"),  renderCurrent: (a) => a.powerMax != null ? `${a.powerMax}w` : "N/A" },
-  { key: "ftp",            label: "FTP",              unit: "w",  baseValue: (a) => a.ftp ?? 0,              getSeries: genPerfSeries((a) => a.ftp ?? 0,              "ftp"),    renderCurrent: (a) => a.ftp != null ? `${a.ftp}w` : "N/A" },
-  { key: "vo2",            label: "VO2 max",          unit: "",   baseValue: (a) => a.vo2Max ?? 0,           getSeries: genPerfSeries((a) => a.vo2Max ?? 0,           "vo2"),    renderCurrent: (a) => a.vo2Max != null ? `${a.vo2Max}` : "N/A" },
-  { key: "tss",            label: "TSS",              unit: "",   baseValue: (a) => a.tss ?? 0,              getSeries: genPerfSeries((a) => a.tss ?? 0,              "tss"),    renderCurrent: (a) => a.tss != null ? `${a.tss}` : "N/A" },
-  { key: "balance",        label: "TSB",              unit: "",   baseValue: (a) => Math.abs(a.tsb ?? 0)+10, getSeries: genPerfSeries((a) => Math.abs(a.tsb ?? 0)+10, "tsb"),    renderCurrent: (a) => a.tsb != null ? formatSignedNumber(a.tsb) : "N/A" },
-  { key: "atl",            label: "ATL",              unit: "",   baseValue: (a) => a.atl ?? 0,              getSeries: genPerfSeries((a) => a.atl ?? 0,              "atl"),    renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
-  { key: "ctl",            label: "CTL",              unit: "",   baseValue: (a) => a.ctl ?? 0,              getSeries: genPerfSeries((a) => a.ctl ?? 0,              "ctl"),    renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
-  { key: "sleepEfficiency",label: "Sleep efficiency", unit: "%",  baseValue: (a) => a.sleepEfficiency,       getSeries: genPerfSeries((a) => a.sleepEfficiency,       "slpeff"), renderCurrent: (a) => `${a.sleepEfficiency}%` },
+  { key: "power",          label: "Power max",        unit: "w",  baseValue: (a) => a.powerMax ?? 0,         getSeries: () => [], renderCurrent: (a) => a.powerMax != null ? `${a.powerMax}w` : "N/A" },
+  { key: "ftp",            label: "FTP",              unit: "w",  baseValue: (a) => a.ftp ?? 0,              getSeries: () => [], renderCurrent: (a) => a.ftp != null ? `${a.ftp}w` : "N/A" },
+  { key: "vo2",            label: "VO2 max",          unit: "",   baseValue: (a) => a.vo2Max ?? 0,           getSeries: () => [], renderCurrent: (a) => a.vo2Max != null ? `${a.vo2Max}` : "N/A" },
+  { key: "tss",            label: "TSS",              unit: "",   baseValue: (a) => a.tss ?? 0,              getSeries: () => [], renderCurrent: (a) => a.tss != null ? `${a.tss}` : "N/A" },
+  { key: "balance",        label: "TSB",              unit: "",   baseValue: (a) => Math.abs(a.tsb ?? 0)+10, getSeries: () => [], renderCurrent: (a) => a.tsb != null ? formatSignedNumber(a.tsb) : "N/A" },
+  { key: "atl",            label: "ATL",              unit: "",   baseValue: (a) => a.atl ?? 0,              getSeries: () => [], renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
+  { key: "ctl",            label: "CTL",              unit: "",   baseValue: (a) => a.ctl ?? 0,              getSeries: () => [], renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
+  { key: "sleepEfficiency",label: "Sleep efficiency", unit: "%",  barDomain: [0, 100], baseValue: (a) => a.sleepEfficiency, getSeries: readinessSeries("sleepEfficiency", "sleepEfficiencyTrend"), renderCurrent: (a) => a.sleepEfficiency != null ? `${a.sleepEfficiency}%` : "N/A" },
 ];
 
 const powerCurveMetrics: CompareMetric[] = [
-  { key: "pc0",   label: "5 sec",     unit: "w", baseValue: (a) => a.powerCurve[0]?.value ?? 0, getSeries: genPerfSeries((a) => a.powerCurve[0]?.value ?? 0, "pc0"),  renderCurrent: (a) => `${a.powerCurve[0]?.value ?? 0}w` },
-  { key: "pc1",   label: "30 sec",    unit: "w", baseValue: (a) => a.powerCurve[1]?.value ?? 0, getSeries: genPerfSeries((a) => a.powerCurve[1]?.value ?? 0, "pc1"),  renderCurrent: (a) => `${a.powerCurve[1]?.value ?? 0}w` },
-  { key: "pc2",   label: "1 min",     unit: "w", baseValue: (a) => a.powerCurve[2]?.value ?? 0, getSeries: genPerfSeries((a) => a.powerCurve[2]?.value ?? 0, "pc2"),  renderCurrent: (a) => `${a.powerCurve[2]?.value ?? 0}w` },
-  { key: "pc3",   label: "5 min",     unit: "w", baseValue: (a) => a.powerCurve[3]?.value ?? 0, getSeries: genPerfSeries((a) => a.powerCurve[3]?.value ?? 0, "pc3"),  renderCurrent: (a) => `${a.powerCurve[3]?.value ?? 0}w` },
-  { key: "pc4",   label: "30 min",    unit: "w", baseValue: (a) => a.powerCurve[4]?.value ?? 0, getSeries: genPerfSeries((a) => a.powerCurve[4]?.value ?? 0, "pc4"),  renderCurrent: (a) => `${a.powerCurve[4]?.value ?? 0}w` },
-  { key: "power", label: "Power max", unit: "w", baseValue: (a) => a.powerMax ?? 0,              getSeries: genPerfSeries((a) => a.powerMax ?? 0,              "power"), renderCurrent: (a) => a.powerMax != null ? `${a.powerMax}w` : "N/A" },
+  { key: "pc0",   label: "5 sec",     unit: "w", baseValue: (a) => a.powerCurve[0]?.value ?? 0, getSeries: () => [], renderCurrent: (a) => `${a.powerCurve[0]?.value ?? 0}w` },
+  { key: "pc1",   label: "30 sec",    unit: "w", baseValue: (a) => a.powerCurve[1]?.value ?? 0, getSeries: () => [], renderCurrent: (a) => `${a.powerCurve[1]?.value ?? 0}w` },
+  { key: "pc2",   label: "1 min",     unit: "w", baseValue: (a) => a.powerCurve[2]?.value ?? 0, getSeries: () => [], renderCurrent: (a) => `${a.powerCurve[2]?.value ?? 0}w` },
+  { key: "pc3",   label: "5 min",     unit: "w", baseValue: (a) => a.powerCurve[3]?.value ?? 0, getSeries: () => [], renderCurrent: (a) => `${a.powerCurve[3]?.value ?? 0}w` },
+  { key: "pc4",   label: "30 min",    unit: "w", baseValue: (a) => a.powerCurve[4]?.value ?? 0, getSeries: () => [], renderCurrent: (a) => `${a.powerCurve[4]?.value ?? 0}w` },
+  { key: "power", label: "Power max", unit: "w", baseValue: (a) => a.powerMax ?? 0,              getSeries: () => [], renderCurrent: (a) => a.powerMax != null ? `${a.powerMax}w` : "N/A" },
 ];
 
 const fitnessMetrics: CompareMetric[] = [
-  { key: "ftp",     label: "FTP",     unit: "w", baseValue: (a) => a.ftp ?? 0,              getSeries: genPerfSeries((a) => a.ftp ?? 0,              "ftp"),  renderCurrent: (a) => a.ftp != null ? `${a.ftp}w` : "N/A" },
-  { key: "vo2",     label: "VO2 max", unit: "",  baseValue: (a) => a.vo2Max ?? 0,           getSeries: genPerfSeries((a) => a.vo2Max ?? 0,           "vo2"),  renderCurrent: (a) => a.vo2Max != null ? `${a.vo2Max}` : "N/A" },
-  { key: "tss",     label: "TSS",     unit: "",  baseValue: (a) => a.tss ?? 0,              getSeries: genPerfSeries((a) => a.tss ?? 0,              "tss"),  renderCurrent: (a) => a.tss != null ? `${a.tss}` : "N/A" },
-  { key: "balance", label: "TSB",     unit: "",  baseValue: (a) => Math.abs(a.tsb ?? 0)+10, getSeries: genPerfSeries((a) => Math.abs(a.tsb ?? 0)+10, "tsb"),  renderCurrent: (a) => a.tsb != null ? formatSignedNumber(a.tsb) : "N/A" },
+  { key: "ftp",     label: "FTP",     unit: "w", baseValue: (a) => a.ftp ?? 0,              getSeries: () => [], renderCurrent: (a) => a.ftp != null ? `${a.ftp}w` : "N/A" },
+  { key: "vo2",     label: "VO2 max", unit: "",  baseValue: (a) => a.vo2Max ?? 0,           getSeries: () => [], renderCurrent: (a) => a.vo2Max != null ? `${a.vo2Max}` : "N/A" },
+  { key: "tss",     label: "TSS",     unit: "",  baseValue: (a) => a.tss ?? 0,              getSeries: () => [], renderCurrent: (a) => a.tss != null ? `${a.tss}` : "N/A" },
+  { key: "balance", label: "TSB",     unit: "",  baseValue: (a) => Math.abs(a.tsb ?? 0)+10, getSeries: () => [], renderCurrent: (a) => a.tsb != null ? formatSignedNumber(a.tsb) : "N/A" },
 ];
 
 const loadMetrics: CompareMetric[] = [
-  { key: "atl",            label: "ATL",              unit: "",  baseValue: (a) => a.atl ?? 0,           getSeries: genPerfSeries((a) => a.atl ?? 0,           "atl"),    renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
-  { key: "ctl",            label: "CTL",              unit: "",  baseValue: (a) => a.ctl ?? 0,           getSeries: genPerfSeries((a) => a.ctl ?? 0,           "ctl"),    renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
-  { key: "sleepEfficiency",label: "Sleep efficiency", unit: "%", baseValue: (a) => a.sleepEfficiency,    getSeries: genPerfSeries((a) => a.sleepEfficiency,    "slpeff"), renderCurrent: (a) => `${a.sleepEfficiency}%` },
+  { key: "atl",            label: "ATL",              unit: "",  baseValue: (a) => a.atl ?? 0,        getSeries: () => [], renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
+  { key: "ctl",            label: "CTL",              unit: "",  baseValue: (a) => a.ctl ?? 0,        getSeries: () => [], renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
+  { key: "sleepEfficiency",label: "Sleep efficiency", unit: "%", barDomain: [0, 100], baseValue: (a) => a.sleepEfficiency, getSeries: readinessSeries("sleepEfficiency", "sleepEfficiencyTrend"), renderCurrent: (a) => a.sleepEfficiency != null ? `${a.sleepEfficiency}%` : "N/A" },
 ];
 
 const PERF_SECTIONS = [
@@ -451,8 +395,9 @@ function CompareChart({
   onSeeMore?: (m: CompareMetric) => void; accentColor: string; timeframe: string;
   colorMap: Map<string, string>;
 }) {
+  const isPct  = metric.unit === "%" || metric.barDomain?.[1] === 100;
   const data   = useMemo(() => mergeSeries(athletes, metric, timeframe), [athletes, metric, timeframe]);
-  const domain = useMemo(() => chartDomain(data), [data]);
+  const domain = useMemo(() => chartDomain(data, isPct), [data, isPct]);
   const isYear = timeframe.startsWith("year");
 
   const athleteAvgs = useMemo(() => athletes.map(a => {
@@ -602,30 +547,17 @@ function PowerHexagon({
   athletes: AthleteSummary[]; window: SnapshotWindow; colorMap: Map<string, string>;
 }) {
   const hexData = useMemo(() => {
-    // Per-athlete profile: each athlete has unique strengths/weaknesses per axis
-    const athleteProfiles = athletes.map(a => {
-      const rng = lcg(strHash(a.id + "hexprofile"));
-      return POWER_SHORT_LABELS.map(() => 0.15 + rng() * 1.85); // 0.15–2.0× multiplier
-    });
-
+    // Use real power curve watts, normalised per axis so the strongest athlete hits 100
     const rawValues = athletes.map(a =>
       a.powerCurve.map((pt) => pt.value ?? 0)
     );
 
-    // Apply profile to raw watts before normalising
-    const shaped = athletes.map((_, ai) =>
-      rawValues[ai].map((v, i) => v * athleteProfiles[ai][i])
-    );
-
-    // Per-axis ceiling: best athlete reaches 90–100% of outer rim on each spoke
-    const axisScales = POWER_SHORT_LABELS.map((_, i) => 90 + (strHash(`hexscale${i}`) % 11));
-
     return POWER_SHORT_LABELS.map((subject, i) => {
-      const vals = shaped.map(av => av[i] ?? 0);
+      const vals = rawValues.map(av => av[i] ?? 0);
       const maxVal = Math.max(...vals, 1);
       const row: Record<string, string | number> = { subject };
       athletes.forEach((a, ai) => {
-        row[a.name] = Math.round((shaped[ai][i] / maxVal) * axisScales[i]);
+        row[a.name] = Math.round((rawValues[ai][i] / maxVal) * 100);
       });
       return row;
     });
