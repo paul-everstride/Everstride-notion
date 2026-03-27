@@ -3,6 +3,7 @@
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { owCreateTeam, owGetTeams, owCreateUser, owAddTeamMember, owDeleteTeam, owDeleteUser, owUpdateUser } from "@/lib/ow-client";
+import { sendPairingEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
 
 export interface CreateTeamResult {
@@ -48,13 +49,14 @@ export async function createAthleteAction(
   data: { first_name: string; last_name: string; email: string; external_user_id: string }
 ): Promise<CreateAthleteResult> {
   try {
+    const coach = await requireAuthenticatedUser();
     const supabase = createSupabaseServiceClient();
     if (!supabase) return { success: false, error: "DB not configured" };
 
-    // Get the OW team ID for this Supabase team
+    // Get the OW team ID + team name for this Supabase team
     const { data: team } = await supabase
       .from("teams")
-      .select("ow_team_id")
+      .select("ow_team_id, name")
       .eq("id", supabaseTeamId)
       .single();
 
@@ -81,6 +83,15 @@ export async function createAthleteAction(
       });
 
     if (insertError) return { success: false, error: `DB error: ${insertError.message}` };
+
+    // Send pairing email to athlete (best-effort — don't fail if email fails)
+    await sendPairingEmail({
+      to: data.email,
+      athleteName,
+      coachName: coach.user_metadata?.full_name ?? coach.email ?? null,
+      teamName: team?.name ?? "your team",
+      pairingLink,
+    }).catch(() => {});
 
     revalidatePath("/teams");
     return { success: true, userId: owUser.id, pairingLink };
