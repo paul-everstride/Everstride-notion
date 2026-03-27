@@ -464,10 +464,11 @@ async function fetchAthletesFromOW(userIds: string[]): Promise<DashboardData> {
 }
 
 // Cache wrapper — keyed by sorted athlete IDs, revalidates every 5 minutes
+// Tag "dashboard-athletes" lets actions bust this cache immediately via revalidateTag
 const fetchAthletesCached = unstable_cache(
   fetchAthletesFromOW,
   ["dashboard-athletes"],
-  { revalidate: 300 }
+  { revalidate: 300, tags: ["dashboard-athletes"] }
 );
 
 export async function getDashboardData(): Promise<DashboardData> {

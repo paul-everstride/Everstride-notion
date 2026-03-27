@@ -86,15 +86,26 @@ function EditAthleteModal({
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function handlePhoto(file: File) {
-    setUploading(true); setError(null);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const result = await uploadAvatarAction(athlete.ow_user_id, fd);
-      if (!result.success) throw new Error(result.error);
+    setError(null);
+    // Client-side validation before hitting the server
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!allowed.includes(file.type)) {
+      setError(`Unsupported file type. Please use JPG, PNG, WebP or GIF.`);
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      const mb = (file.size / 1024 / 1024).toFixed(1);
+      setError(`File is ${mb} MB — maximum is 5 MB. Please compress or resize the image first.`);
+      return;
+    }
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const result = await uploadAvatarAction(athlete.ow_user_id, fd);
+    if (result.success) {
       setAvatarUrl(result.url ?? null);
-    } catch (e) {
-      setError(`Upload failed: ${String(e)}`);
+    } else {
+      setError(result.error ?? "Upload failed.");
     }
     setUploading(false);
   }
@@ -129,18 +140,19 @@ function EditAthleteModal({
               </div>
             </div>
             <div>
-              <button onClick={() => fileRef.current?.click()}
-                className="text-sm font-medium text-ink hover:text-brand transition flex items-center gap-1.5">
-                <Camera className="h-3.5 w-3.5" />
-                {avatarUrl ? "Change photo" : "Upload photo"}
+              <button onClick={() => !uploading && fileRef.current?.click()}
+                disabled={uploading}
+                className="text-sm font-medium text-ink hover:text-brand transition flex items-center gap-1.5 disabled:opacity-50">
+                {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+                {uploading ? "Uploading…" : avatarUrl ? "Change photo" : "Upload photo"}
               </button>
               <p className="text-xs text-muted mt-0.5">JPG, PNG or WebP · max 5 MB</p>
-              {avatarUrl && (
+              {avatarUrl && !uploading && (
                 <button onClick={() => setAvatarUrl(null)} className="text-xs text-red-500 hover:text-red-700 mt-1 transition">Remove photo</button>
               )}
             </div>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) handlePhoto(f); }} />
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) handlePhoto(f); e.target.value = ""; }} />
           </div>
 
           <div>

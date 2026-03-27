@@ -4,7 +4,10 @@ import { requireAuthenticatedUser } from "@/lib/auth";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { owCreateTeam, owGetTeams, owCreateUser, owAddTeamMember, owDeleteTeam, owDeleteUser, owUpdateUser } from "@/lib/ow-client";
 import { sendPairingEmail } from "@/lib/email";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
 export interface CreateTeamResult {
   success: boolean;
@@ -148,9 +151,20 @@ export async function uploadAvatarAction(
     if (!supabase) return { success: false, error: "DB not configured" };
 
     const file = formData.get("file") as File | null;
-    if (!file) return { success: false, error: "No file provided" };
+    if (!file) return { success: false, error: "No file selected." };
 
-    const ext = file.name.split(".").pop() ?? "jpg";
+    // Validate type
+    if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+      return { success: false, error: `Unsupported file type (${file.type || "unknown"}). Please use JPG, PNG, WebP or GIF.` };
+    }
+
+    // Validate size
+    if (file.size > MAX_AVATAR_BYTES) {
+      const mb = (file.size / 1024 / 1024).toFixed(1);
+      return { success: false, error: `File is ${mb} MB — maximum allowed size is 5 MB. Please compress or resize the image first.` };
+    }
+
+    const ext = file.type.split("/")[1].replace("jpeg", "jpg");
     const path = `${user.id}/${owUserId}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
@@ -158,11 +172,9 @@ export async function uploadAvatarAction(
       .from("avatars")
       .upload(path, buffer, { upsert: true, contentType: file.type });
 
-    if (upErr) return { success: false, error: upErr.message };
+    if (upErr) return { success: false, error: `Upload failed: ${upErr.message}` };
 
     const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-    revalidatePath("/teams");
-    revalidatePath("/athletes", "layout");
     return { success: true, url: data.publicUrl };
   } catch (e) {
     return { success: false, error: String(e) };
@@ -200,7 +212,7 @@ export async function updateAthleteAction(
       .eq("ow_user_id", owUserId);
     if (error) return { success: false, error: error.message };
     revalidatePath("/teams");
-    revalidatePath("/athletes", "layout");
+    revalidateTag("dashboard-athletes"); // busts unstable_cache so athletes + detail pages reflect changes immediately
     return { success: true };
   } catch (e) {
     return { success: false, error: String(e) };
