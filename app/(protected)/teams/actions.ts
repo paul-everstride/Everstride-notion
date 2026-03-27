@@ -161,6 +161,8 @@ export async function uploadAvatarAction(
     if (upErr) return { success: false, error: upErr.message };
 
     const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    revalidatePath("/teams");
+    revalidatePath("/athletes", "layout");
     return { success: true, url: data.publicUrl };
   } catch (e) {
     return { success: false, error: String(e) };
@@ -198,6 +200,7 @@ export async function updateAthleteAction(
       .eq("ow_user_id", owUserId);
     if (error) return { success: false, error: error.message };
     revalidatePath("/teams");
+    revalidatePath("/athletes", "layout");
     return { success: true };
   } catch (e) {
     return { success: false, error: String(e) };
