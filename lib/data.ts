@@ -404,18 +404,20 @@ async function fetchAthletesFromOW(userIds: string[]): Promise<DashboardData> {
 
   // Fetch avatar URLs from Supabase for all athletes in one query
   const avatarMap = new Map<string, string | null>();
-  try {
-    const supabase = createSupabaseServiceClient();
-    if (supabase) {
-      const { data: avatarRows } = await supabase
-        .from("team_athletes")
-        .select("ow_user_id, avatar_url")
-        .in("ow_user_id", filtered.map(u => u.id));
-      for (const row of avatarRows ?? []) {
-        if (row.ow_user_id) avatarMap.set(row.ow_user_id, row.avatar_url ?? null);
-      }
+  const supabase = createSupabaseServiceClient();
+  if (supabase) {
+    const { data: avatarRows, error: avatarErr } = await supabase
+      .from("team_athletes")
+      .select("ow_user_id, avatar_url")
+      .in("ow_user_id", filtered.map(u => u.id));
+    if (avatarErr) {
+      // Column likely missing — run supabase-migration.sql in Supabase SQL editor
+      console.error("[data.ts] avatar_url fetch failed:", avatarErr.message);
     }
-  } catch { /* avatar fetch is best-effort */ }
+    for (const row of avatarRows ?? []) {
+      if (row.ow_user_id) avatarMap.set(row.ow_user_id, row.avatar_url ?? null);
+    }
+  }
 
   const athletes = (
     await Promise.all(

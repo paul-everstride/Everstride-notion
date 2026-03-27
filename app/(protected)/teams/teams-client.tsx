@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, UserPlus, ChevronDown, ChevronRight, Loader2, Trash2, X, Pencil, Mail, ExternalLink, Copy, Check, Camera } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -71,11 +72,13 @@ function Avatar({ name, avatarUrl, size = 64 }: { name: string; avatarUrl?: stri
 // ── Edit modal ───────────────────────────────────────────────────────────────
 
 function EditAthleteModal({
-  athlete, teamId, onClose, onSave,
+  athlete, teamId, onClose, onSave, onAvatarChange, onRefreshNeeded,
 }: {
   athlete: TeamAthlete; teamId: string;
   onClose: () => void;
   onSave: (name: string, email: string, avatarUrl?: string) => void;
+  onAvatarChange?: (url: string | null) => void;
+  onRefreshNeeded?: () => void;
 }) {
   const [name, setName] = useState(athlete.athlete_name ?? "");
   const [email, setEmail] = useState(athlete.athlete_email ?? "");
@@ -103,10 +106,15 @@ function EditAthleteModal({
     fd.append("file", file);
     const result = await uploadAvatarAction(athlete.ow_user_id, fd);
     if (result.success && result.url) {
+      // Bust browser/CDN cache with a timestamp query param
+      const bustedUrl = `${result.url}?t=${Date.now()}`;
       // Immediately persist the URL to DB — don't wait for Save button
-      const saveResult = await saveAvatarUrlAction(athlete.ow_user_id, result.url);
+      // Pass teamId so OW-only athletes (no existing row) are upserted correctly
+      const saveResult = await saveAvatarUrlAction(teamId, athlete.ow_user_id, bustedUrl);
       if (saveResult.success) {
-        setAvatarUrl(result.url);
+        setAvatarUrl(bustedUrl);
+        onAvatarChange?.(bustedUrl);
+        onRefreshNeeded?.(); // bust Next.js router cache so athletes pages get fresh data
       } else {
         setError(saveResult.error ?? "Photo uploaded but failed to save. Please try again.");
       }
@@ -124,8 +132,11 @@ function EditAthleteModal({
       ...(avatarUrl !== athlete.avatar_url ? { avatar_url: avatarUrl ?? "" } : {}),
     });
     setSaving(false);
-    if (result.success) { onSave(name.trim(), email.trim(), avatarUrl ?? undefined); onClose(); }
-    else setError(result.error ?? "Save failed");
+    if (result.success) {
+      onSave(name.trim(), email.trim(), avatarUrl ?? undefined);
+      onRefreshNeeded?.(); // bust Next.js router cache so athletes pages get fresh data
+      onClose();
+    } else setError(result.error ?? "Save failed");
   }
 
   return (
@@ -154,7 +165,7 @@ function EditAthleteModal({
               </button>
               <p className="text-xs text-muted mt-0.5">JPG, PNG or WebP · max 5 MB</p>
               {avatarUrl && !uploading && (
-                <button onClick={() => setAvatarUrl(null)} className="text-xs text-red-500 hover:text-red-700 mt-1 transition">Remove photo</button>
+                <button onClick={() => { setAvatarUrl(null); onAvatarChange?.(null); }} className="text-xs text-red-500 hover:text-red-700 mt-1 transition">Remove photo</button>
               )}
             </div>
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
@@ -204,19 +215,32 @@ function EditAthleteModal({
 
 // ── Athlete card ─────────────────────────────────────────────────────────────
 
-function AthleteCard({ athlete, teamId, onDelete, onUpdate }: {
+function AthleteCard({ athlete, teamId, onDelete, onUpdate, onRefreshNeeded }: {
   athlete: TeamAthlete; teamId: string;
   onDelete: () => void;
   onUpdate: (name: string, email: string, avatarUrl?: string) => void;
+  onRefreshNeeded: () => void;
 }) {
   const [showEdit, setShowEdit] = useState(false);
-  const name = athlete.athlete_name ?? "Unknown";
+  // Track avatar and name locally so the card + modal always reflect the latest upload without waiting for a full page refresh
+  const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null | undefined>(athlete.avatar_url);
+  const [localName, setLocalName] = useState(athlete.athlete_name ?? "Unknown");
+
+  const name = localName;
+  // Build a merged athlete object so the modal sees fresh local state
+  const athleteWithLocal: TeamAthlete = { ...athlete, avatar_url: localAvatarUrl, athlete_name: localName };
+
+  function handleSave(savedName: string, savedEmail: string, savedAvatarUrl?: string) {
+    setLocalName(savedName);
+    setLocalAvatarUrl(savedAvatarUrl ?? null);
+    onUpdate(savedName, savedEmail, savedAvatarUrl);
+  }
 
   return (
     <>
       <div className="flex flex-col rounded-2xl border border-line bg-white overflow-hidden shadow-sm hover:shadow-md hover:border-zinc-300 transition-all duration-150 group">
         <Link href={`/athletes/${athlete.ow_user_id}`} className="flex flex-col items-center pt-8 pb-5 px-5 gap-3">
-          <Avatar name={name} avatarUrl={athlete.avatar_url} size={72} />
+          <Avatar name={name} avatarUrl={localAvatarUrl} size={72} />
           <div className="text-center">
             <p className="text-sm font-semibold text-ink group-hover:text-brand transition-colors leading-snug">{name}</p>
             <p className="text-xs text-muted mt-0.5 flex items-center justify-center gap-1">
@@ -239,9 +263,11 @@ function AthleteCard({ athlete, teamId, onDelete, onUpdate }: {
 
       {showEdit && (
         <EditAthleteModal
-          athlete={athlete} teamId={teamId}
+          athlete={athleteWithLocal} teamId={teamId}
           onClose={() => setShowEdit(false)}
-          onSave={onUpdate}
+          onSave={handleSave}
+          onAvatarChange={url => setLocalAvatarUrl(url)}
+          onRefreshNeeded={onRefreshNeeded}
         />
       )}
     </>
@@ -251,6 +277,7 @@ function AthleteCard({ athlete, teamId, onDelete, onUpdate }: {
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontendUrl }: Props) {
+  const router = useRouter();
   const [teams, setTeams] = useState<Team[]>(initialTeams);
   const [athletes, setAthletes] = useState<Record<string, TeamAthlete[]>>(initialAthletes);
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(() => new Set(initialTeams.map(t => t.id)));
@@ -457,6 +484,7 @@ export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontend
                             ...p,
                             [team.id]: (p[team.id] ?? []).map(x => x.ow_user_id === a.ow_user_id ? { ...x, athlete_name: name, athlete_email: email, ...(avatarUrl !== undefined ? { avatar_url: avatarUrl } : {}) } : x),
                           }))}
+                          onRefreshNeeded={() => router.refresh()}
                         />
                       ))}
                     </div>

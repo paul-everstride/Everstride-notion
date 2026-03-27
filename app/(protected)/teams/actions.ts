@@ -181,20 +181,46 @@ export async function uploadAvatarAction(
   }
 }
 
-/** Persists avatar_url immediately after upload — no need to click Save separately */
+/** Persists avatar_url immediately after upload — no need to click Save separately.
+ *  Uses select-then-update-or-insert to avoid needing a unique constraint.
+ *  OW-only athletes (no existing row) get a minimal row created for avatar storage. */
 export async function saveAvatarUrlAction(
+  supabaseTeamId: string,
   owUserId: string,
   avatarUrl: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = createSupabaseServiceClient();
     if (!supabase) return { success: false, error: "DB not configured" };
-    const { error } = await supabase
+
+    // Check if a row already exists
+    const { data: existing } = await supabase
       .from("team_athletes")
-      .update({ avatar_url: avatarUrl })
-      .eq("ow_user_id", owUserId);
-    if (error) return { success: false, error: error.message };
+      .select("ow_user_id")
+      .eq("team_id", supabaseTeamId)
+      .eq("ow_user_id", owUserId)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      // Row exists — update avatar_url in-place
+      const { error } = await supabase
+        .from("team_athletes")
+        .update({ avatar_url: avatarUrl })
+        .eq("team_id", supabaseTeamId)
+        .eq("ow_user_id", owUserId);
+      if (error) return { success: false, error: error.message };
+    } else {
+      // No row yet (OW-only athlete) — create a minimal row for avatar storage
+      // The teams page always merges OW name/email on top of this row
+      const { error } = await supabase
+        .from("team_athletes")
+        .insert({ team_id: supabaseTeamId, ow_user_id: owUserId, avatar_url: avatarUrl });
+      if (error) return { success: false, error: error.message };
+    }
+
     revalidatePath("/teams");
+    revalidatePath("/athletes", "layout");
+    revalidatePath("/", "layout");
     revalidateTag("dashboard-athletes");
     return { success: true };
   } catch (e) {
@@ -216,14 +242,31 @@ export async function updateAthleteAction(
     };
     if (data.avatar_url !== undefined) updateData.avatar_url = data.avatar_url;
 
-    // Write to Supabase first — this must not be blocked by OW sync
-    const { error } = await supabase
+    // Write to Supabase — select-then-update-or-insert (no unique constraint required)
+    const { data: existing } = await supabase
       .from("team_athletes")
-      .update(updateData)
+      .select("ow_user_id")
       .eq("team_id", supabaseTeamId)
-      .eq("ow_user_id", owUserId);
-    if (error) return { success: false, error: error.message };
+      .eq("ow_user_id", owUserId)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      const { error } = await supabase
+        .from("team_athletes")
+        .update(updateData)
+        .eq("team_id", supabaseTeamId)
+        .eq("ow_user_id", owUserId);
+      if (error) return { success: false, error: error.message };
+    } else {
+      const { error } = await supabase
+        .from("team_athletes")
+        .insert({ team_id: supabaseTeamId, ow_user_id: owUserId, ...updateData });
+      if (error) return { success: false, error: error.message };
+    }
+
     revalidatePath("/teams");
+    revalidatePath("/athletes", "layout");
+    revalidatePath("/", "layout");
     revalidateTag("dashboard-athletes");
 
     // Sync name + email to OW best-effort — never blocks the DB save

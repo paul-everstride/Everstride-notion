@@ -53,32 +53,48 @@ export default async function TeamsPage() {
         athletesData = withoutAvatar;
       }
 
-      // Merge Supabase athletes with athletes added directly in OW dashboard
+      // Merge Supabase athletes with athletes added directly in OW dashboard.
+      // Strategy: OW is always the source of truth for names/emails.
+      // Supabase is the source of truth for avatar_url and any manual overrides.
       for (const team of teams) {
         const supabaseAthletes = (athletesData ?? []).filter(a => a.team_id === team.id);
-        const supabaseIds = new Set(supabaseAthletes.map(a => a.ow_user_id));
+        // Build a lookup map from ow_user_id → supabase row (for avatar + manual edits)
+        const supabaseMap = new Map(supabaseAthletes.map(a => [a.ow_user_id, a]));
 
-        // Fetch live OW team members for athletes added via OW dashboard
-        let owOnlyAthletes: typeof supabaseAthletes = [];
+        let mergedAthletes: typeof supabaseAthletes = [];
+
         if (team.ow_team_id) {
           try {
             const owMembers = await owGetTeamMembers(team.ow_team_id);
-            owOnlyAthletes = owMembers
-              .filter(m => !supabaseIds.has(m.id))
-              .map(m => ({
+            // For every OW member: use OW for name/email, Supabase for avatar + overrides
+            mergedAthletes = owMembers.map(m => {
+              const supabaseRow = supabaseMap.get(m.id);
+              const owName = [m.first_name, m.last_name].filter(Boolean).join(" ") || null;
+              return {
                 team_id: team.id,
                 ow_user_id: m.id,
-                athlete_name: [m.first_name, m.last_name].filter(Boolean).join(" ") || null,
-                athlete_email: m.email ?? null,
-                pairing_link: `${owFrontendUrl}/users/${m.id}/pair`,
-                avatar_url: null,
-              }));
+                // Prefer Supabase name if manually set, otherwise use OW name
+                athlete_name: supabaseRow?.athlete_name || owName,
+                athlete_email: supabaseRow?.athlete_email || m.email || null,
+                pairing_link: supabaseRow?.pairing_link || `${owFrontendUrl}/users/${m.id}/pair`,
+                // Always use Supabase avatar_url — this is where uploads are stored
+                avatar_url: supabaseRow?.avatar_url ?? null,
+              };
+            });
+            // Also include any Supabase-only athletes not found in OW (edge case)
+            const owIds = new Set(owMembers.map(m => m.id));
+            for (const sa of supabaseAthletes) {
+              if (!owIds.has(sa.ow_user_id)) mergedAthletes.push(sa);
+            }
           } catch {
-            // OW unreachable — skip
+            // OW unreachable — fall back to Supabase data only
+            mergedAthletes = supabaseAthletes;
           }
+        } else {
+          mergedAthletes = supabaseAthletes;
         }
 
-        initialAthletes[team.id] = [...supabaseAthletes, ...owOnlyAthletes];
+        initialAthletes[team.id] = mergedAthletes;
       }
     }
   }
