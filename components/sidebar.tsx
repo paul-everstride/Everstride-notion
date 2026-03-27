@@ -6,19 +6,20 @@ import { cn } from "@/lib/utils";
 import type { AppRole } from "@/lib/types";
 import { LayoutDashboard, ArrowLeftRight, Users, User, Eye, ChevronRight, LogOut } from "lucide-react";
 
-/** Shield outline with a small gear/cog inside — custom Team Settings icon */
+/** Shield with bold horizontal slider lines — Team Settings icon readable at any size */
 function ShieldSettingsIcon({ size = 15 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       {/* Shield */}
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      {/* Gear: centre circle */}
-      <circle cx="12" cy="11.5" r="1.7" strokeWidth="1.5" />
-      {/* Gear: 4 spokes (N/S/E/W) */}
-      <line x1="12" y1="8.6"  x2="12" y2="9.8"  strokeWidth="1.4" />
-      <line x1="12" y1="13.2" x2="12" y2="14.4" strokeWidth="1.4" />
-      <line x1="9.1"  y1="11.5" x2="10.3" y2="11.5" strokeWidth="1.4" />
-      <line x1="13.7" y1="11.5" x2="14.9" y2="11.5" strokeWidth="1.4" />
+      {/* Top slider line */}
+      <line x1="9.5" y1="10.5" x2="14.5" y2="10.5" />
+      {/* Bottom slider line */}
+      <line x1="9.5" y1="14"   x2="14.5" y2="14" />
+      {/* Knob on top line (left) */}
+      <circle cx="11.5" cy="10.5" r="1.4" />
+      {/* Knob on bottom line (right) */}
+      <circle cx="13"   cy="14"   r="1.4" />
     </svg>
   );
 }
