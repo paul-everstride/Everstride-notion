@@ -176,98 +176,9 @@ function DetailColEditorPanel({
 const na = (v: number | null | undefined, fmt: (n: number) => string = (n) => String(n)) =>
   v == null ? "N/A" : fmt(v);
 
-// ── Deterministic helpers ────────────────────────────────────────────────────
+// ── Label helpers ────────────────────────────────────────────────────────────
 
-function strHash(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-function lcg(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => { s = (Math.imul(1664525, s) + 1013904223) >>> 0; return s / 4294967295; };
-}
-function genTrend(seed: number, base: number, labels: string[], variance = 0.07): TrendPoint[] {
-  const rng = lcg(seed);
-  let val = base;
-  return labels.map(label => {
-    val += (rng() - 0.5) * base * variance;
-    val = Math.max(base * 0.72, Math.min(base * 1.28, val));
-    return { label, value: Math.round(val * 10) / 10 };
-  });
-}
-
-/** TSB-specific: signed trend that can cross zero, drifts around a center value */
-function genTsbTrend(seed: number, center: number, labels: string[], swing = 12): TrendPoint[] {
-  const rng = lcg(seed);
-  let val = center;
-  return labels.map(label => {
-    val += (rng() - 0.5) * swing;
-    val += (center - val) * 0.12; // mean-revert toward center
-    return { label, value: Math.round(val * 10) / 10 };
-  });
-}
-
-// ── Label builders ───────────────────────────────────────────────────────────
-
-const MS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const MN = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-
-/**
- * Returns evenly-spaced date labels (always full, never empty) + the
- * XAxis `interval` that keeps the axis readable without losing tooltip dates.
- */
-function getTimeframeInfo(
-  tf: string, cStart: string, cEnd: string
-): { labels: string[]; tickInterval: number; seed: string } {
-  const now = new Date();
-  if (tf === "7d") {
-    const labels = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(now); d.setDate(now.getDate() - 6 + i);
-      return `${d.getDate()} ${MS[d.getMonth()]}`;
-    });
-    return { labels, tickInterval: 0, seed: "7d" };
-  }
-  if (tf === "30d") {
-    const labels = Array.from({ length: 30 }, (_, i) => {
-      const d = new Date(now); d.setDate(now.getDate() - 29 + i);
-      return `${d.getDate()} ${MS[d.getMonth()]}`;
-    });
-    return { labels, tickInterval: 6, seed: "30d" };
-  }
-  if (tf === "3m") {
-    const labels = Array.from({ length: 13 }, (_, i) => {
-      const d = new Date(now); d.setDate(now.getDate() - 12 * 7 + i * 7);
-      return `${d.getDate()} ${MS[d.getMonth()]}`;
-    });
-    return { labels, tickInterval: 1, seed: "3m" };
-  }
-  if (tf === "6m") {
-    const labels = Array.from({ length: 26 }, (_, i) => {
-      const d = new Date(now); d.setDate(now.getDate() - 25 * 7 + i * 7);
-      return `${d.getDate()} ${MS[d.getMonth()]}`;
-    });
-    return { labels, tickInterval: 3, seed: "6m" };
-  }
-  if (tf === "1y") {
-    const labels = Array.from({ length: 12 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
-      return MS[d.getMonth()];
-    });
-    return { labels, tickInterval: 0, seed: "1y" };
-  }
-  // custom
-  const start = new Date(cStart), end = new Date(cEnd);
-  const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
-  const pts = Math.min(30, Math.max(7, Math.floor(days / 3)));
-  const step = Math.max(1, Math.floor(days / (pts - 1)));
-  const labels: string[] = [];
-  for (let i = 0; i < pts; i++) {
-    const d = new Date(start); d.setDate(d.getDate() + i * step);
-    if (d <= end) labels.push(`${d.getDate()} ${MS[d.getMonth()]}`);
-  }
-  return { labels, tickInterval: Math.max(0, Math.floor(pts / 6)), seed: `${cStart}${cEnd}` };
-}
 
 // ── Chart helpers ────────────────────────────────────────────────────────────
 
@@ -377,35 +288,49 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
     return `${String(d.getUTCDate()).padStart(2, "0")} ${MN[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
   }, [selectedDate, todayStr]);
 
-  // ── Trend data for current timeframe ──
+  // ── Trend data for current timeframe — always real data from recoveryHistory ──
   const trendData = useMemo(() => {
-    const { labels, tickInterval, seed } = getTimeframeInfo(timeframe, customStart, customEnd);
-    const g = (base: number | null, key: string, v = 0.08) =>
-      base != null ? genTrend(strHash(athlete.id + key + seed), base, labels, v) : null;
+    // Map timeframe → cutoff date string
+    const daysMap: Record<string, number> = { "7d": 7, "30d": 30, "3m": 90, "6m": 180, "1y": 365 };
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const startStr = timeframe === "custom"
+      ? customStart
+      : new Date(Date.now() - (daysMap[timeframe] ?? 30) * 86_400_000).toISOString().slice(0, 10);
+    const endStr = timeframe === "custom" ? customEnd : todayStr;
 
-    // For 7d and 30d use real stored trend data (real dates + real values).
-    // For longer timeframes we fall back to genTrend (synthetic values, real date labels).
-    const n = timeframe === "7d" ? 7 : 30;
-    const useReal = timeframe === "7d" || timeframe === "30d";
-    /** Pick last n points of a real trend (oldest→newest), or fall back to genTrend */
-    const real = (trend: TrendPoint[], base: number | null, key: string, v = 0.08) =>
-      useReal && trend.length ? trend.slice(-n) : g(base, key, v);
+    const filtered = athlete.recoveryHistory.filter(d => d.date >= startStr && d.date <= endStr);
+
+    // Compute a sensible x-axis tick interval so labels don't overlap
+    const n = filtered.length;
+    const tickInterval = n <= 10 ? 0 : n <= 35 ? 4 : n <= 95 ? 13 : n <= 190 ? 25 : 59;
+
+    if (filtered.length === 0) {
+      return { tickInterval, recovery: null, sleep: null, hrv: null, rhr: null, spo2: null, sleepEff: null, ftp: null, vo2: null, power: null, tss: null, atl: null, ctl: null, tsb: null };
+    }
+
+    /** Map a field from recoveryHistory to a TrendPoint array; returns null if no values */
+    const toTrend = (getValue: (d: RecoveryHistoryDay) => number | null): TrendPoint[] | null => {
+      const pts = filtered
+        .map(d => ({ label: d.shortLabel, value: getValue(d) }))
+        .filter((p): p is TrendPoint => p.value != null);
+      return pts.length > 0 ? pts : null;
+    };
 
     return {
       tickInterval,
-      recovery: real(athlete.readinessTrend,       athlete.recoveryScore,    "rec",    0.07),
-      sleep:    real(athlete.sleepTrend,            athlete.sleepScore,       "slp",    0.07),
-      hrv:      real(athlete.hrvTrend,              athlete.hrv,              "hrv",    0.09),
-      rhr:      real(athlete.rhrTrend,              athlete.restHr,           "rhr",    0.05),
-      spo2:     g(athlete.spo2,  "spo2",  0.02),
-      sleepEff: real(athlete.sleepEfficiencyTrend,  athlete.sleepEfficiency,  "slpeff", 0.06),
-      ftp:      g(athlete.ftp,           "ftp",    0.06),
-      vo2:      g(athlete.vo2Max,        "vo2",    0.05),
-      power:    g(athlete.powerMax,      "power",  0.08),
-      tss:      g(athlete.tss,           "tss",    0.12),
-      atl:      g(athlete.atl,           "atl",    0.08),
-      ctl:      g(athlete.ctl,           "ctl",    0.05),
-      tsb:      athlete.tsb != null ? genTsbTrend(strHash(athlete.id + "tsb" + seed), athlete.tsb, labels) : null,
+      recovery: toTrend(d => d.recoveryScore),
+      sleep:    toTrend(d => d.sleepScore),
+      hrv:      toTrend(d => d.hrv),
+      rhr:      toTrend(d => d.restHr),
+      spo2:     toTrend(d => d.spo2),
+      sleepEff: toTrend(d => d.sleepEfficiency),
+      ftp:      null,
+      vo2:      null,
+      power:    null,
+      tss:      null,
+      atl:      null,
+      ctl:      null,
+      tsb:      null,
     };
   }, [athlete, timeframe, customStart, customEnd]);
 
