@@ -1,6 +1,7 @@
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { owUpdateTeam, owGetTeamMembers } from "@/lib/ow-client";
+import { getDashboardData } from "@/lib/data";
 import { TeamsClient } from "./teams-client";
 
 export default async function TeamsPage() {
@@ -9,7 +10,11 @@ export default async function TeamsPage() {
   const owFrontendUrl = process.env.OW_FRONTEND_URL ?? "https://frontend-production-fdc3.up.railway.app";
 
   let teams: { id: string; name: string; ow_team_id?: string | null }[] = [];
-  let initialAthletes: Record<string, { ow_user_id: string; athlete_name?: string | null; athlete_email?: string | null; pairing_link?: string | null; avatar_url?: string | null }[]> = {};
+  let initialAthletes: Record<string, { ow_user_id: string; athlete_name?: string | null; athlete_email?: string | null; pairing_link?: string | null; avatar_url?: string | null; has_data?: boolean }[]> = {};
+
+  // Fetch dashboard data in parallel — it's cached so this adds no latency on repeat loads.
+  // We use it purely to mark which athletes already have wearable data connected.
+  const dashboardPromise = getDashboardData();
 
   if (supabase) {
     const { data: teamsData } = await supabase
@@ -97,6 +102,18 @@ export default async function TeamsPage() {
         initialAthletes[team.id] = mergedAthletes;
       }
     }
+
+    // Resolve dashboard data and stamp has_data on each athlete
+    try {
+      const dashboard = await dashboardPromise;
+      const withDataIds = new Set(dashboard.athletes.map(a => a.userId));
+      for (const teamId of Object.keys(initialAthletes)) {
+        initialAthletes[teamId] = initialAthletes[teamId].map(a => ({
+          ...a,
+          has_data: withDataIds.has(a.ow_user_id),
+        }));
+      }
+    } catch { /* has_data is best-effort — cards still render without it */ }
   }
 
   return (
