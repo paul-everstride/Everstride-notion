@@ -72,3 +72,37 @@ th {
     font-variant-numeric: tabular-nums;
   }
 }
+
+/* Skeleton shimmer animation */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-strong);
+  border-radius: 8px;
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 100%
+  );
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+.skeleton-round {
+  border-radius: 9999px;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

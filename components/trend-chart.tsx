@@ -38,7 +38,7 @@ function tickFmt(v: number): string {
 
 export function TrendChart({ data, state = "default", color = "#e16b2b" }: TrendChartProps) {
   if (state === "loading") {
-    return <div className="h-56 animate-pulse rounded-lg bg-surfaceStrong" />;
+    return <div className="h-56 skeleton rounded-xl" />;
   }
 
   if (state === "empty") {

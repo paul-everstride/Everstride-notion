@@ -64,7 +64,7 @@ export function AthleteHeaderClient({ athleteId, initialName, initialAvatarUrl, 
         title="Change photo"
       >
         {avatarUrl ? (
-          <img src={avatarUrl} alt={name} className="w-10 h-10 rounded-full object-cover border border-line" />
+          <img src={avatarUrl} alt={name} className="w-10 h-10 rounded-full object-cover border border-line" loading="eager" fetchPriority="high" />
         ) : (
           <div className="w-10 h-10 rounded-full bg-surfaceStrong border border-line flex items-center justify-center">
             <span className="text-sm font-semibold text-muted">{initials}</span>

@@ -82,7 +82,7 @@ const columnDefinitions: ColumnDefinition[] = [
         <div className="flex items-center justify-between gap-3 min-w-[180px]">
           <div className="flex items-center gap-2.5">
             {athlete.avatarUrl ? (
-              <img src={athlete.avatarUrl} alt={athlete.name} className="w-8 h-8 rounded-full object-cover shrink-0 border border-line" />
+              <img src={athlete.avatarUrl} alt={athlete.name} className="w-8 h-8 rounded-full object-cover shrink-0 border border-line" loading="eager" fetchPriority="high" />
             ) : (
               <div className="w-8 h-8 rounded-full bg-surfaceStrong border border-line flex items-center justify-center shrink-0">
                 <span className="text-[10px] font-semibold text-muted">{initials}</span>
@@ -128,11 +128,14 @@ const groupMeta = {
 export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns, columnOrder, state = "default" }: AthleteTableProps) {
   if (state === "loading") {
     return (
-      <div className="border border-line rounded-lg overflow-hidden">
+      <div className="border border-line rounded-xl overflow-hidden">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex gap-4 px-4 py-3 border-b border-line animate-pulse last:border-0">
-            <div className="h-3 w-32 bg-surfaceStrong rounded" />
-            <div className="h-3 w-10 bg-surfaceStrong rounded ml-auto" />
+          <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-line last:border-0">
+            <div className="w-8 h-8 skeleton skeleton-round" />
+            <div className="h-3 w-32 skeleton" />
+            <div className="h-3 w-10 skeleton ml-auto" />
+            <div className="h-3 w-10 skeleton" />
+            <div className="h-3 w-10 skeleton" />
           </div>
         ))}
       </div>

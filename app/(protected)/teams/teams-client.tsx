@@ -58,7 +58,7 @@ function Avatar({ name, avatarUrl, size = 64 }: { name: string; avatarUrl?: stri
   if (avatarUrl) {
     return (
       <div className="rounded-full overflow-hidden shrink-0 shadow-sm" style={{ width: size, height: size }}>
-        <Image src={avatarUrl} alt={name} width={size} height={size} className="object-cover w-full h-full" />
+        <Image src={avatarUrl} alt={name} width={size} height={size} className="object-cover w-full h-full" priority />
       </div>
     );
   }

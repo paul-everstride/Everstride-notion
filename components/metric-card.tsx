@@ -20,10 +20,10 @@ export function MetricCard({
 }: MetricCardProps) {
   if (state === "loading") {
     return (
-      <div className="bg-canvas p-4 animate-pulse border border-line rounded-lg">
-        <div className="h-2 w-20 bg-line rounded mb-3" />
-        <div className="h-7 w-16 bg-line rounded mb-2" />
-        <div className="h-2 w-32 bg-line rounded" />
+      <div className="bg-canvas p-4 border border-line rounded-lg">
+        <div className="h-2 w-20 skeleton mb-3" />
+        <div className="h-7 w-16 skeleton mb-2" />
+        <div className="h-2 w-32 skeleton" />
       </div>
     );
   }
