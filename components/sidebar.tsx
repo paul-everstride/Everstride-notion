@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/lib/types";
-import { LayoutDashboard, ArrowLeftRight, Users, User, Eye, ChevronRight, LogOut } from "lucide-react";
+import { LayoutDashboard, ArrowLeftRight, Users, User, Eye, ChevronRight, LogOut, CalendarRange, ExternalLink } from "lucide-react";
 
 /** Shield with bold horizontal slider lines — Team Settings icon readable at any size */
 function ShieldSettingsIcon({ size = 15 }: { size?: number }) {
@@ -25,7 +25,9 @@ function ShieldSettingsIcon({ size = 15 }: { size?: number }) {
 }
 
 type NavChild = { href: string; label: string };
-type NavItem = { href: string; label: string; icon: React.ReactNode; children?: NavChild[] };
+type NavItem = { href: string; label: string; icon: React.ReactNode; children?: NavChild[]; external?: boolean };
+
+const PLANNER_URL = process.env.NEXT_PUBLIC_PLANNER_URL ?? "https://planner.everstride.fit";
 
 const coachItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={15} /> },
@@ -40,6 +42,7 @@ const coachItems: NavItem[] = [
   },
   { href: "/athletes", label: "Athletes", icon: <Users size={15} /> },
   { href: "/teams",    label: "Team Settings", icon: <ShieldSettingsIcon size={15} /> },
+  { href: PLANNER_URL, label: "Season Planner", icon: <CalendarRange size={15} />, external: true },
 ];
 
 const athleteItems: NavItem[] = [
@@ -64,8 +67,24 @@ export function Sidebar({ role }: { role: AppRole }) {
       {/* Nav */}
       <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
         {items.map((item) => {
-          const parentActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const parentActive = !item.external && (pathname === item.href || pathname.startsWith(`${item.href}/`));
           const hasChildren = item.children && item.children.length > 0;
+
+          if (item.external) {
+            return (
+              <a
+                key={item.href}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors duration-100 text-muted hover:text-ink hover:bg-surfaceStrong"
+              >
+                <span className="shrink-0 text-muted/70">{item.icon}</span>
+                <span className="flex-1">{item.label}</span>
+                <ExternalLink size={11} className="shrink-0 text-muted/40" />
+              </a>
+            );
+          }
 
           return (
             <div key={item.href}>
