@@ -4,7 +4,7 @@ import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const FROM = "Everstride <noreply@everstride.fit>";
+const FROM = "paul@everstride.fit";
 
 function pairingEmailHtml({
   athleteName,
