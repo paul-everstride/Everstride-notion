@@ -7,7 +7,7 @@ import { TeamsClient } from "./teams-client";
 export default async function TeamsPage() {
   const user = await requireAuthenticatedUser();
   const supabase = createSupabaseServerClient();
-  const owFrontendUrl = process.env.OW_FRONTEND_URL ?? "https://frontend-production-fdc3.up.railway.app";
+  const owFrontendUrl = process.env.OW_FRONTEND_URL ?? "https://connect.everstride.fit";
 
   let teams: { id: string; name: string; ow_team_id?: string | null }[] = [];
   let initialAthletes: Record<string, { ow_user_id: string; athlete_name?: string | null; athlete_email?: string | null; pairing_link?: string | null; avatar_url?: string | null; has_data?: boolean }[]> = {};

@@ -12,6 +12,16 @@ const nextConfig = {
       },
     ],
   },
+  async redirects() {
+    const owFrontend = process.env.OW_FRONTEND_URL ?? "https://connect.everstride.fit";
+    return [
+      {
+        source: "/pair/:userId",
+        destination: `${owFrontend}/users/:userId/pair`,
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
