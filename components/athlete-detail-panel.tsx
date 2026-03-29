@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import { Calendar, SlidersHorizontal, X } from "lucide-react";
 import type { AthleteSummary, RecoveryHistoryDay, TrendPoint } from "@/lib/types";
+import type { SeasonPlanData, PlanWeek } from "@/app/(protected)/athletes/[id]/season-plan-actions";
 import { cn, formatSleepDuration, formatSignedNumber, formatWeight, getRecoveryTone } from "@/lib/utils";
 import { AthleteHeroStrip } from "@/components/photo-accents";
 
@@ -266,11 +267,11 @@ function SectionChart({ title, data, color, height = 200, sub, tickInterval = 0,
 
 // ── Main export ──────────────────────────────────────────────────────────────
 
-type Tab   = "readiness" | "recovery" | "performance" | "load" | "power" | "profile";
+type Tab   = "readiness" | "recovery" | "performance" | "load" | "power" | "profile" | "season";
 type TF    = "7d" | "30d" | "3m" | "6m" | "1y" | "custom";
 type RecTF = "7d" | "30d" | "90d" | "365d" | "all";
 
-export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
+export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: AthleteSummary; seasonPlan?: SeasonPlanData | null; coachId?: string }) {
   const todayStr   = new Date().toISOString().slice(0, 10);
   const thirtyAgo  = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 
@@ -395,6 +396,7 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
     { key: "load",        label: "Training Load" },
     { key: "power",       label: "Power" },
     { key: "profile",     label: "Profile" },
+    { key: "season",      label: "Season Plan" },
   ];
 
   // ── Recovery tab data ──
@@ -1027,6 +1029,138 @@ export function AthleteDetailPanel({ athlete }: { athlete: AthleteSummary }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── Season Plan tab ──────────────────────────────────────── */}
+      {tab === "season" && (
+        <div className="px-6 py-5 space-y-5">
+          {seasonPlan ? (
+            <>
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-ink">{seasonPlan.season_year} Season Plan</h3>
+                  <p className="text-sm text-muted mt-0.5">
+                    {new Date(seasonPlan.season_start + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    {" — "}
+                    {new Date(seasonPlan.season_end + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    {" · "}{seasonPlan.plan_data.length} weeks
+                  </p>
+                </div>
+                <a
+                  href={`${process.env.NEXT_PUBLIC_PLANNER_URL ?? "https://planner.everstride.fit"}?coach_id=${coachId ?? ""}&athlete_id=${athlete.userId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-brand border border-brand/30 rounded-md px-3 py-1.5 hover:bg-brandSoft transition-colors duration-100"
+                >
+                  Edit in Planner ↗
+                </a>
+              </div>
+
+              {/* Phase timeline bar */}
+              <div className="rounded-xl border border-line bg-surface p-4">
+                <p className="text-xs font-medium text-muted uppercase tracking-wider mb-3">Phase Timeline</p>
+                <div className="flex h-8 rounded-lg overflow-hidden">
+                  {(() => {
+                    const blocks: { phase: string; color: string; count: number }[] = [];
+                    for (const w of seasonPlan.plan_data) {
+                      const last = blocks[blocks.length - 1];
+                      if (last && last.phase === w.phase) last.count++;
+                      else blocks.push({ phase: w.phase, color: w.color, count: 1 });
+                    }
+                    const total = seasonPlan.plan_data.length;
+                    return blocks.map((b, i) => (
+                      <div
+                        key={i}
+                        style={{ width: `${(b.count / total) * 100}%`, backgroundColor: b.color }}
+                        className="flex items-center justify-center text-[10px] font-semibold text-white overflow-hidden whitespace-nowrap px-1"
+                        title={`${b.phase} (${b.count} weeks)`}
+                      >
+                        {b.count >= 2 ? b.phase : ""}
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+
+              {/* Main races */}
+              {seasonPlan.form_payload.mainRaces && seasonPlan.form_payload.mainRaces.length > 0 && (
+                <div className="rounded-xl border border-line bg-surface p-4">
+                  <p className="text-xs font-medium text-muted uppercase tracking-wider mb-3">Main Races</p>
+                  <div className="flex flex-wrap gap-2">
+                    {seasonPlan.form_payload.mainRaces.map((r, i) => (
+                      <div key={i} className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
+                        <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                        <span className="text-sm font-medium text-ink">{r.name}</span>
+                        <span className="text-xs text-muted">
+                          {new Date(r.date + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Week summary table */}
+              <div className="rounded-xl border border-line bg-surface overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-line bg-surfaceStrong/50">
+                      <th className="text-left px-3 py-2 font-medium text-muted">Wk</th>
+                      <th className="text-left px-3 py-2 font-medium text-muted">Date Range</th>
+                      <th className="text-left px-3 py-2 font-medium text-muted">Phase</th>
+                      <th className="text-center px-3 py-2 font-medium text-muted">Vol</th>
+                      <th className="text-center px-3 py-2 font-medium text-muted">Int</th>
+                      <th className="text-left px-3 py-2 font-medium text-muted">Events</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {seasonPlan.plan_data.map((w) => (
+                      <tr key={w.week} className="border-b border-line last:border-0 hover:bg-surfaceStrong/30 transition-colors">
+                        <td className="px-3 py-1.5 tabular text-muted">{w.week}</td>
+                        <td className="px-3 py-1.5 text-xs text-muted">{w.weekRangeShort}</td>
+                        <td className="px-3 py-1.5">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: w.color }} />
+                            <span className="text-xs font-medium">{w.phase}</span>
+                          </span>
+                        </td>
+                        <td className="px-3 py-1.5 text-center">
+                          <span className="text-xs tabular">{w.volume}/5</span>
+                        </td>
+                        <td className="px-3 py-1.5 text-center">
+                          <span className="text-xs tabular">{w.intensity}/5</span>
+                        </td>
+                        <td className="px-3 py-1.5 text-xs text-muted truncate max-w-[200px]">
+                          {[...(w.races || []), ...(w.trainingCamps || []), ...(w.tests || [])].join(", ") || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            /* Empty state */
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-12 h-12 rounded-full bg-surfaceStrong flex items-center justify-center mb-3">
+                <Calendar className="w-5 h-5 text-muted" />
+              </div>
+              <h3 className="text-sm font-medium text-ink mb-1">No season plan yet</h3>
+              <p className="text-xs text-muted mb-4 max-w-xs">
+                Create a periodized training plan for this athlete using the Season Planner.
+              </p>
+              <a
+                href={`${process.env.NEXT_PUBLIC_PLANNER_URL ?? "https://planner.everstride.fit"}?coach_id=${coachId ?? ""}&athlete_id=${athlete.userId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium text-brand border border-brand/30 rounded-md px-3 py-1.5 hover:bg-brandSoft transition-colors duration-100"
+              >
+                Open Season Planner ↗
+              </a>
+            </div>
+          )}
         </div>
       )}
 

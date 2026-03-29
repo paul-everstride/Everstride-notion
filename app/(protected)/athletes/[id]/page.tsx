@@ -4,10 +4,13 @@ import { AthleteDetailPanel } from "@/components/athlete-detail-panel";
 import { getAthleteById } from "@/lib/data";
 import Link from "next/link";
 import { AthleteHeaderClient } from "./athlete-header-client";
+import { getSeasonPlan } from "./season-plan-actions";
+import { requireAuthenticatedUser } from "@/lib/auth";
 
 export default async function AthleteDetailPage({ params }: { params: { id: string } }) {
-  const athlete = await getAthleteById(params.id);
+  const [athlete, user] = await Promise.all([getAthleteById(params.id), requireAuthenticatedUser()]);
   if (!athlete) notFound();
+  const seasonPlan = await getSeasonPlan(athlete.userId);
 
   return (
     <div>
@@ -37,7 +40,7 @@ export default async function AthleteDetailPage({ params }: { params: { id: stri
         </div>
       </div>
 
-      <AthleteDetailPanel athlete={athlete} />
+      <AthleteDetailPanel athlete={athlete} seasonPlan={seasonPlan} coachId={user.id} />
     </div>
   );
 }

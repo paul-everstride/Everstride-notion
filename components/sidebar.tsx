@@ -27,32 +27,37 @@ function ShieldSettingsIcon({ size = 15 }: { size?: number }) {
 type NavChild = { href: string; label: string };
 type NavItem = { href: string; label: string; icon: React.ReactNode; children?: NavChild[]; external?: boolean };
 
-const PLANNER_URL = process.env.NEXT_PUBLIC_PLANNER_URL ?? "https://planner.everstride.fit";
+const PLANNER_BASE = process.env.NEXT_PUBLIC_PLANNER_URL ?? "https://planner.everstride.fit";
 
-const coachItems: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={15} /> },
-  {
-    href: "/compare",
-    label: "Compare",
-    icon: <ArrowLeftRight size={15} />,
-    children: [
-      { href: "/compare/readiness",   label: "Readiness"   },
-      { href: "/compare/performance", label: "Performance" }
-    ]
-  },
-  { href: "/athletes", label: "Athletes", icon: <Users size={15} /> },
-  { href: "/teams",    label: "Team Settings", icon: <ShieldSettingsIcon size={15} /> },
-  { href: PLANNER_URL, label: "Season Planner", icon: <CalendarRange size={15} />, external: true },
-];
+function buildCoachItems(coachId?: string, coachName?: string): NavItem[] {
+  const plannerUrl = coachId
+    ? `${PLANNER_BASE}?coach_id=${encodeURIComponent(coachId)}&coach_name=${encodeURIComponent(coachName ?? "")}`
+    : PLANNER_BASE;
+  return [
+    { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={15} /> },
+    {
+      href: "/compare",
+      label: "Compare",
+      icon: <ArrowLeftRight size={15} />,
+      children: [
+        { href: "/compare/readiness",   label: "Readiness"   },
+        { href: "/compare/performance", label: "Performance" }
+      ]
+    },
+    { href: "/athletes", label: "Athletes", icon: <Users size={15} /> },
+    { href: "/teams",    label: "Team Settings", icon: <ShieldSettingsIcon size={15} /> },
+    { href: plannerUrl, label: "Season Planner", icon: <CalendarRange size={15} />, external: true },
+  ];
+}
 
 const athleteItems: NavItem[] = [
   { href: "/me",        label: "My Metrics", icon: <User size={15} /> },
   { href: "/dashboard", label: "Coach View", icon: <Eye size={15} /> }
 ];
 
-export function Sidebar({ role }: { role: AppRole }) {
+export function Sidebar({ role, coachId, coachName }: { role: AppRole; coachId?: string; coachName?: string }) {
   const pathname = usePathname();
-  const items = role === "athlete" ? athleteItems : coachItems;
+  const items = role === "athlete" ? athleteItems : buildCoachItems(coachId, coachName);
 
   return (
     <aside className="fixed inset-y-0 left-0 z-20 hidden w-56 border-r border-line bg-surface lg:flex flex-col">
