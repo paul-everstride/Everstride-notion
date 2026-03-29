@@ -72,7 +72,7 @@ export async function createAthleteAction(
     }
 
     const athleteName = `${data.first_name} ${data.last_name}`.trim();
-    const pairingLink = `${process.env.OW_FRONTEND_URL ?? "https://frontend-production-fdc3.up.railway.app"}/users/${owUser.id}/pair`;
+    const pairingLink = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.everstride.fit"}/pair/${owUser.id}`;
 
     // Store in Supabase team_athletes with name, email and pairing link
     const { error: insertError } = await supabase
