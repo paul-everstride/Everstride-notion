@@ -117,13 +117,13 @@ function toAthleteSummary(
   const ts_skin     = timeseries["skin_temperature"]              ?? [];
 
   // ── Today-only headline metrics (dashboard cards) ─────────────────────────
-  // Only use the most recent data point if it is from today or yesterday —
-  // WHOOP delivers overnight data in the morning so yesterday is acceptable.
-  // If a user's sync stopped months ago (e.g. Paul) all headline metrics are null.
+  // Only use the most recent data point if it is from today.
+  // WHOOP logs overnight sleep under the date it *completed* (the morning),
+  // so today's date always contains the current night's data.
+  // If no data exists for today all headline metrics are null → "—".
   const todayStr     = new Date().toISOString().slice(0, 10);
-  const yesterdayStr = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
   const isRecent = (date: string | undefined): boolean =>
-    date != null && date >= yesterdayStr;
+    date != null && date === todayStr;
 
   const recoveryScore: number | null =
     isRecent(ts_recovery[0]?.date) && ts_recovery[0]?.value != null
