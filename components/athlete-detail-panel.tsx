@@ -1129,42 +1129,62 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                 })()}
               </div>
 
-              {/* Main races */}
-              {seasonPlan.form_payload.mainRaces && seasonPlan.form_payload.mainRaces.length > 0 && (() => {
+              {/* Events — main races, secondary races, training camps */}
+              {(() => {
+                const fp = seasonPlan.form_payload;
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
-                const nextRace = seasonPlan.form_payload.mainRaces
-                  .map(r => ({ ...r, dateObj: new Date(r.date + "T12:00:00Z") }))
-                  .filter(r => r.dateObj >= today)
+
+                type EventItem = { name: string; date: string; endDate?: string; type: "main" | "secondary" | "camp" };
+                const allEvents: EventItem[] = [
+                  ...(fp.mainRaces ?? []).map(r => ({ ...r, type: "main" as const })),
+                  ...(fp.secondaryRaces ?? []).map(r => ({ ...r, type: "secondary" as const })),
+                  ...(fp.trainingCamps ?? []).map(r => ({ ...r, type: "camp" as const })),
+                ];
+                if (allEvents.length === 0) return null;
+
+                const colorMap = {
+                  main:      { dot: "bg-red-500",    bg: "bg-red-50",     border: "border-red-200",    text: "text-red-600",    countBg: "bg-red-50",    countBorder: "border-red-200" },
+                  secondary: { dot: "bg-amber-500",  bg: "bg-amber-50",   border: "border-amber-200",  text: "text-amber-600",  countBg: "bg-amber-50",  countBorder: "border-amber-200" },
+                  camp:      { dot: "bg-blue-500",   bg: "bg-blue-50",    border: "border-blue-200",   text: "text-blue-600",   countBg: "bg-blue-50",   countBorder: "border-blue-200" },
+                };
+                const labelMap = { main: "Main Race", secondary: "Race", camp: "Camp" };
+
+                // Find next upcoming event across all types
+                const upcoming = allEvents
+                  .map(e => ({ ...e, dateObj: new Date(e.date + "T12:00:00Z") }))
+                  .filter(e => e.dateObj >= today)
                   .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime())[0];
-                const daysUntil = nextRace ? Math.ceil((nextRace.dateObj.getTime() - today.getTime()) / 86400000) : null;
+                const daysUntil = upcoming ? Math.ceil((upcoming.dateObj.getTime() - today.getTime()) / 86400000) : null;
 
                 return (
-                <div className="rounded-xl border border-line bg-surface p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs font-medium text-muted uppercase tracking-wider">Main Races</p>
-                    {nextRace && daysUntil != null && (
-                      <span className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-full px-2.5 py-0.5">
-                        {daysUntil === 0 ? "Race day!" : `${daysUntil} day${daysUntil === 1 ? "" : "s"} to ${nextRace.name}`}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {seasonPlan.form_payload.mainRaces.map((r, i) => {
-                      const rDate = new Date(r.date + "T12:00:00Z");
-                      const isPast = rDate < today;
-                      return (
-                      <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-1.5 ${isPast ? "bg-gray-50 border border-gray-200 opacity-60" : "bg-red-50 border border-red-200"}`}>
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${isPast ? "bg-gray-400" : "bg-red-500"}`} />
-                        <span className="text-sm font-medium text-ink">{r.name}</span>
-                        <span className="text-xs text-muted">
-                          {rDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  <div className="rounded-xl border border-line bg-surface p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs font-medium text-muted uppercase tracking-wider">Events</p>
+                      {upcoming && daysUntil != null && (
+                        <span className={`text-xs font-semibold ${colorMap[upcoming.type].text} ${colorMap[upcoming.type].countBg} ${colorMap[upcoming.type].countBorder} border rounded-full px-2.5 py-0.5`}>
+                          {daysUntil === 0 ? `${labelMap[upcoming.type]} day!` : `${daysUntil} day${daysUntil === 1 ? "" : "s"} to ${upcoming.name}`}
                         </span>
-                      </div>
-                      );
-                    })}
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {allEvents.map((e, i) => {
+                        const eDate = new Date(e.date + "T12:00:00Z");
+                        const isPast = eDate < today;
+                        const colors = colorMap[e.type];
+                        return (
+                          <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-1.5 border ${isPast ? "bg-gray-50 border-gray-200 opacity-60" : `${colors.bg} ${colors.border}`}`}>
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${isPast ? "bg-gray-400" : colors.dot}`} />
+                            <span className="text-sm font-medium text-ink">{e.name}</span>
+                            <span className="text-[10px] uppercase font-medium text-muted">{labelMap[e.type]}</span>
+                            <span className="text-xs text-muted">
+                              {eDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
                 );
               })()}
 
