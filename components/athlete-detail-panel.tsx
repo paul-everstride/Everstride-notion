@@ -1144,42 +1144,43 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                 if (allEvents.length === 0) return null;
 
                 const colorMap = {
-                  main:      { dot: "bg-red-500",    bg: "bg-red-50",     border: "border-red-200",    text: "text-red-600",    countBg: "bg-red-50",    countBorder: "border-red-200" },
-                  secondary: { dot: "bg-amber-500",  bg: "bg-amber-50",   border: "border-amber-200",  text: "text-amber-600",  countBg: "bg-amber-50",  countBorder: "border-amber-200" },
-                  camp:      { dot: "bg-blue-500",   bg: "bg-blue-50",    border: "border-blue-200",   text: "text-blue-600",   countBg: "bg-blue-50",   countBorder: "border-blue-200" },
+                  main:      { dot: "bg-red-500",    bg: "bg-red-50",     border: "border-red-200",    text: "text-red-600" },
+                  secondary: { dot: "bg-amber-500",  bg: "bg-amber-50",   border: "border-amber-200",  text: "text-amber-600" },
+                  camp:      { dot: "bg-blue-500",   bg: "bg-blue-50",    border: "border-blue-200",   text: "text-blue-600" },
                 };
                 const labelMap = { main: "Main Race", secondary: "Race", camp: "Camp" };
 
-                // Find next upcoming event across all types
-                const upcoming = allEvents
-                  .map(e => ({ ...e, dateObj: new Date(e.date + "T12:00:00Z") }))
-                  .filter(e => e.dateObj >= today)
-                  .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime())[0];
-                const daysUntil = upcoming ? Math.ceil((upcoming.dateObj.getTime() - today.getTime()) / 86400000) : null;
+                // Sort all events by date and compute countdowns
+                const enriched = allEvents
+                  .map(e => {
+                    const dateObj = new Date(e.date + "T12:00:00Z");
+                    const isPast = dateObj < today;
+                    const diff = Math.ceil((dateObj.getTime() - today.getTime()) / 86400000);
+                    return { ...e, dateObj, isPast, daysUntil: diff };
+                  })
+                  .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
 
                 return (
                   <div className="rounded-xl border border-line bg-surface p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="text-xs font-medium text-muted uppercase tracking-wider">Events</p>
-                      {upcoming && daysUntil != null && (
-                        <span className={`text-xs font-semibold ${colorMap[upcoming.type].text} ${colorMap[upcoming.type].countBg} ${colorMap[upcoming.type].countBorder} border rounded-full px-2.5 py-0.5`}>
-                          {daysUntil === 0 ? `${labelMap[upcoming.type]} day!` : `${daysUntil} day${daysUntil === 1 ? "" : "s"} to ${upcoming.name}`}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {allEvents.map((e, i) => {
-                        const eDate = new Date(e.date + "T12:00:00Z");
-                        const isPast = eDate < today;
+                    <p className="text-xs font-medium text-muted uppercase tracking-wider mb-3">Events</p>
+                    <div className="flex flex-wrap gap-2.5">
+                      {enriched.map((e, i) => {
                         const colors = colorMap[e.type];
                         return (
-                          <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-1.5 border ${isPast ? "bg-gray-50 border-gray-200 opacity-60" : `${colors.bg} ${colors.border}`}`}>
-                            <span className={`w-2 h-2 rounded-full shrink-0 ${isPast ? "bg-gray-400" : colors.dot}`} />
-                            <span className="text-sm font-medium text-ink">{e.name}</span>
-                            <span className="text-[10px] uppercase font-medium text-muted">{labelMap[e.type]}</span>
-                            <span className="text-xs text-muted">
-                              {eDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${e.isPast ? "bg-gray-50 border-gray-200 opacity-50" : `${colors.bg} ${colors.border}`}`}>
+                            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${e.isPast ? "bg-gray-400" : colors.dot}`} />
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm font-semibold text-ink leading-none">{e.name}</span>
+                              <span className={`text-[9px] uppercase font-bold leading-none px-1 py-0.5 rounded ${e.isPast ? "bg-gray-200 text-gray-500" : `${colors.bg} ${colors.text}`}`}>{labelMap[e.type]}</span>
+                            </div>
+                            <span className="text-xs text-muted leading-none">
+                              {e.dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                             </span>
+                            {!e.isPast && (
+                              <span className={`text-[10px] font-semibold leading-none ${colors.text}`}>
+                                {e.daysUntil === 0 ? "Today!" : `${e.daysUntil}d`}
+                              </span>
+                            )}
                           </div>
                         );
                       })}
