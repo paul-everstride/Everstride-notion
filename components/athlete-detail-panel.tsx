@@ -820,7 +820,7 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                     fill="url(#rec-hist-fill)"
                     dot={false}
                     activeDot={{ r: 3, fill: "#6366f1", stroke: "#ffffff", strokeWidth: 1.5 }}
-                    connectNulls
+                    connectNulls={false}
                   />
                 </AreaChart>
               </ResponsiveContainer>

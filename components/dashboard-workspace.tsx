@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Activity,
@@ -345,29 +345,25 @@ const DEFAULT_QUICK_KEYS = ["highest_recovery", "highest_tss", "lowest_rhr", "lo
 
 // ── Attention monitor config ──────────────────────────────────────────────────
 
-type AttentionMetricKey = "recovery" | "tsb" | "hrv" | "rhr" | "sleep" | "spo2" | "atl";
+type AttentionMetricKey = "recovery" | "hrv" | "rhr" | "sleep" | "spo2";
 
 const ATTENTION_METRIC_OPTIONS: { key: AttentionMetricKey; label: string; description: string }[] = [
   { key: "recovery", label: "Recovery score", description: "Flag if score < 60"   },
-  { key: "tsb",      label: "TSB (Form)",     description: "Flag if TSB < −10"    },
   { key: "hrv",      label: "HRV",            description: "Flag if HRV < 50 ms"  },
   { key: "rhr",      label: "Resting HR",     description: "Flag if RHR > 65 bpm" },
   { key: "sleep",    label: "Sleep score",    description: "Flag if score < 60"   },
   { key: "spo2",     label: "SpO₂",           description: "Flag if < 95%"        },
-  { key: "atl",      label: "ATL",            description: "Flag if ATL > 100"    },
 ];
 
-const DEFAULT_ATTENTION_METRICS: AttentionMetricKey[] = ["recovery", "tsb"];
+const DEFAULT_ATTENTION_METRICS: AttentionMetricKey[] = ["recovery"];
 
 function athleteNeedsAttention(a: AthleteSummary, metrics: AttentionMetricKey[]): boolean {
   return metrics.some(m => {
     if (m === "recovery") return a.recoveryScore != null && a.recoveryScore < 60;
-    if (m === "tsb")      return a.tsb != null && a.tsb < -10;
     if (m === "hrv")      return a.hrv != null && a.hrv < 50;
     if (m === "rhr")      return a.restHr != null && a.restHr > 65;
     if (m === "sleep")    return a.sleepScore != null && a.sleepScore < 60;
     if (m === "spo2")     return a.spo2 != null && a.spo2 < 95;
-    if (m === "atl")      return a.atl != null && a.atl > 100;
     return false;
   });
 }
@@ -612,7 +608,7 @@ function AttentionMonitor({ athletes }: { athletes: AthleteSummary[] }) {
                 {athlete.name}
               </span>
               <span className="text-xs tabular text-muted mr-2">
-                TSB {athlete.tsb != null ? formatSignedNumber(athlete.tsb) : "N/A"}
+                REC {athlete.recoveryScore ?? "N/A"}
               </span>
               {athlete.recoveryScore != null
                 ? <RecoveryBadge score={athlete.recoveryScore} />
@@ -873,22 +869,41 @@ function EditorPanel({
 
 // ── DashboardWorkspace ────────────────────────────────────────────────────────
 
+const PREFS_KEY = "everstride-dashboard-prefs";
+
+function loadPrefs() {
+  if (typeof window === "undefined") return null;
+  try { return JSON.parse(localStorage.getItem(PREFS_KEY) || "null"); } catch { return null; }
+}
+
 export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) {
+  const saved = useRef(loadPrefs());
+
   const [search, setSearch]               = useState("");
   const [flaggedOnly, setFlaggedOnly]     = useState(false);
   const [showFieldsEditor, setShowFieldsEditor] = useState(false);
-  const [columnOrder, setColumnOrder] = useState<AthleteColumnKey[]>(defaultAthleteColumns);
-  const [quickKeys, setQuickKeys]         = useState<string[]>(DEFAULT_QUICK_KEYS);
+  const [columnOrder, setColumnOrder] = useState<AthleteColumnKey[]>(saved.current?.columnOrder ?? defaultAthleteColumns);
+  const [quickKeys, setQuickKeys]         = useState<string[]>(saved.current?.quickKeys ?? DEFAULT_QUICK_KEYS);
   const [showQuickPicker, setShowQuickPicker] = useState(false);
 
   // Attention monitor config
   const [attentionExcluded, setAttentionExcluded] = useState<string[]>([]);
-  const [attentionMetrics,  setAttentionMetrics]  = useState<AttentionMetricKey[]>(DEFAULT_ATTENTION_METRICS);
+  const [attentionMetrics,  setAttentionMetrics]  = useState<AttentionMetricKey[]>(saved.current?.attentionMetrics ?? DEFAULT_ATTENTION_METRICS);
   const [showAttentionEdit, setShowAttentionEdit] = useState(false);
 
   // AI summary config
-  const [summaryMetrics,    setSummaryMetrics]    = useState<SummaryMetricKey[]>(DEFAULT_SUMMARY_METRICS);
+  const [summaryMetrics,    setSummaryMetrics]    = useState<SummaryMetricKey[]>(saved.current?.summaryMetrics ?? DEFAULT_SUMMARY_METRICS);
   const [showSummaryEdit,   setShowSummaryEdit]   = useState(false);
+
+  // Persist preferences when they change
+  useEffect(() => {
+    localStorage.setItem(PREFS_KEY, JSON.stringify({
+      quickKeys,
+      attentionMetrics,
+      summaryMetrics,
+      columnOrder,
+    }));
+  }, [quickKeys, attentionMetrics, summaryMetrics, columnOrder]);
 
   const attentionIds = useMemo(
     () => new Set(dashboard.attentionAthletes.map(a => a.id)),
@@ -1109,9 +1124,8 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
             <div>
               <span className="text-sm font-medium text-ink">Coach note — </span>
               <span className="text-sm text-ink">
-                {lowestRecAthlete.name} has the lowest readiness.
-                {lowestRecAthlete.tss != null ? ` TSS ${lowestRecAthlete.tss}` : ""}
-                {lowestRecAthlete.tsb != null ? ` · TSB ${formatSignedNumber(lowestRecAthlete.tsb)}` : ""}
+                {lowestRecAthlete.name} has the lowest readiness
+                {lowestRecAthlete.recoveryScore != null ? ` (${lowestRecAthlete.recoveryScore}%)` : ""}
                 {" "}— consider reducing load before next session.
               </span>
             </div>
