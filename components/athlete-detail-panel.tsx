@@ -1247,8 +1247,21 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                             ))}
                           </span>
                         </td>
-                        <td className="px-3 py-1.5 text-xs text-muted truncate max-w-[200px]">
-                          {[...(w.races || []), ...(w.trainingCamps || []), ...(w.tests || [])].join(", ") || "—"}
+                        <td className="px-3 py-1.5">
+                          {(() => {
+                            const events: { name: string; cls: string }[] = [
+                              ...(w.races || []).map(r => ({ name: r, cls: "bg-red-50 text-red-700 border-red-200" })),
+                              ...(w.trainingCamps || []).map(r => ({ name: r, cls: "bg-emerald-50 text-emerald-700 border-emerald-200" })),
+                              ...(w.tests || []).map(r => ({ name: r, cls: "bg-violet-50 text-violet-700 border-violet-200" })),
+                            ];
+                            return events.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {events.map((e, j) => (
+                                  <span key={j} className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded border ${e.cls}`}>{e.name}</span>
+                                ))}
+                              </div>
+                            ) : <span className="text-xs text-muted">—</span>;
+                          })()}
                         </td>
                       </tr>
                     );
