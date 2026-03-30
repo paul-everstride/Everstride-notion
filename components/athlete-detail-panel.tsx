@@ -1061,30 +1061,72 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
               {/* Phase timeline bar */}
               <div className="rounded-xl border border-line bg-surface p-4">
                 <p className="text-xs font-medium text-muted uppercase tracking-wider mb-3">Phase Timeline</p>
-                <div className="flex h-8 rounded-lg overflow-hidden">
-                  {(() => {
-                    const blocks: { phase: string; color: string; count: number }[] = [];
-                    for (const w of seasonPlan.plan_data) {
-                      const last = blocks[blocks.length - 1];
-                      if (last && last.phase === w.phase) last.count++;
-                      else blocks.push({ phase: w.phase, color: w.color, count: 1 });
+                {(() => {
+                  const weeks = seasonPlan.plan_data;
+                  const total = weeks.length;
+                  const blocks: { phase: string; color: string; count: number }[] = [];
+                  for (const w of weeks) {
+                    const last = blocks[blocks.length - 1];
+                    if (last && last.phase === w.phase) last.count++;
+                    else blocks.push({ phase: w.phase, color: w.color, count: 1 });
+                  }
+
+                  // Current position (red dot)
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const seasonStart = new Date(weeks[0].monday + "T00:00:00");
+                  const seasonEnd = new Date(weeks[total - 1].sunday + "T23:59:59");
+                  const totalDays = (seasonEnd.getTime() - seasonStart.getTime()) / 86400000;
+                  const elapsed = (today.getTime() - seasonStart.getTime()) / 86400000;
+                  const pct = Math.max(0, Math.min(100, (elapsed / totalDays) * 100));
+                  const isInSeason = today >= seasonStart && today <= seasonEnd;
+
+                  // Month labels along x-axis
+                  const months: { label: string; pct: number }[] = [];
+                  let prevMonth = -1;
+                  for (let i = 0; i < total; i++) {
+                    const d = new Date(weeks[i].monday + "T00:00:00");
+                    const m = d.getMonth();
+                    if (m !== prevMonth) {
+                      prevMonth = m;
+                      const dayOffset = (d.getTime() - seasonStart.getTime()) / 86400000;
+                      months.push({ label: d.toLocaleDateString("en-US", { month: "short" }), pct: (dayOffset / totalDays) * 100 });
                     }
-                    const total = seasonPlan.plan_data.length;
-                    return blocks.map((b, i) => {
-                      const bc = b.color?.startsWith("#") ? b.color : `#${b.color || "999"}`;
-                      return (
-                      <div
-                        key={i}
-                        style={{ width: `${(b.count / total) * 100}%`, backgroundColor: bc }}
-                        className="flex items-center justify-center text-[10px] font-semibold text-white overflow-hidden whitespace-nowrap px-1"
-                        title={`${b.phase} (${b.count} weeks)`}
-                      >
-                        {b.count >= 2 ? b.phase : ""}
+                  }
+
+                  return (
+                    <>
+                      <div className="relative">
+                        {/* Phase bar */}
+                        <div className="flex h-8 rounded-lg overflow-hidden">
+                          {blocks.map((b, i) => {
+                            const bc = b.color?.startsWith("#") ? b.color : `#${b.color || "999"}`;
+                            return (
+                              <div key={i} style={{ width: `${(b.count / total) * 100}%`, backgroundColor: bc }}
+                                className="flex items-center justify-center text-[10px] font-semibold text-white overflow-hidden whitespace-nowrap px-1"
+                                title={`${b.phase} (${b.count} weeks)`}>
+                                {b.count >= 2 ? b.phase : ""}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {/* Red "now" indicator */}
+                        {isInSeason && (
+                          <div className="absolute top-0 h-full flex flex-col items-center pointer-events-none" style={{ left: `${pct}%`, transform: "translateX(-50%)" }}>
+                            <div className="w-0.5 h-full bg-red-500" />
+                            <div className="absolute -top-1.5 w-3 h-3 rounded-full bg-red-500 border-2 border-white shadow-sm" />
+                          </div>
+                        )}
                       </div>
-                    );
-                    });
-                  })()}
-                </div>
+                      {/* Month axis */}
+                      <div className="relative h-4 mt-1">
+                        {months.map((m, i) => (
+                          <span key={i} className="absolute text-[10px] text-muted" style={{ left: `${m.pct}%` }}>{m.label}</span>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Main races */}
