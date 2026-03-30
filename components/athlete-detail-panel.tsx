@@ -1144,9 +1144,9 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                 if (allEvents.length === 0) return null;
 
                 const colorMap = {
-                  main:      { dot: "bg-red-500",    bg: "bg-red-50",     border: "border-red-200",    text: "text-red-600" },
-                  secondary: { dot: "bg-amber-500",  bg: "bg-amber-50",   border: "border-amber-200",  text: "text-amber-600" },
-                  camp:      { dot: "bg-blue-500",   bg: "bg-blue-50",    border: "border-blue-200",   text: "text-blue-600" },
+                  main:      { dot: "bg-red-500",     bg: "bg-red-50",      border: "border-red-300",     text: "text-red-600" },
+                  secondary: { dot: "bg-amber-500",   bg: "bg-amber-50",    border: "border-amber-300",   text: "text-amber-600" },
+                  camp:      { dot: "bg-emerald-500", bg: "bg-emerald-50",  border: "border-emerald-300", text: "text-emerald-600" },
                 };
                 const labelMap = { main: "Main Race", secondary: "Race", camp: "Camp" };
 
