@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, UserPlus, ChevronDown, ChevronRight, Loader2, Trash2, X, Pencil, Mail, ExternalLink, Copy, Check, Camera } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { createTeamAction, createAthleteAction, deleteTeamAction, deleteAthleteAction, updateAthleteAction, uploadAvatarAction, saveAvatarUrlAction } from "./actions";
+import { createTeamAction, createAthleteAction, deleteTeamAction, deleteAthleteAction, updateAthleteAction, uploadAvatarAction, saveAvatarUrlAction, renameTeamAction } from "./actions";
 import { getTeamColor } from "@/lib/team-colors";
 
 interface Team { id: string; name: string; ow_team_id?: string | null; }
@@ -302,6 +302,8 @@ export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontend
 
   const [error, setError] = useState<string | null>(null);
   const [confirmDeleteTeam, setConfirmDeleteTeam] = useState<{ id: string; name: string } | null>(null);
+  const [editingTeamName, setEditingTeamName] = useState<string | null>(null);
+  const [teamNameInput, setTeamNameInput] = useState("");
   const [deleteTeamInput, setDeleteTeamInput] = useState("");
   const [confirmDeleteAthlete, setConfirmDeleteAthlete] = useState<{ teamId: string; owUserId: string; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -419,16 +421,69 @@ export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontend
             <div key={team.id}>
               {/* Team header — light, prominent heading style */}
               <div className="flex items-center gap-3 pb-3 mb-5" style={{ borderBottom: `2px solid ${teamColor.border}` }}>
-                <button onClick={() => toggleTeam(team.id)} className="flex items-center gap-2 flex-1 min-w-0 text-left group">
-                  {expanded
-                    ? <ChevronDown className="h-4 w-4 text-muted shrink-0 group-hover:text-ink transition" />
-                    : <ChevronRight className="h-4 w-4 text-muted shrink-0 group-hover:text-ink transition" />}
-                  <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: teamColor.text }} />
-                  <span className="text-lg font-bold text-ink truncate">{team.name}</span>
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <button onClick={() => toggleTeam(team.id)} className="flex items-center gap-2 min-w-0 text-left group">
+                    {expanded
+                      ? <ChevronDown className="h-4 w-4 text-muted shrink-0 group-hover:text-ink transition" />
+                      : <ChevronRight className="h-4 w-4 text-muted shrink-0 group-hover:text-ink transition" />}
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: teamColor.text }} />
+                  </button>
+                  {editingTeamName === team.id ? (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        value={teamNameInput}
+                        onChange={(e) => setTeamNameInput(e.target.value)}
+                        onKeyDown={async (e) => {
+                          if (e.key === "Enter" && teamNameInput.trim()) {
+                            const result = await renameTeamAction(team.id, teamNameInput.trim());
+                            if (result.success) {
+                              setTeams(prev => prev.map(t => t.id === team.id ? { ...t, name: teamNameInput.trim() } : t));
+                              setEditingTeamName(null);
+                            }
+                          }
+                          if (e.key === "Escape") setEditingTeamName(null);
+                        }}
+                        autoFocus
+                        className="text-lg font-bold text-ink bg-transparent border-b-2 border-brand outline-none min-w-0 w-48"
+                      />
+                      <button
+                        onClick={async () => {
+                          if (!teamNameInput.trim()) return;
+                          const result = await renameTeamAction(team.id, teamNameInput.trim());
+                          if (result.success) {
+                            setTeams(prev => prev.map(t => t.id === team.id ? { ...t, name: teamNameInput.trim() } : t));
+                            setEditingTeamName(null);
+                          }
+                        }}
+                        className="p-1 rounded text-emerald-600 hover:bg-emerald-50 transition shrink-0"
+                        title="Save"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setEditingTeamName(null)}
+                        className="p-1 rounded text-muted hover:text-ink hover:bg-surfaceStrong transition shrink-0"
+                        title="Cancel"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => toggleTeam(team.id)} className="flex items-center gap-2 min-w-0 text-left group/name">
+                      <span className="text-lg font-bold text-ink truncate">{team.name}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditingTeamName(team.id); setTeamNameInput(team.name); }}
+                        className="opacity-0 group-hover/name:opacity-100 p-1 rounded text-muted hover:text-ink hover:bg-surfaceStrong transition shrink-0"
+                        title="Rename team"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    </button>
+                  )}
                   <span className="text-xs text-muted bg-zinc-100 rounded-full px-2.5 py-0.5 shrink-0">
                     {teamAthletes.length} {teamAthletes.length === 1 ? "athlete" : "athletes"}
                   </span>
-                </button>
+                </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={() => { setShowAddAthlete(addingHere ? null : team.id); setError(null); }}

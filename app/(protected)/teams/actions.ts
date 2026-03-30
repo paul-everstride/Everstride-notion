@@ -103,6 +103,28 @@ export async function createAthleteAction(
   }
 }
 
+export async function renameTeamAction(supabaseTeamId: string, newName: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await requireAuthenticatedUser();
+    const supabase = createSupabaseServiceClient();
+    if (!supabase) return { success: false, error: "DB not configured" };
+
+    const { error } = await supabase
+      .from("teams")
+      .update({ name: newName.trim() })
+      .eq("id", supabaseTeamId)
+      .eq("coach_id", user.id);
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/teams");
+    revalidateTag("dashboard-athletes");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+}
+
 export async function deleteTeamAction(supabaseTeamId: string): Promise<{ success: boolean; error?: string }> {
   try {
     const user = await requireAuthenticatedUser();

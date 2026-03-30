@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/lib/types";
-import { LayoutDashboard, ArrowLeftRight, Users, User, Eye, ChevronRight, LogOut, CalendarRange, ExternalLink } from "lucide-react";
+import { LayoutDashboard, ArrowLeftRight, Users, User, Eye, ChevronRight, LogOut, CalendarRange, ExternalLink, UserCog } from "lucide-react";
 
 /** Shield with bold horizontal slider lines — Team Settings icon readable at any size */
 function ShieldSettingsIcon({ size = 15 }: { size?: number }) {
@@ -139,8 +139,14 @@ export function Sidebar({ role, coachId, coachName }: { role: AppRole; coachId?:
       </nav>
 
       {/* Footer */}
-      <div className="px-3 py-3 border-t border-line space-y-1">
-        <p className="text-xs text-muted capitalize">{role}</p>
+      <div className="px-3 py-3 border-t border-line space-y-2">
+        <Link
+          href="/settings"
+          className="flex items-center gap-2 text-xs text-muted hover:text-ink hover:bg-surfaceStrong rounded-md px-1 py-1.5 transition-colors duration-100 -mx-1"
+        >
+          <UserCog size={13} className="shrink-0" />
+          <span className="truncate">{coachName || "Coach Settings"}</span>
+        </Link>
         <form action="/api/auth/logout" method="POST">
           <button
             type="submit"
