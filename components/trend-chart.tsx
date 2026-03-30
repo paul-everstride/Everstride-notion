@@ -13,7 +13,7 @@ import {
 
 type TrendPoint = {
   label: string;
-  value: number;
+  value: number | undefined;
 };
 
 type TrendChartProps = {
@@ -57,7 +57,7 @@ export function TrendChart({ data, state = "default", color = "#e16b2b" }: Trend
     );
   }
 
-  const values = data.map((d) => d.value);
+  const values = data.map((d) => d.value).filter((v): v is number => v != null);
   const [yMin, yMax] = computeDomain(values);
   const avg = values.length ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : 0;
   const latest = values[values.length - 1] ?? 0;
@@ -141,6 +141,7 @@ export function TrendChart({ data, state = "default", color = "#e16b2b" }: Trend
               fill={`url(#${gradientId})`}
               dot={{ r: 3, fill: color, stroke: "#ffffff", strokeWidth: 1.5 }}
               activeDot={{ r: 4.5, fill: color, stroke: "#ffffff", strokeWidth: 2 }}
+              connectNulls={false}
             />
           </AreaChart>
         </ResponsiveContainer>

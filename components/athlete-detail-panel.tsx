@@ -314,12 +314,11 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
       return { tickInterval, recovery: null, sleep: null, hrv: null, rhr: null, spo2: null, resp: null, sleepEff: null, ftp: null, vo2: null, power: null, tss: null, atl: null, ctl: null, tsb: null };
     }
 
-    /** Map a field from recoveryHistory to a TrendPoint array; returns null if no values */
+    /** Map a field from recoveryHistory to a TrendPoint array; keeps nulls to show gaps */
     const toTrend = (getValue: (d: RecoveryHistoryDay) => number | null): TrendPoint[] | null => {
-      const pts = filtered
-        .map(d => ({ label: d.shortLabel, value: getValue(d) }))
-        .filter((p): p is TrendPoint => p.value != null);
-      return pts.length > 0 ? pts : null;
+      const pts = filtered.map(d => ({ label: d.shortLabel, value: getValue(d) ?? undefined }));
+      const hasAny = pts.some(p => p.value != null);
+      return hasAny ? (pts as TrendPoint[]) : null;
     };
 
     return {

@@ -175,15 +175,25 @@ function toAthleteSummary(
   // Sleep records keyed by date so we can join per-day sleep data
   const sleepByDate = Object.fromEntries(sleep.map(s => [s.date, s]));
 
-  const allHistoryDates = Array.from(new Set([
+  // Build a continuous date range from earliest to latest data point (no gaps)
+  const rawDates = [
     ...ts_recovery.map(p => p.date),
     ...ts_rhr.map(p => p.date),
     ...ts_hrv.map(p => p.date),
     ...ts_spo2.map(p => p.date),
     ...ts_skin.map(p => p.date),
     ...ts_resp.map(p => p.date),
-    ...sleep.map(s => s.date),      // include all sleep dates too
-  ])).sort(); // ascending — oldest first
+    ...sleep.map(s => s.date),
+  ];
+  const allHistoryDates: string[] = [];
+  if (rawDates.length > 0) {
+    const sorted = rawDates.sort();
+    const start = new Date(sorted[0] + "T00:00:00");
+    const end = new Date(sorted[sorted.length - 1] + "T00:00:00");
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      allHistoryDates.push(d.toISOString().slice(0, 10));
+    }
+  }
 
   const recoveryHistory: RecoveryHistoryDay[] = allHistoryDates.map(date => {
     const s = sleepByDate[date];
