@@ -223,7 +223,7 @@ function SectionChart({ title, data, color, height = 200, sub, tickInterval = 0,
   const latest = data[data.length - 1]?.value ?? 0;
   const gid = `adg-${color.replace("#", "")}-${title.replace(/\s/g, "")}`;
   return (
-    <div className="border border-line rounded-lg bg-canvas overflow-hidden">
+    <div className="border border-line rounded-lg bg-canvas overflow-clip">
       <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
         <div>
           <span className="text-sm font-medium text-ink">{title}</span>
@@ -520,7 +520,7 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
           <Calendar size={13} />
           <input type="date" max={todayStr} value={selectedDate}
             onChange={e => setSelectedDate(e.target.value)}
-            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+            className="absolute right-0 top-0 opacity-0 w-full h-full cursor-pointer" />
         </label>
       </div>
     );
@@ -562,7 +562,7 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
           <SectionHeader title="Daily Readiness" sub="Wearable sync · morning calculation" controls={<DayNav />} />
 
           {/* Metrics strip */}
-          <div className="border border-line rounded-lg overflow-hidden">
+          <div className="border border-line rounded-lg overflow-clip">
             <div className="flex flex-wrap divide-x divide-line bg-canvas">
               <MetricPill label="Recovery"
                 value={dayVals.recovery != null ? String(dayVals.recovery) : "N/A"}
@@ -580,7 +580,7 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
           </div>
 
           {/* Sleep breakdown */}
-          <div className="border border-line rounded-lg overflow-hidden bg-canvas">
+          <div className="border border-line rounded-lg overflow-clip bg-canvas">
             <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
               <span className="text-sm font-medium text-ink">Sleep breakdown</span>
               <span className="text-xs text-muted">
@@ -847,7 +847,7 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                 </button>
               </div>
             </div>
-            <div className="border border-line rounded-lg overflow-hidden">
+            <div className="border border-line rounded-lg overflow-clip">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-line text-sm">
                   <thead className="bg-surface">
@@ -1014,7 +1014,7 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
               ],
             },
           ].map(section => (
-            <div key={section.title} className="border border-line rounded-lg overflow-hidden bg-canvas">
+            <div key={section.title} className="border border-line rounded-lg overflow-clip bg-canvas">
               <div className="border-b border-line px-4 py-2.5 bg-surface">
                 <span className="text-xs font-semibold text-muted uppercase tracking-wide">{section.title}</span>
               </div>
@@ -1097,7 +1097,7 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                     <>
                       <div className="relative">
                         {/* Phase bar */}
-                        <div className="flex h-8 rounded-lg overflow-hidden">
+                        <div className="flex h-8 rounded-lg overflow-clip">
                           {blocks.map((b, i) => {
                             const bc = b.color?.startsWith("#") ? b.color : `#${b.color || "999"}`;
                             return (
