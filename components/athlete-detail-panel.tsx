@@ -532,7 +532,7 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
         <h2 className="text-sm font-semibold text-ink">{title}</h2>
         {sub && <p className="text-xs text-muted mt-0.5">{sub}</p>}
       </div>
-      {controls && <div className="pr-10">{controls}</div>}
+      {controls && <div className="pr-52">{controls}</div>}
     </div>
   );
 
