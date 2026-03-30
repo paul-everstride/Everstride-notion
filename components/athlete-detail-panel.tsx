@@ -1088,22 +1088,43 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
               </div>
 
               {/* Main races */}
-              {seasonPlan.form_payload.mainRaces && seasonPlan.form_payload.mainRaces.length > 0 && (
+              {seasonPlan.form_payload.mainRaces && seasonPlan.form_payload.mainRaces.length > 0 && (() => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const nextRace = seasonPlan.form_payload.mainRaces
+                  .map(r => ({ ...r, dateObj: new Date(r.date + "T12:00:00Z") }))
+                  .filter(r => r.dateObj >= today)
+                  .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime())[0];
+                const daysUntil = nextRace ? Math.ceil((nextRace.dateObj.getTime() - today.getTime()) / 86400000) : null;
+
+                return (
                 <div className="rounded-xl border border-line bg-surface p-4">
-                  <p className="text-xs font-medium text-muted uppercase tracking-wider mb-3">Main Races</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-medium text-muted uppercase tracking-wider">Main Races</p>
+                    {nextRace && daysUntil != null && (
+                      <span className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-full px-2.5 py-0.5">
+                        {daysUntil === 0 ? "Race day!" : `${daysUntil} day${daysUntil === 1 ? "" : "s"} to ${nextRace.name}`}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-2">
-                    {seasonPlan.form_payload.mainRaces.map((r, i) => (
-                      <div key={i} className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
-                        <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                    {seasonPlan.form_payload.mainRaces.map((r, i) => {
+                      const rDate = new Date(r.date + "T12:00:00Z");
+                      const isPast = rDate < today;
+                      return (
+                      <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-1.5 ${isPast ? "bg-gray-50 border border-gray-200 opacity-60" : "bg-red-50 border border-red-200"}`}>
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${isPast ? "bg-gray-400" : "bg-red-500"}`} />
                         <span className="text-sm font-medium text-ink">{r.name}</span>
                         <span className="text-xs text-muted">
-                          {new Date(r.date + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          {rDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                         </span>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
-              )}
+                );
+              })()}
 
               {/* Week summary table */}
               <div className="rounded-xl border border-line bg-surface overflow-hidden">
