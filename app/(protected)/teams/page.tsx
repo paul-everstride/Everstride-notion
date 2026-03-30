@@ -1,6 +1,6 @@
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { owUpdateTeam, owGetTeamMembers } from "@/lib/ow-client";
+import { owUpdateTeam, owGetTeamMembers, owAddTeamMember } from "@/lib/ow-client";
 import { getDashboardData } from "@/lib/data";
 import { TeamsClient } from "./teams-client";
 
@@ -86,10 +86,14 @@ export default async function TeamsPage() {
                 avatar_url: supabaseRow?.avatar_url ?? null,
               };
             });
-            // Also include any Supabase-only athletes not found in OW (edge case)
+            // Sync Supabase-only athletes to OW team (keeps OW in sync with Everstride)
             const owIds = new Set(owMembers.map(m => m.id));
             for (const sa of supabaseAthletes) {
-              if (!owIds.has(sa.ow_user_id)) mergedAthletes.push(sa);
+              if (!owIds.has(sa.ow_user_id)) {
+                mergedAthletes.push(sa);
+                // Best-effort: add missing athlete to the OW team so dashboards stay in sync
+                owAddTeamMember(team.ow_team_id!, sa.ow_user_id).catch(() => {});
+              }
             }
           } catch {
             // OW unreachable — fall back to Supabase data only
