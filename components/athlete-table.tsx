@@ -186,12 +186,13 @@ export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns,
           </tr>
           {/* Column label row */}
           <tr className="bg-surface border-b border-line">
-            {activeColumns.map((col) => {
+            {activeColumns.map((col, i) => {
               const meta = groupMeta[col.group];
+              const isFirstInGroup = i === 0 || activeColumns[i - 1].group !== col.group;
               return (
                 <th
                   key={col.key}
-                  className={`px-4 py-2.5 font-medium text-xs text-muted whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"} ${meta.bgClass}`}
+                  className={`px-4 py-2.5 font-medium text-xs text-muted whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"} ${meta.bgClass} ${isFirstInGroup ? meta.borderClass : ""}`}
                 >
                   {col.label}
                 </th>
@@ -205,14 +206,18 @@ export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns,
               key={athlete.id}
               className="transition-colors duration-75 hover:bg-surface"
             >
-              {activeColumns.map((col) => (
-                <td
-                  key={`${athlete.id}-${col.key}`}
-                  className={`px-4 py-2.5 text-ink whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"}`}
-                >
-                  {col.render(athlete)}
-                </td>
-              ))}
+              {activeColumns.map((col, i) => {
+                const isFirstInGroup = i === 0 || activeColumns[i - 1].group !== col.group;
+                const meta = groupMeta[col.group];
+                return (
+                  <td
+                    key={`${athlete.id}-${col.key}`}
+                    className={`px-4 py-2.5 text-ink whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"} ${isFirstInGroup ? meta.borderClass : ""}`}
+                  >
+                    {col.render(athlete)}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>
