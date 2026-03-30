@@ -120,9 +120,9 @@ const columnDefinitions: ColumnDefinition[] = [
 ];
 
 const groupMeta = {
-  Athlete:     { textClass: "text-muted",  bgClass: "", borderClass: "" },
-  Readiness:   { textClass: "text-blue",   bgClass: "bg-blue-50/50", borderClass: "border-l-2 border-l-blue-400" },
-  Performance: { textClass: "text-brand",  bgClass: "bg-orange-50/50", borderClass: "border-l-2 border-l-orange-400" },
+  Athlete:     { textClass: "text-muted",  bgClass: "" },
+  Readiness:   { textClass: "text-blue",   bgClass: "bg-blue-50/50" },
+  Performance: { textClass: "text-brand",  bgClass: "bg-orange-50/50" },
 } as const;
 
 export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns, columnOrder, state = "default" }: AthleteTableProps) {
@@ -177,7 +177,7 @@ export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns,
                 <th
                   key={group}
                   colSpan={count}
-                  className={`px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider border-b border-line ${meta.textClass} ${meta.bgClass} ${meta.borderClass}`}
+                  className={`px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider border-b border-line ${meta.textClass} ${meta.bgClass}`}
                 >
                   {group}
                 </th>
@@ -186,13 +186,12 @@ export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns,
           </tr>
           {/* Column label row */}
           <tr className="bg-surface border-b border-line">
-            {activeColumns.map((col, i) => {
+            {activeColumns.map((col) => {
               const meta = groupMeta[col.group];
-              const isFirstInGroup = i === 0 || activeColumns[i - 1].group !== col.group;
               return (
                 <th
                   key={col.key}
-                  className={`px-4 py-2.5 font-medium text-xs text-muted whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"} ${meta.bgClass} ${isFirstInGroup ? meta.borderClass : ""}`}
+                  className={`px-4 py-2.5 font-medium text-xs text-muted whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"} ${meta.bgClass}`}
                 >
                   {col.label}
                 </th>
@@ -206,18 +205,14 @@ export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns,
               key={athlete.id}
               className="transition-colors duration-75 hover:bg-surface"
             >
-              {activeColumns.map((col, i) => {
-                const isFirstInGroup = i === 0 || activeColumns[i - 1].group !== col.group;
-                const meta = groupMeta[col.group];
-                return (
-                  <td
-                    key={`${athlete.id}-${col.key}`}
-                    className={`px-4 py-2.5 text-ink whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"} ${isFirstInGroup ? meta.borderClass : ""}`}
-                  >
-                    {col.render(athlete)}
-                  </td>
-                );
-              })}
+              {activeColumns.map((col) => (
+                <td
+                  key={`${athlete.id}-${col.key}`}
+                  className={`px-4 py-2.5 text-ink whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"}`}
+                >
+                  {col.render(athlete)}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>
