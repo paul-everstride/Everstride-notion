@@ -849,8 +849,13 @@ function EditorPanel({
                           <button
                             type="button"
                             onClick={() => toggleKey(item.key)}
-                            className={cn("text-xs ml-2 font-medium shrink-0", active ? "text-brand" : "text-muted/50")}>
-                            {active ? "On" : "Off"}
+                            className="ml-2 shrink-0 w-8 h-[18px] rounded-full transition-colors duration-150 relative"
+                            style={{ backgroundColor: active ? "var(--brand, #e16b2b)" : "#d4d4d8" }}
+                          >
+                            <span
+                              className="absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform duration-150"
+                              style={{ left: active ? "calc(100% - 16px)" : "2px" }}
+                            />
                           </button>
                         )}
                       </div>
@@ -966,15 +971,10 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
               {dashboard.athletes.length} athletes · Sync live
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted">
-              Next event: <span className="text-ink font-medium">Apr 18, 2026 · Girona Camp</span>
-            </span>
-            <Link href="/compare"
-              className="text-sm font-medium text-brand hover:text-brandInk transition-colors duration-100">
-              Compare →
-            </Link>
-          </div>
+          <Link href="/compare"
+            className="text-sm font-medium text-brand hover:text-brandInk transition-colors duration-100">
+            Compare →
+          </Link>
         </div>
 
         {/* Team stats strip */}

@@ -120,9 +120,9 @@ const columnDefinitions: ColumnDefinition[] = [
 ];
 
 const groupMeta = {
-  Athlete:     { textClass: "text-muted" },
-  Readiness:   { textClass: "text-blue" },
-  Performance: { textClass: "text-brand" }
+  Athlete:     { textClass: "text-muted",  bgClass: "", borderClass: "" },
+  Readiness:   { textClass: "text-blue",   bgClass: "bg-blue-50/50", borderClass: "border-l-2 border-l-blue-400" },
+  Performance: { textClass: "text-brand",  bgClass: "bg-orange-50/50", borderClass: "border-l-2 border-l-orange-400" },
 } as const;
 
 export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns, columnOrder, state = "default" }: AthleteTableProps) {
@@ -177,7 +177,7 @@ export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns,
                 <th
                   key={group}
                   colSpan={count}
-                  className={`px-4 py-2 text-left text-xs font-medium border-b border-line ${meta.textClass}`}
+                  className={`px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider border-b border-line ${meta.textClass} ${meta.bgClass} ${meta.borderClass}`}
                 >
                   {group}
                 </th>
@@ -186,14 +186,17 @@ export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns,
           </tr>
           {/* Column label row */}
           <tr className="bg-surface border-b border-line">
-            {activeColumns.map((col) => (
-              <th
-                key={col.key}
-                className={`px-4 py-2.5 font-medium text-xs text-muted whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"}`}
-              >
-                {col.label}
-              </th>
-            ))}
+            {activeColumns.map((col) => {
+              const meta = groupMeta[col.group];
+              return (
+                <th
+                  key={col.key}
+                  className={`px-4 py-2.5 font-medium text-xs text-muted whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"} ${meta.bgClass}`}
+                >
+                  {col.label}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody className="divide-y divide-line bg-canvas">
