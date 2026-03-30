@@ -505,6 +505,12 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
 
     return (
       <div className="flex items-center gap-2">
+        <label className="relative flex items-center justify-center w-7 h-7 rounded-md border border-line text-muted hover:text-ink hover:bg-surfaceStrong transition-colors cursor-pointer">
+          <Calendar size={13} />
+          <input type="date" max={todayStr} value={selectedDate}
+            onChange={e => setSelectedDate(e.target.value)}
+            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+        </label>
         <div className="inline-flex items-center border border-line rounded-md overflow-hidden">
           <button type="button" onClick={() => setSelectedDate(prevStr)}
             className="px-2 py-1.5 text-xs text-muted hover:text-ink hover:bg-surfaceStrong border-r border-line transition-colors">‹</button>
@@ -516,12 +522,6 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
             className={cn("px-2 py-1.5 text-xs border-l border-line transition-colors",
               atToday ? "text-muted opacity-30 cursor-not-allowed" : "text-muted hover:text-ink hover:bg-surfaceStrong")}>›</button>
         </div>
-        <label className="relative flex items-center justify-center w-7 h-7 rounded-md border border-line text-muted hover:text-ink hover:bg-surfaceStrong transition-colors cursor-pointer">
-          <Calendar size={13} />
-          <input type="date" max={todayStr} value={selectedDate}
-            onChange={e => setSelectedDate(e.target.value)}
-            className="absolute right-0 top-0 opacity-0 w-full h-full cursor-pointer" />
-        </label>
       </div>
     );
   };
@@ -532,7 +532,7 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
         <h2 className="text-sm font-semibold text-ink">{title}</h2>
         {sub && <p className="text-xs text-muted mt-0.5">{sub}</p>}
       </div>
-      {controls && <div className="pr-52">{controls}</div>}
+      {controls}
     </div>
   );
 
