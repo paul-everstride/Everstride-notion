@@ -1070,16 +1070,19 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                       else blocks.push({ phase: w.phase, color: w.color, count: 1 });
                     }
                     const total = seasonPlan.plan_data.length;
-                    return blocks.map((b, i) => (
+                    return blocks.map((b, i) => {
+                      const bc = b.color?.startsWith("#") ? b.color : `#${b.color || "999"}`;
+                      return (
                       <div
                         key={i}
-                        style={{ width: `${(b.count / total) * 100}%`, backgroundColor: b.color }}
+                        style={{ width: `${(b.count / total) * 100}%`, backgroundColor: bc }}
                         className="flex items-center justify-center text-[10px] font-semibold text-white overflow-hidden whitespace-nowrap px-1"
                         title={`${b.phase} (${b.count} weeks)`}
                       >
                         {b.count >= 2 ? b.phase : ""}
                       </div>
-                    ));
+                    );
+                    });
                   })()}
                 </div>
               </div>
@@ -1116,14 +1119,16 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                     </tr>
                   </thead>
                   <tbody>
-                    {seasonPlan.plan_data.map((w) => (
-                      <tr key={w.week} className="border-b border-line last:border-0 transition-colors" style={{ backgroundColor: `color-mix(in srgb, ${w.color} 12%, transparent)` }}>
-                        <td className="px-3 py-1.5 tabular text-muted" style={{ borderLeft: `3px solid ${w.color}` }}>{w.week}</td>
+                    {seasonPlan.plan_data.map((w) => {
+                      const c = w.color?.startsWith("#") ? w.color : `#${w.color || "999"}`;
+                      return (
+                      <tr key={w.week} className="border-b border-line last:border-0 transition-colors" style={{ backgroundColor: `color-mix(in srgb, ${c} 12%, transparent)` }}>
+                        <td className="px-3 py-1.5 tabular text-muted" style={{ borderLeft: `3px solid ${c}` }}>{w.week}</td>
                         <td className="px-3 py-1.5 text-xs text-muted">{w.weekRangeShort}</td>
                         <td className="px-3 py-1.5">
                           <span className="inline-flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: w.color }} />
-                            <span className="text-xs font-medium" style={{ color: w.color }}>{w.phase}</span>
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c }} />
+                            <span className="text-xs font-medium" style={{ color: c }}>{w.phase}</span>
                           </span>
                         </td>
                         <td className="px-3 py-1.5 text-center">
@@ -1136,7 +1141,8 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                           {[...(w.races || []), ...(w.trainingCamps || []), ...(w.tests || [])].join(", ") || "—"}
                         </td>
                       </tr>
-                    ))}
+                    );
+                    })}
                   </tbody>
                 </table>
               </div>
