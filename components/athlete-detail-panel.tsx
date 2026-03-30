@@ -1203,11 +1203,22 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                     </tr>
                   </thead>
                   <tbody>
-                    {seasonPlan.plan_data.map((w) => {
+                    {(() => {
+                      const nowDate = new Date();
+                      nowDate.setHours(0, 0, 0, 0);
+                      return seasonPlan.plan_data.map((w) => {
                       const c = w.color?.startsWith("#") ? w.color : `#${w.color || "999"}`;
+                      const weekStart = new Date(w.monday + "T00:00:00");
+                      const weekEnd = new Date(w.sunday + "T23:59:59");
+                      const isCurrent = nowDate >= weekStart && nowDate <= weekEnd;
                       return (
-                      <tr key={w.week} className="border-b border-line last:border-0 transition-colors" style={{ backgroundColor: `color-mix(in srgb, ${c} 12%, transparent)` }}>
-                        <td className="px-3 py-1.5 tabular text-muted" style={{ borderLeft: `3px solid ${c}` }}>{w.week}</td>
+                      <tr key={w.week} className={`border-b border-line last:border-0 transition-colors ${isCurrent ? "ring-1 ring-red-400 ring-inset" : ""}`} style={{ backgroundColor: `color-mix(in srgb, ${c} 12%, transparent)` }}>
+                        <td className="px-3 py-1.5 tabular text-muted" style={{ borderLeft: `3px solid ${c}` }}>
+                          <span className="inline-flex items-center gap-1.5">
+                            {isCurrent && <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />}
+                            {w.week}
+                          </span>
+                        </td>
                         <td className="px-3 py-1.5 text-xs text-muted">{w.weekRangeShort}</td>
                         <td className="px-3 py-1.5">
                           <span className="inline-flex items-center gap-1.5">
@@ -1241,7 +1252,8 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                         </td>
                       </tr>
                     );
-                    })}
+                    });
+                    })()}
                   </tbody>
                 </table>
               </div>
