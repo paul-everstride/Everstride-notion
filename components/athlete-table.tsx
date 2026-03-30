@@ -10,8 +10,12 @@ export type AthleteColumnKey =
   | "team"
   | "recovery"
   | "sleep"
+  | "sleepEfficiency"
   | "rhr"
   | "hrv"
+  | "spo2"
+  | "resp"
+  | "skinTemp"
   | "atl"
   | "ctl"
   | "tsb"
@@ -31,26 +35,13 @@ type ColumnDefinition = {
   key: AthleteColumnKey;
   group: "Athlete" | "Readiness" | "Performance";
   label: string;
-  align?: "right";
   render: (athlete: AthleteSummary) => React.ReactNode;
 };
 
 export const defaultAthleteColumns: AthleteColumnKey[] = [
-  "name",
-  "age",
-  "weight",
-  "team",
-  "recovery",
-  "sleep",
-  "rhr",
-  "hrv",
-  "atl",
-  "ctl",
-  "tsb",
-  "vo2",
-  "ftp",
-  "polarized",
-  "powerMax"
+  "name", "age", "weight", "team",
+  "recovery", "sleep", "sleepEfficiency", "rhr", "hrv", "spo2", "resp", "skinTemp",
+  "atl", "ctl", "tsb", "vo2", "ftp", "polarized", "powerMax"
 ];
 
 function RecoveryCell({ score }: { score: number | null }) {
@@ -71,6 +62,13 @@ function TsbCell({ value }: { value: number | null }) {
   return <span className="text-muted tabular">0</span>;
 }
 
+function Val({ v, unit }: { v: number | null | undefined; unit?: string }) {
+  if (v == null) return <span className="text-muted tabular">—</span>;
+  return <span className="tabular">{v}{unit ?? ""}</span>;
+}
+
+const COL_W = 80; // uniform width for all metric columns
+
 const columnDefinitions: ColumnDefinition[] = [
   {
     key: "name",
@@ -79,8 +77,8 @@ const columnDefinitions: ColumnDefinition[] = [
     render: (athlete) => {
       const initials = athlete.name.split(" ").map((w: string) => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
       return (
-        <div className="flex items-center justify-between gap-3 min-w-[180px]">
-          <div className="flex items-center gap-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
             {athlete.avatarUrl ? (
               <img src={athlete.avatarUrl} alt={athlete.name} className="w-8 h-8 rounded-full object-cover shrink-0 border border-line" loading="eager" fetchPriority="high" />
             ) : (
@@ -88,9 +86,9 @@ const columnDefinitions: ColumnDefinition[] = [
                 <span className="text-[10px] font-semibold text-muted">{initials}</span>
               </div>
             )}
-            <div>
-              <p className="m-0 font-medium text-ink text-sm">{athlete.name}</p>
-              <p className="mt-0.5 text-xs text-muted truncate max-w-[120px]">{athlete.email ?? "—"}</p>
+            <div className="min-w-0">
+              <p className="m-0 font-medium text-ink text-sm truncate">{athlete.name}</p>
+              <p className="mt-0.5 text-xs text-muted truncate">{athlete.email ?? "—"}</p>
             </div>
           </div>
           <Link
@@ -103,20 +101,24 @@ const columnDefinitions: ColumnDefinition[] = [
       );
     }
   },
-  { key: "age",      group: "Athlete",      label: "Age",     align: "right", render: (a) => <span className="tabular">{a.age ?? "—"}</span> },
-  { key: "weight",   group: "Athlete",      label: "Wt (kg)", align: "right", render: (a) => <span className="tabular">{formatWeight(a.weightKg)}</span> },
-  { key: "team",     group: "Athlete",      label: "Team",    render: (a) => <span className="text-muted text-xs">{a.team}</span> },
-  { key: "recovery", group: "Readiness",    label: "REC",     render: (a) => <RecoveryCell score={a.recoveryScore} /> },
-  { key: "sleep",    group: "Readiness",    label: "SLP",     align: "right", render: (a) => <span className="tabular">{a.sleepScore != null ? a.sleepScore : "—"}</span> },
-  { key: "rhr",      group: "Readiness",    label: "RHR",     align: "right", render: (a) => <span className="tabular">{a.restHr != null ? a.restHr : "—"}</span> },
-  { key: "hrv",      group: "Readiness",    label: "HRV",     align: "right", render: (a) => <span className="tabular">{a.hrv != null ? a.hrv : "—"}</span> },
-  { key: "atl",      group: "Performance",  label: "ATL",     render: (a) => <span className="tabular">{a.atl != null ? a.atl : "—"}</span> },
-  { key: "ctl",      group: "Performance",  label: "CTL",     align: "right", render: (a) => <span className="tabular">{a.ctl != null ? a.ctl : "—"}</span> },
-  { key: "tsb",      group: "Performance",  label: "TSB",     align: "right", render: (a) => <TsbCell value={a.tsb} /> },
-  { key: "vo2",      group: "Performance",  label: "VO2",     align: "right", render: (a) => <span className="tabular">{a.vo2Max != null ? a.vo2Max : "—"}</span> },
-  { key: "ftp",      group: "Performance",  label: "FTP",     align: "right", render: (a) => <span className="tabular">{a.ftp != null ? `${a.ftp}w` : "—"}</span> },
-  { key: "polarized",group: "Performance",  label: "Zones",   render: (a) => <PolarizedBar zones={a.polarizedZones} compact /> },
-  { key: "powerMax", group: "Performance",  label: "Pwr Max", align: "right", render: (a) => <span className="tabular">{a.powerMax != null ? `${a.powerMax}w` : "—"}</span> }
+  { key: "age",             group: "Athlete",      label: "Age",       render: (a) => <Val v={a.age} /> },
+  { key: "weight",          group: "Athlete",      label: "Wt (kg)",   render: (a) => <span className="tabular">{formatWeight(a.weightKg)}</span> },
+  { key: "team",            group: "Athlete",      label: "Team",      render: (a) => <span className="text-muted text-xs truncate">{a.team}</span> },
+  { key: "recovery",        group: "Readiness",    label: "REC",       render: (a) => <RecoveryCell score={a.recoveryScore} /> },
+  { key: "sleep",           group: "Readiness",    label: "SLP",       render: (a) => <Val v={a.sleepScore} /> },
+  { key: "sleepEfficiency", group: "Readiness",    label: "Eff%",      render: (a) => <Val v={a.sleepEfficiency} unit="%" /> },
+  { key: "rhr",             group: "Readiness",    label: "RHR",       render: (a) => <Val v={a.restHr} /> },
+  { key: "hrv",             group: "Readiness",    label: "HRV",       render: (a) => <Val v={a.hrv} /> },
+  { key: "spo2",            group: "Readiness",    label: "SpO₂",      render: (a) => <Val v={a.spo2} unit="%" /> },
+  { key: "resp",            group: "Readiness",    label: "Resp",      render: (a) => <Val v={a.respirationRate} /> },
+  { key: "skinTemp",        group: "Readiness",    label: "Skin °C",   render: (a) => <Val v={a.skinTemp} unit="°" /> },
+  { key: "atl",             group: "Performance",  label: "ATL",       render: (a) => <Val v={a.atl} /> },
+  { key: "ctl",             group: "Performance",  label: "CTL",       render: (a) => <Val v={a.ctl} /> },
+  { key: "tsb",             group: "Performance",  label: "TSB",       render: (a) => <TsbCell value={a.tsb} /> },
+  { key: "vo2",             group: "Performance",  label: "VO2",       render: (a) => <Val v={a.vo2Max} /> },
+  { key: "ftp",             group: "Performance",  label: "FTP",       render: (a) => <Val v={a.ftp} unit="w" /> },
+  { key: "polarized",       group: "Performance",  label: "Zones",     render: (a) => <PolarizedBar zones={a.polarizedZones} compact /> },
+  { key: "powerMax",        group: "Performance",  label: "Pwr Max",   render: (a) => <Val v={a.powerMax} unit="w" /> },
 ];
 
 const groupMeta = {
@@ -165,7 +167,12 @@ export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns,
 
   return (
     <div className="overflow-x-auto border border-line rounded-lg">
-      <table className="w-full divide-y divide-line text-sm">
+      <table className="divide-y divide-line text-sm" style={{ minWidth: "100%" }}>
+        <colgroup>
+          {activeColumns.map((col) => (
+            <col key={col.key} style={{ width: col.key === "name" ? 220 : col.key === "team" ? 110 : COL_W }} />
+          ))}
+        </colgroup>
         {/* Group header row */}
         <thead>
           <tr className="bg-surface">
@@ -177,7 +184,7 @@ export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns,
                 <th
                   key={group}
                   colSpan={count}
-                  className={`px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider border-b border-line ${meta.textClass} ${meta.bgClass}`}
+                  className={`px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider border-b border-line ${meta.textClass} ${meta.bgClass}`}
                 >
                   {group}
                 </th>
@@ -191,7 +198,7 @@ export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns,
               return (
                 <th
                   key={col.key}
-                  className={`px-4 py-2.5 font-medium text-xs text-muted whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"} ${meta.bgClass}`}
+                  className={`px-3 py-2 font-medium text-xs text-muted whitespace-nowrap text-left ${meta.bgClass}`}
                 >
                   {col.label}
                 </th>
@@ -208,7 +215,7 @@ export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns,
               {activeColumns.map((col) => (
                 <td
                   key={`${athlete.id}-${col.key}`}
-                  className={`px-4 py-2.5 text-ink whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"}`}
+                  className="px-3 py-2.5 text-ink whitespace-nowrap text-left"
                 >
                   {col.render(athlete)}
                 </td>

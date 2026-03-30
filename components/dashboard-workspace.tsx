@@ -29,21 +29,25 @@ import { DashboardSectionBg } from "@/components/photo-accents";
 // ── Column config ──────────────────────────────────────────────────────────────
 
 const columnOptions: Array<{ key: AthleteColumnKey; label: string }> = [
-  { key: "name",      label: "Name"       },
-  { key: "age",       label: "Age"        },
-  { key: "weight",    label: "Weight"     },
-  { key: "team",      label: "Team"       },
-  { key: "recovery",  label: "Recovery"   },
-  { key: "sleep",     label: "Sleep"      },
-  { key: "rhr",       label: "RHR"        },
-  { key: "hrv",       label: "HRV"        },
-  { key: "atl",       label: "ATL"        },
-  { key: "ctl",       label: "CTL"        },
-  { key: "tsb",       label: "TSB"        },
-  { key: "vo2",       label: "VO2 max"    },
-  { key: "ftp",       label: "FTP"        },
-  { key: "polarized", label: "Polarized"  },
-  { key: "powerMax",  label: "Power max"  }
+  { key: "name",            label: "Name"             },
+  { key: "age",             label: "Age"              },
+  { key: "weight",          label: "Weight"           },
+  { key: "team",            label: "Team"             },
+  { key: "recovery",        label: "Recovery"         },
+  { key: "sleep",           label: "Sleep"            },
+  { key: "sleepEfficiency", label: "Sleep Efficiency" },
+  { key: "rhr",             label: "RHR"              },
+  { key: "hrv",             label: "HRV"              },
+  { key: "spo2",            label: "SpO₂"             },
+  { key: "resp",            label: "Resp Rate"        },
+  { key: "skinTemp",        label: "Skin Temp"        },
+  { key: "atl",             label: "ATL"              },
+  { key: "ctl",             label: "CTL"              },
+  { key: "tsb",             label: "TSB"              },
+  { key: "vo2",             label: "VO2 max"          },
+  { key: "ftp",             label: "FTP"              },
+  { key: "polarized",       label: "Polarized"        },
+  { key: "powerMax",        label: "Power max"        },
 ];
 
 // ── Stat strip cell ───────────────────────────────────────────────────────────
@@ -731,7 +735,8 @@ function EditorPanel({
     // Since columnDefinitions is not exported, we reconstruct group info here using columnOptions
     const groupMap: Record<AthleteColumnKey, ColGroup> = {
       name: "Athlete", age: "Athlete", weight: "Athlete", team: "Athlete",
-      recovery: "Readiness", sleep: "Readiness", rhr: "Readiness", hrv: "Readiness",
+      recovery: "Readiness", sleep: "Readiness", sleepEfficiency: "Readiness",
+      rhr: "Readiness", hrv: "Readiness", spo2: "Readiness", resp: "Readiness", skinTemp: "Readiness",
       atl: "Performance", ctl: "Performance", tsb: "Performance",
       vo2: "Performance", ftp: "Performance", polarized: "Performance", powerMax: "Performance",
     };
