@@ -1117,8 +1117,8 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                   </thead>
                   <tbody>
                     {seasonPlan.plan_data.map((w) => (
-                      <tr key={w.week} className="border-b border-line last:border-0 transition-colors" style={{ backgroundColor: `${w.color}15` }}>
-                        <td className="px-3 py-1.5 tabular text-muted">{w.week}</td>
+                      <tr key={w.week} className="border-b border-line last:border-0 transition-colors" style={{ backgroundColor: `color-mix(in srgb, ${w.color} 12%, transparent)` }}>
+                        <td className="px-3 py-1.5 tabular text-muted" style={{ borderLeft: `3px solid ${w.color}` }}>{w.week}</td>
                         <td className="px-3 py-1.5 text-xs text-muted">{w.weekRangeShort}</td>
                         <td className="px-3 py-1.5">
                           <span className="inline-flex items-center gap-1.5">
