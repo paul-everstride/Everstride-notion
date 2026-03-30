@@ -258,7 +258,7 @@ export async function owCreateUser(payload: {
 }
 
 /** Update a team's coach_email (used to backfill existing teams). */
-export async function owUpdateTeam(teamId: string, update: { coach_email?: string }): Promise<void> {
+export async function owUpdateTeam(teamId: string, update: { name?: string; coach_email?: string }): Promise<void> {
   const res = await fetch(`${OW_API_URL}/api/v1/teams/${teamId}`, {
     method: "PATCH",
     headers: { "X-Open-Wearables-API-Key": OW_API_KEY, "Content-Type": "application/json" },

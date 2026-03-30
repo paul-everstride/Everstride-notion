@@ -2,7 +2,7 @@
 
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
-import { owCreateTeam, owGetTeams, owCreateUser, owAddTeamMember, owDeleteTeam, owDeleteUser, owUpdateUser } from "@/lib/ow-client";
+import { owCreateTeam, owGetTeams, owCreateUser, owAddTeamMember, owDeleteTeam, owDeleteUser, owUpdateUser, owUpdateTeam } from "@/lib/ow-client";
 import { sendPairingEmail } from "@/lib/email";
 import { revalidatePath, revalidateTag } from "next/cache";
 
@@ -109,13 +109,28 @@ export async function renameTeamAction(supabaseTeamId: string, newName: string):
     const supabase = createSupabaseServiceClient();
     if (!supabase) return { success: false, error: "DB not configured" };
 
+    const trimmed = newName.trim();
+
+    // Get OW team ID so we can sync the name there too
+    const { data: team } = await supabase
+      .from("teams")
+      .select("ow_team_id")
+      .eq("id", supabaseTeamId)
+      .eq("coach_id", user.id)
+      .single();
+
     const { error } = await supabase
       .from("teams")
-      .update({ name: newName.trim() })
+      .update({ name: trimmed })
       .eq("id", supabaseTeamId)
       .eq("coach_id", user.id);
 
     if (error) return { success: false, error: error.message };
+
+    // Sync name to OW dashboard (best-effort)
+    if (team?.ow_team_id) {
+      owUpdateTeam(team.ow_team_id, { name: trimmed }).catch(() => {});
+    }
 
     revalidatePath("/teams");
     revalidateTag("dashboard-athletes");
