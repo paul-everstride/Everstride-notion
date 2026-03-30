@@ -477,7 +477,7 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
         ))}
       </div>
       {timeframe === "custom" && (
-        <div className="inline-flex items-center gap-2 border border-line rounded-md px-3 py-1.5 bg-canvas mr-56">
+        <div className="inline-flex items-center gap-2 border border-line rounded-md px-3 py-1.5 bg-canvas mr-16">
           <span className="text-xs text-muted">From</span>
           <input type="date" value={customStart} max={customEnd}
             onChange={e => setCustomStart(e.target.value)}
