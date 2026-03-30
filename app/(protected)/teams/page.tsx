@@ -1,6 +1,6 @@
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { owUpdateTeam, owGetTeamMembers, owAddTeamMember } from "@/lib/ow-client";
+import { owUpdateTeam, owGetTeams, owGetTeamMembers, owAddTeamMember, owDeleteTeam } from "@/lib/ow-client";
 import { getDashboardData } from "@/lib/data";
 import { TeamsClient } from "./teams-client";
 
@@ -25,13 +25,25 @@ export default async function TeamsPage() {
 
     teams = teamsData ?? [];
 
-    // Backfill coach_email on OW teams that were created before this field existed
+    // Backfill coach_email on OW teams and sync names
     if (teams.length > 0 && user.email) {
       await Promise.allSettled(
         teams
           .filter(t => t.ow_team_id)
-          .map(t => owUpdateTeam(t.ow_team_id!, { coach_email: user.email! }))
+          .map(t => owUpdateTeam(t.ow_team_id!, { name: t.name, coach_email: user.email! }))
       );
+    }
+
+    // Clean up stale OW teams that no longer exist in Supabase for this coach
+    if (user.email) {
+      const validOwTeamIds = new Set(teams.filter(t => t.ow_team_id).map(t => t.ow_team_id));
+      try {
+        const allOwTeams = await owGetTeams();
+        const staleTeams = allOwTeams.filter(
+          t => t.coach_email === user.email && !validOwTeamIds.has(t.id)
+        );
+        await Promise.allSettled(staleTeams.map(t => owDeleteTeam(t.id)));
+      } catch { /* best-effort cleanup */ }
     }
 
     if (teams.length > 0) {

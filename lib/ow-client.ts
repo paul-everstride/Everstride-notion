@@ -20,6 +20,7 @@ export interface OWUser {
 export interface OWTeam {
   id: string;
   name: string;
+  coach_email: string | null;
   created_at: string;
 }
 
