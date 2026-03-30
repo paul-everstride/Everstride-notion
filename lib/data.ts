@@ -100,7 +100,8 @@ function toAthleteSummary(
   sleep: OWSleepSummary[],
   body: OWBodySummary | null,
   timeseries: Record<string, OWTimeseriesPoint[]>,
-  avatarUrl: string | null = null
+  avatarUrl: string | null = null,
+  teamName: string | null = null
 ): AthleteSummary {
   const latestSleep = sleep[0] ?? null;
 
@@ -299,7 +300,7 @@ function toAthleteSummary(
     age,
     weightKg,
     heightCm,
-    team: "Everstride",
+    team: teamName ?? "—",
     recoveryScore,
     sleepScore,
     restHr,
@@ -415,20 +416,38 @@ async function fetchAthletesFromOW(userIds: string[]): Promise<DashboardData> {
 
   if (!filtered.length) return emptyDashboard;
 
-  // Fetch avatar URLs from Supabase for all athletes in one query
+  // Fetch avatar URLs and team names from Supabase for all athletes
   const avatarMap = new Map<string, string | null>();
+  const teamNameMap = new Map<string, string>();
   const supabase = createSupabaseServiceClient();
   if (supabase) {
     const { data: avatarRows, error: avatarErr } = await supabase
       .from("team_athletes")
-      .select("ow_user_id, avatar_url")
+      .select("ow_user_id, avatar_url, team_id")
       .in("ow_user_id", filtered.map(u => u.id));
     if (avatarErr) {
-      // Column likely missing — run supabase-migration.sql in Supabase SQL editor
       console.error("[data.ts] avatar_url fetch failed:", avatarErr.message);
     }
-    for (const row of avatarRows ?? []) {
-      if (row.ow_user_id) avatarMap.set(row.ow_user_id, row.avatar_url ?? null);
+    // Build team ID → name lookup
+    const teamIds = [...new Set((avatarRows ?? []).map(r => r.team_id).filter(Boolean))];
+    if (teamIds.length > 0) {
+      const { data: teamRows } = await supabase
+        .from("teams")
+        .select("id, name")
+        .in("id", teamIds);
+      const teamIdToName = new Map((teamRows ?? []).map((t: { id: string; name: string }) => [t.id, t.name]));
+      for (const row of avatarRows ?? []) {
+        if (row.ow_user_id) {
+          avatarMap.set(row.ow_user_id, row.avatar_url ?? null);
+          if (row.team_id && teamIdToName.has(row.team_id)) {
+            teamNameMap.set(row.ow_user_id, teamIdToName.get(row.team_id)!);
+          }
+        }
+      }
+    } else {
+      for (const row of avatarRows ?? []) {
+        if (row.ow_user_id) avatarMap.set(row.ow_user_id, row.avatar_url ?? null);
+      }
     }
   }
 
@@ -447,7 +466,8 @@ async function fetchAthletesFromOW(userIds: string[]): Promise<DashboardData> {
             user.id, user.first_name, user.last_name,
             user.email, user.created_at,
             recovery, sleep, body, timeseries,
-            avatarMap.get(user.id) ?? null
+            avatarMap.get(user.id) ?? null,
+            teamNameMap.get(user.id) ?? null
           );
         } catch { return null; }
       })
