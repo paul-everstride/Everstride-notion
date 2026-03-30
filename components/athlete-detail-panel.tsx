@@ -1153,10 +1153,25 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                           </span>
                         </td>
                         <td className="px-3 py-1.5 text-center">
-                          <span className="text-xs tabular">{w.volume}/5</span>
+                          <span className="inline-flex gap-0.5">
+                            {Array.from({ length: 5 }, (_, i) => (
+                              <span key={i} className={`w-3 h-3 rounded-[2px] border ${i < w.volume ? "border-ink/40 bg-ink/70" : "border-line bg-transparent"}`} />
+                            ))}
+                          </span>
                         </td>
                         <td className="px-3 py-1.5 text-center">
-                          <span className="text-xs tabular">{w.intensity}/5</span>
+                          <span className="inline-flex gap-0.5">
+                            {Array.from({ length: 5 }, (_, i) => (
+                              <span key={i} className={`w-3 h-3 rounded-[2px] border relative ${i < w.intensity ? "border-ink/40" : "border-line"}`}>
+                                {i < w.intensity && (
+                                  <svg className="absolute inset-0 w-full h-full text-ink/70" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                    <line x1="2" y1="2" x2="10" y2="10" />
+                                    <line x1="10" y1="2" x2="2" y2="10" />
+                                  </svg>
+                                )}
+                              </span>
+                            ))}
+                          </span>
                         </td>
                         <td className="px-3 py-1.5 text-xs text-muted truncate max-w-[200px]">
                           {[...(w.races || []), ...(w.trainingCamps || []), ...(w.tests || [])].join(", ") || "—"}
