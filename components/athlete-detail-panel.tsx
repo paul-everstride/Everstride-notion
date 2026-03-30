@@ -1117,13 +1117,13 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                   </thead>
                   <tbody>
                     {seasonPlan.plan_data.map((w) => (
-                      <tr key={w.week} className="border-b border-line last:border-0 hover:bg-surfaceStrong/30 transition-colors">
+                      <tr key={w.week} className="border-b border-line last:border-0 transition-colors" style={{ backgroundColor: `${w.color}15` }}>
                         <td className="px-3 py-1.5 tabular text-muted">{w.week}</td>
                         <td className="px-3 py-1.5 text-xs text-muted">{w.weekRangeShort}</td>
                         <td className="px-3 py-1.5">
                           <span className="inline-flex items-center gap-1.5">
                             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: w.color }} />
-                            <span className="text-xs font-medium">{w.phase}</span>
+                            <span className="text-xs font-medium" style={{ color: w.color }}>{w.phase}</span>
                           </span>
                         </td>
                         <td className="px-3 py-1.5 text-center">
