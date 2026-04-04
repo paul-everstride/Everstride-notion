@@ -349,27 +349,62 @@ const DEFAULT_QUICK_KEYS = ["highest_recovery", "highest_tss", "lowest_rhr", "lo
 
 // ── Attention monitor config ──────────────────────────────────────────────────
 
-type AttentionMetricKey = "recovery" | "hrv" | "rhr" | "sleep" | "spo2";
+type AttentionMetricKey = "recovery" | "hrv" | "rhr" | "sleep" | "spo2" | "fatigue" | "overload" | "ftp_drop";
 
 const ATTENTION_METRIC_OPTIONS: { key: AttentionMetricKey; label: string; description: string }[] = [
-  { key: "recovery", label: "Recovery score", description: "Flag if score < 60"   },
-  { key: "hrv",      label: "HRV",            description: "Flag if HRV < 50 ms"  },
-  { key: "rhr",      label: "Resting HR",     description: "Flag if RHR > 65 bpm" },
-  { key: "sleep",    label: "Sleep score",    description: "Flag if score < 60"   },
-  { key: "spo2",     label: "SpO₂",           description: "Flag if < 95%"        },
+  { key: "recovery",  label: "Recovery score", description: "Flag if score < 60"              },
+  { key: "hrv",       label: "HRV",            description: "Flag if HRV < 50 ms"             },
+  { key: "rhr",       label: "Resting HR",     description: "Flag if RHR > 65 bpm"            },
+  { key: "sleep",     label: "Sleep score",    description: "Flag if score < 60"              },
+  { key: "spo2",      label: "SpO₂",           description: "Flag if < 95%"                   },
+  { key: "fatigue",   label: "High fatigue",   description: "Flag if TSB < −25 (overreaching)" },
+  { key: "overload",  label: "Overload risk",  description: "Flag if ATL / CTL > 1.4"         },
+  { key: "ftp_drop",  label: "FTP decline",    description: "Flag if FTP trending down"       },
 ];
 
-const DEFAULT_ATTENTION_METRICS: AttentionMetricKey[] = ["recovery"];
+const DEFAULT_ATTENTION_METRICS: AttentionMetricKey[] = ["recovery", "fatigue", "overload"];
+
+type AttentionFlag = { key: AttentionMetricKey; label: string; detail: string };
+
+function getAthleteFlags(a: AthleteSummary, metrics: AttentionMetricKey[]): AttentionFlag[] {
+  const flags: AttentionFlag[] = [];
+  for (const m of metrics) {
+    if (m === "recovery" && a.recoveryScore != null && a.recoveryScore < 60) {
+      flags.push({ key: m, label: "Low recovery", detail: `${a.recoveryScore}%` });
+    }
+    if (m === "hrv" && a.hrv != null && a.hrv < 50) {
+      flags.push({ key: m, label: "Low HRV", detail: `${a.hrv} ms` });
+    }
+    if (m === "rhr" && a.restHr != null && a.restHr > 65) {
+      flags.push({ key: m, label: "Elevated RHR", detail: `${a.restHr} bpm` });
+    }
+    if (m === "sleep" && a.sleepScore != null && a.sleepScore < 60) {
+      flags.push({ key: m, label: "Poor sleep", detail: `${a.sleepScore}` });
+    }
+    if (m === "spo2" && a.spo2 != null && a.spo2 < 95) {
+      flags.push({ key: m, label: "Low SpO₂", detail: `${a.spo2}%` });
+    }
+    if (m === "fatigue" && a.tsb != null && a.tsb < -25) {
+      flags.push({ key: m, label: "Overreaching", detail: `TSB ${a.tsb}` });
+    }
+    if (m === "overload" && a.atl != null && a.ctl != null && a.ctl > 0 && (a.atl / a.ctl) > 1.4) {
+      flags.push({ key: m, label: "Overload risk", detail: `ATL/CTL ${(a.atl / a.ctl).toFixed(1)}` });
+    }
+    if (m === "ftp_drop" && a.ftpTrend.length >= 14) {
+      const recent = a.ftpTrend.slice(-7);
+      const prior = a.ftpTrend.slice(-14, -7);
+      const avgRecent = recent.reduce((s, p) => s + p.value, 0) / recent.length;
+      const avgPrior = prior.reduce((s, p) => s + p.value, 0) / prior.length;
+      if (avgPrior > 0 && avgRecent < avgPrior * 0.95) {
+        flags.push({ key: m, label: "FTP declining", detail: `${Math.round(avgRecent)}w → ${Math.round(avgPrior)}w` });
+      }
+    }
+  }
+  return flags;
+}
 
 function athleteNeedsAttention(a: AthleteSummary, metrics: AttentionMetricKey[]): boolean {
-  return metrics.some(m => {
-    if (m === "recovery") return a.recoveryScore != null && a.recoveryScore < 60;
-    if (m === "hrv")      return a.hrv != null && a.hrv < 50;
-    if (m === "rhr")      return a.restHr != null && a.restHr > 65;
-    if (m === "sleep")    return a.sleepScore != null && a.sleepScore < 60;
-    if (m === "spo2")     return a.spo2 != null && a.spo2 < 95;
-    return false;
-  });
+  return getAthleteFlags(a, metrics).length > 0;
 }
 
 // ── AI summary config ─────────────────────────────────────────────────────────
@@ -564,7 +599,7 @@ function QuickMetricsPicker({
 
 // ── Attention Monitor ─────────────────────────────────────────────────────────
 
-function AttentionMonitor({ athletes }: { athletes: AthleteSummary[] }) {
+function AttentionMonitor({ athletes, metrics }: { athletes: AthleteSummary[]; metrics: AttentionMetricKey[] }) {
   const count = athletes.length;
   const allClear = count === 0;
 
@@ -601,24 +636,33 @@ function AttentionMonitor({ athletes }: { athletes: AthleteSummary[] }) {
             <p className="text-xs text-muted mt-1">No flags raised</p>
           </div>
         ) : (
-          athletes.map((athlete, i) => (
-            <Link
-              key={athlete.id}
-              href={`/athletes/${athlete.id}`}
-              className="group flex items-center gap-3 px-4 py-2.5 border-b border-line last:border-0 hover:bg-surface transition-colors duration-100"
-            >
-              <span className="text-xs text-muted w-5 tabular shrink-0">{i + 1}.</span>
-              <span className="flex-1 text-sm font-medium text-ink group-hover:text-brand transition-colors duration-100">
-                {athlete.name}
-              </span>
-              <span className="text-xs tabular text-muted mr-2">
-                REC {athlete.recoveryScore ?? "N/A"}
-              </span>
-              {athlete.recoveryScore != null
-                ? <RecoveryBadge score={athlete.recoveryScore} />
-                : <span className="text-xs text-muted">N/A</span>}
-            </Link>
-          ))
+          athletes.map((athlete, i) => {
+            const flags = getAthleteFlags(athlete, metrics);
+            return (
+              <Link
+                key={athlete.id}
+                href={`/athletes/${athlete.id}`}
+                className="group flex items-start gap-3 px-4 py-2.5 border-b border-line last:border-0 hover:bg-surface transition-colors duration-100"
+              >
+                <span className="text-xs text-muted w-5 tabular shrink-0 pt-0.5">{i + 1}.</span>
+                <span className="flex-1 min-w-0">
+                  <span className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-ink group-hover:text-brand transition-colors duration-100">
+                      {athlete.name}
+                    </span>
+                    {athlete.recoveryScore != null && <RecoveryBadge score={athlete.recoveryScore} />}
+                  </span>
+                  <span className="flex flex-wrap gap-1 mt-1">
+                    {flags.map(f => (
+                      <span key={f.key} className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-dangerSoft text-danger border border-danger/10">
+                        {f.label} <span className="text-danger/60">{f.detail}</span>
+                      </span>
+                    ))}
+                  </span>
+                </span>
+              </Link>
+            );
+          })
         )}
       </div>
 
@@ -636,39 +680,76 @@ function AttentionMonitor({ athletes }: { athletes: AthleteSummary[] }) {
 
 // ── AI Summary ────────────────────────────────────────────────────────────────
 
-function AiSummaryCard({ data, summaryMetrics }: { data: DashboardData; summaryMetrics: SummaryMetricKey[] }) {
-  const flagCount = data.attentionAthletes.length;
-  const atlAthletes = data.athletes.filter(a => a.atl != null);
-  const ctlAthletes = data.athletes.filter(a => a.ctl != null);
-  const ftpAthletes = data.athletes.filter(a => a.ftp != null);
-  const vo2Athletes = data.athletes.filter(a => a.vo2Max != null);
-  const avgAtl = atlAthletes.length ? Math.round(atlAthletes.reduce((s, a) => s + (a.atl ?? 0), 0) / atlAthletes.length) : null;
-  const avgCtl = ctlAthletes.length ? Math.round(ctlAthletes.reduce((s, a) => s + (a.ctl ?? 0), 0) / ctlAthletes.length) : null;
-  const avgFtp = ftpAthletes.length ? Math.round(ftpAthletes.reduce((s, a) => s + (a.ftp ?? 0), 0) / ftpAthletes.length) : null;
-  const avgVo2 = vo2Athletes.length ? Math.round(vo2Athletes.reduce((s, a) => s + (a.vo2Max ?? 0), 0) / vo2Athletes.length) : null;
+function AiSummaryCard({ data, summaryMetrics, attentionMetrics }: { data: DashboardData; summaryMetrics: SummaryMetricKey[]; attentionMetrics: AttentionMetricKey[] }) {
+  const insight = useMemo(() => {
+    const athletes = data.athletes;
+    const avg = (arr: (number | null)[]) => {
+      const valid = arr.filter((v): v is number => v != null);
+      return valid.length ? Math.round(valid.reduce((s, v) => s + v, 0) / valid.length) : null;
+    };
 
-  const sentences: string[] = [];
-  if (summaryMetrics.includes("recovery")) {
-    if (data.teamAverageRecovery > 0) {
-      const ok = data.teamAverageRecovery >= 70;
-      sentences.push(ok
-        ? `Team recovery is strong at ${data.teamAverageRecovery}.`
-        : `Team recovery is below target at ${data.teamAverageRecovery} — consider reducing load.`);
+    const avgRec = avg(athletes.map(a => a.recoveryScore));
+    const avgSlp = avg(athletes.map(a => a.sleepScore));
+    const avgHrv = avg(athletes.map(a => a.hrv));
+    const avgAtl = avg(athletes.map(a => a.atl));
+    const avgCtl = avg(athletes.map(a => a.ctl));
+    const avgTsb = avg(athletes.map(a => a.tsb));
+    const avgFtp = avg(athletes.map(a => a.ftp));
+
+    // Find most concerning and best athletes
+    const flagged = athletes.filter(a => athleteNeedsAttention(a, attentionMetrics));
+    const greenAthletes = athletes.filter(a => (a.recoveryScore ?? 0) >= 70);
+    const worstAthlete = [...athletes].sort((a, b) => (a.recoveryScore ?? 100) - (b.recoveryScore ?? 100))[0];
+    const bestAthlete = [...athletes].sort((a, b) => (b.recoveryScore ?? 0) - (a.recoveryScore ?? 0))[0];
+    const overreaching = athletes.filter(a => a.tsb != null && a.tsb < -25);
+    const freshAthletes = athletes.filter(a => a.tsb != null && a.tsb > 0);
+
+    // ── 1. Current Status ──
+    let status = "";
+    if (summaryMetrics.includes("recovery") && avgRec != null) {
+      if (avgRec >= 75) status = `Team readiness is strong at ${avgRec}% with ${greenAthletes.length} of ${athletes.length} athletes in the green.`;
+      else if (avgRec >= 60) status = `Team readiness is moderate at ${avgRec}% — ${greenAthletes.length} athletes in green, ${flagged.length} flagged.`;
+      else status = `Team readiness is low at ${avgRec}% — ${flagged.length} of ${athletes.length} athletes need attention.`;
     } else {
-      sentences.push("Team recovery data not yet available.");
+      status = `${athletes.length} athletes tracked. ${flagged.length} flagged for attention.`;
     }
-  }
-  if (summaryMetrics.includes("flagCount")) {
-    sentences.push(flagCount > 0
-      ? `${flagCount} athlete${flagCount > 1 ? "s" : ""} flagged for attention.`
-      : "No athletes flagged.");
-  }
-  if (summaryMetrics.includes("hrv"))  sentences.push(data.teamAverageHrv > 0 ? `Team HRV avg ${data.teamAverageHrv} ms.` : "Team HRV data not yet available.");
-  if (summaryMetrics.includes("sleep")) sentences.push(`Team sleep avg ${data.teamAverageSleep}.`);
-  if (summaryMetrics.includes("atl"))  sentences.push(avgAtl != null ? `Team ATL avg ${avgAtl}.` : "Team ATL data not yet available.");
-  if (summaryMetrics.includes("ctl"))  sentences.push(avgCtl != null ? `Team CTL avg ${avgCtl}.` : "Team CTL data not yet available.");
-  if (summaryMetrics.includes("ftp"))  sentences.push(avgFtp != null ? `Team FTP avg ${avgFtp}w.` : "Team FTP data not yet available.");
-  if (summaryMetrics.includes("vo2"))  sentences.push(avgVo2 != null ? `Team VO2 avg ${avgVo2}.` : "Team VO2 data not yet available.");
+
+    // ── 2. Key Insight ──
+    let keyInsight = "";
+    // Priority: overreaching > low recovery individual > load imbalance > positive
+    if (overreaching.length > 0 && (summaryMetrics.includes("atl") || summaryMetrics.includes("ctl"))) {
+      const names = overreaching.map(a => a.name.split(" ")[0]).join(", ");
+      keyInsight = `${names} ${overreaching.length > 1 ? "are" : "is"} overreaching (TSB below −25) — fatigue has accumulated beyond safe levels.`;
+    } else if (worstAthlete && (worstAthlete.recoveryScore ?? 100) < 40 && summaryMetrics.includes("recovery")) {
+      keyInsight = `${worstAthlete.name.split(" ")[0]} is at ${worstAthlete.recoveryScore}% recovery${worstAthlete.sleepScore != null && worstAthlete.sleepScore < 60 ? ` with poor sleep (${worstAthlete.sleepScore})` : ""} — this is the primary concern today.`;
+    } else if (avgAtl != null && avgCtl != null && avgCtl > 0 && avgAtl / avgCtl > 1.3 && summaryMetrics.includes("atl")) {
+      keyInsight = `Team acute load (${avgAtl}) is running ${Math.round((avgAtl / avgCtl - 1) * 100)}% above chronic load (${avgCtl}) — risk of cumulative overload.`;
+    } else if (freshAthletes.length >= athletes.length / 2 && summaryMetrics.includes("recovery")) {
+      keyInsight = `${freshAthletes.length} athletes have positive form (TSB > 0) — the squad is fresh and can absorb higher training stress.`;
+    } else if (summaryMetrics.includes("hrv") && avgHrv != null) {
+      keyInsight = `Team HRV averages ${avgHrv} ms${avgSlp != null ? ` with sleep quality at ${avgSlp}` : ""}.`;
+    } else if (summaryMetrics.includes("ftp") && avgFtp != null) {
+      keyInsight = `Team FTP averages ${avgFtp}w across the squad.`;
+    }
+
+    // ── 3. Suggested Action ──
+    let action = "";
+    if (overreaching.length > 0) {
+      action = `Reduce load for ${overreaching.map(a => a.name.split(" ")[0]).join(" and ")} — consider active recovery or a deload day.`;
+    } else if (flagged.length > 0 && worstAthlete && (worstAthlete.recoveryScore ?? 100) < 50) {
+      action = `Prioritize recovery check-in with ${worstAthlete.name.split(" ")[0]} before today's session.`;
+    } else if (avgAtl != null && avgCtl != null && avgCtl > 0 && avgAtl / avgCtl > 1.3) {
+      action = "Consider a lighter session today to let chronic fitness catch up with acute load.";
+    } else if (freshAthletes.length >= athletes.length / 2) {
+      action = "Good window for a quality session — most athletes have capacity to absorb load.";
+    } else if (flagged.length > 0) {
+      action = `Monitor ${flagged.map(a => a.name.split(" ")[0]).join(", ")} closely and adjust intensity as needed.`;
+    } else {
+      action = "Squad is tracking well. Continue current training plan.";
+    }
+
+    return { status, keyInsight, action, flaggedCount: flagged.length };
+  }, [data, summaryMetrics, attentionMetrics]);
 
   return (
     <div className="border border-warning/20 rounded-lg flex flex-col flex-1 overflow-hidden bg-canvas">
@@ -678,16 +759,21 @@ function AiSummaryCard({ data, summaryMetrics }: { data: DashboardData; summaryM
         <span className="text-xs text-muted bg-surface rounded-full px-2.5 py-0.5">Coach view</span>
       </div>
 
-      <div className="px-4 py-3 flex-1">
-        {sentences.length > 0 ? (
-          <p className="text-sm text-ink leading-6">{sentences.join(" ")}</p>
-        ) : (
-          <p className="text-sm text-muted italic">No metrics selected.</p>
+      <div className="px-4 py-3 flex-1 space-y-2">
+        {/* Status */}
+        <p className="text-sm text-ink leading-relaxed">{insight.status}</p>
+        {/* Key insight */}
+        {insight.keyInsight && (
+          <p className="text-sm text-ink leading-relaxed">
+            <span className="font-semibold text-warning">Insight:</span> {insight.keyInsight}
+          </p>
         )}
-        <p className="text-xs text-muted leading-5 mt-2">
-          Squad split between green athletes and reduced-load candidates.
-          Filters and compare active.
-        </p>
+        {/* Suggested action */}
+        {insight.action && (
+          <p className="text-sm text-ink leading-relaxed">
+            <span className="font-semibold text-brand">Action:</span> {insight.action}
+          </p>
+        )}
       </div>
 
       <div className="border-t border-line grid grid-cols-2">
@@ -1067,7 +1153,7 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
                 Edit
               </button>
             </div>
-            <AttentionMonitor athletes={configuredAttentionAthletes} />
+            <AttentionMonitor athletes={configuredAttentionAthletes} metrics={attentionMetrics} />
           </div>
 
           {/* AI summary */}
@@ -1080,7 +1166,7 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
                 Edit
               </button>
             </div>
-            <AiSummaryCard data={dashboard} summaryMetrics={summaryMetrics} />
+            <AiSummaryCard data={dashboard} summaryMetrics={summaryMetrics} attentionMetrics={attentionMetrics} />
           </div>
 
           </div>
