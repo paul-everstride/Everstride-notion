@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useRef } from "react";
 import {
-  Area, AreaChart, CartesianGrid, ReferenceLine,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart,
+  Pie, PieChart, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { Calendar, SlidersHorizontal, X } from "lucide-react";
@@ -936,12 +937,24 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
       {tab === "performance" && (
         <div className="px-6 py-5 space-y-5">
           <SectionHeader title="Performance" sub="FTP · VO2 max · Power" />
-          <div className="border border-line rounded-lg bg-canvas px-6 py-8 flex flex-col items-center justify-center text-center gap-2">
-            <p className="text-sm font-medium text-ink">Performance metrics not available</p>
-            <p className="text-sm text-muted max-w-md">
-              Performance metrics (FTP, VO2 max, power) require a power meter connection. Coming soon.
-            </p>
+          {/* Metric pills */}
+          <div className="flex border border-line rounded-lg bg-canvas overflow-clip divide-x divide-line">
+            <MetricPill label="FTP" value={athlete.ftp != null ? `${athlete.ftp}w` : "–"} sub="Functional threshold" accent="#e16b2b" />
+            <MetricPill label="VO2 max" value={athlete.vo2Max != null ? `${athlete.vo2Max}` : "–"} sub="ml/kg/min" accent="#2563eb" />
+            <MetricPill label="Power max" value={athlete.powerMax != null ? `${athlete.powerMax}w` : "–"} sub="Peak power" accent="#7c3aed" />
           </div>
+          {/* FTP trend */}
+          {athlete.ftpTrend.length > 0 && (
+            <SectionChart title="FTP" data={athlete.ftpTrend} color="#e16b2b" sub="watts · 30-day trend" tickInterval={4} />
+          )}
+          {/* VO2 max trend */}
+          {athlete.vo2MaxTrend.length > 0 && (
+            <SectionChart title="VO2 max" data={athlete.vo2MaxTrend} color="#2563eb" sub="ml/kg/min · 30-day trend" tickInterval={4} />
+          )}
+          {/* Power trend */}
+          {athlete.powerTrend.length > 0 && (
+            <SectionChart title="Power max" data={athlete.powerTrend} color="#7c3aed" sub="watts · 30-day trend" tickInterval={4} />
+          )}
         </div>
       )}
 
@@ -949,25 +962,146 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
       {tab === "load" && (
         <div className="px-6 py-5 space-y-5">
           <SectionHeader title="Training Load" sub="ATL · CTL · TSB · form" />
-          <div className="border border-line rounded-lg bg-canvas px-6 py-8 flex flex-col items-center justify-center text-center gap-2">
-            <p className="text-sm font-medium text-ink">Training load metrics not available</p>
-            <p className="text-sm text-muted max-w-md">
-              Training load metrics require recovery score data. Coming soon.
-            </p>
+          {/* Metric pills */}
+          <div className="flex border border-line rounded-lg bg-canvas overflow-clip divide-x divide-line">
+            <MetricPill label="TSS" value={athlete.tss != null ? `${athlete.tss}` : "–"} sub="Today's stress score" accent="#e16b2b" />
+            <MetricPill label="ATL (Fatigue)" value={athlete.atl != null ? `${athlete.atl}` : "–"} sub="7-day acute load" accent="#ef4444" />
+            <MetricPill label="CTL (Fitness)" value={athlete.ctl != null ? `${athlete.ctl}` : "–"} sub="42-day chronic load" accent="#2563eb" />
+            <MetricPill label="TSB (Form)" value={athlete.tsb != null ? formatSignedNumber(athlete.tsb) : "–"}
+              sub={athlete.tsb != null ? (athlete.tsb > 5 ? "Fresh — ready to race" : athlete.tsb > -10 ? "Optimal — sharp" : athlete.tsb > -30 ? "Tired — building fitness" : "Overreaching — needs rest") : ""}
+              accent={athlete.tsb != null ? (athlete.tsb > 5 ? "#16a34a" : athlete.tsb > -10 ? "#2563eb" : athlete.tsb > -30 ? "#d97706" : "#ef4444") : undefined} />
           </div>
+          {/* PMC Chart — ATL, CTL, TSB overlaid */}
+          {athlete.atlTrend.length > 0 && athlete.ctlTrend.length > 0 && athlete.tsbTrend.length > 0 && (() => {
+            const pmcData = athlete.atlTrend.map((pt, i) => ({
+              label: pt.label,
+              atl: pt.value,
+              ctl: athlete.ctlTrend[i]?.value ?? 0,
+              tsb: athlete.tsbTrend[i]?.value ?? 0,
+            }));
+            const allVals = pmcData.flatMap(d => [d.atl, d.ctl, d.tsb]);
+            const yMin = Math.floor(Math.min(...allVals) - 10);
+            const yMax = Math.ceil(Math.max(...allVals) + 10);
+            return (
+              <div className="border border-line rounded-lg bg-canvas overflow-clip">
+                <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+                  <div>
+                    <span className="text-sm font-medium text-ink">Performance Management Chart</span>
+                    <span className="text-xs text-muted ml-2">30-day view</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1 text-[10px] text-muted"><span className="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block" /> ATL</span>
+                    <span className="flex items-center gap-1 text-[10px] text-muted"><span className="w-2.5 h-2.5 rounded-sm bg-blue-600 inline-block" /> CTL</span>
+                    <span className="flex items-center gap-1 text-[10px] text-muted"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> TSB</span>
+                  </div>
+                </div>
+                <div style={{ height: 240 }} className="px-1 pt-2 pb-1">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={pmcData} margin={{ top: 4, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid vertical={false} stroke="#e9e9e7" />
+                      <XAxis dataKey="label" interval={4} tickLine={false} axisLine={false} tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }} />
+                      <YAxis domain={[yMin, yMax]} tickCount={5} tickLine={false} axisLine={false} tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }} width={32} />
+                      <ReferenceLine y={0} stroke="#9b9a97" strokeDasharray="4 3" strokeWidth={1} />
+                      <Tooltip contentStyle={TS} labelStyle={TL} />
+                      <Line type="monotone" dataKey="atl" name="ATL" stroke="#ef4444" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="ctl" name="CTL" stroke="#2563eb" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="tsb" name="TSB" stroke="#16a34a" strokeWidth={2} dot={false} strokeDasharray="6 3" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            );
+          })()}
+          {/* TSS trend */}
+          {athlete.tssTrend.length > 0 && (
+            <SectionChart title="Training Stress Score" data={athlete.tssTrend} color="#e16b2b" sub="daily TSS · 30-day trend" tickInterval={4} />
+          )}
         </div>
       )}
 
       {/* ── POWER ── */}
       {tab === "power" && (
         <div className="px-6 py-5 space-y-5">
-          <SectionHeader title="Power Profile" sub="Curve · hexagon · trend" />
-          <div className="border border-line rounded-lg bg-canvas px-6 py-8 flex flex-col items-center justify-center text-center gap-2">
-            <p className="text-sm font-medium text-ink">Power data not available</p>
-            <p className="text-sm text-muted max-w-md">
-              Power data requires a power meter. Coming soon.
-            </p>
+          <SectionHeader title="Power Profile" sub="Curve · zones · trend" />
+          {/* Power curve bar chart */}
+          {athlete.powerCurve.length > 0 && (
+            <div className="border border-line rounded-lg bg-canvas overflow-clip">
+              <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+                <div>
+                  <span className="text-sm font-medium text-ink">Power Curve</span>
+                  <span className="text-xs text-muted ml-2">peak watts by duration</span>
+                </div>
+                <span className="text-[10px] text-muted">Max <span className="font-semibold text-ink ml-0.5">{athlete.powerMax}w</span></span>
+              </div>
+              <div style={{ height: 220 }} className="px-4 pt-3 pb-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={athlete.powerCurve} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+                    <CartesianGrid vertical={false} stroke="#e9e9e7" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "#9b9a97", fontSize: 11, fontFamily: "inherit" }} />
+                    <YAxis tickLine={false} axisLine={false} tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }} width={36} />
+                    <Tooltip contentStyle={TS} labelStyle={TL} formatter={(v: number) => [`${v}w`, "Power"]} />
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={48}>
+                      {athlete.powerCurve.map((_, i) => (
+                        <Cell key={i} fill={i === 0 ? "#e16b2b" : `rgba(225, 107, 43, ${0.85 - i * 0.12})`} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+          {/* Polarized zones + Power max pill */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="border border-line rounded-lg bg-canvas p-4">
+              <p className="text-xs font-medium text-muted uppercase tracking-wider mb-3">Training Zones</p>
+              <div className="flex items-center gap-4">
+                <div style={{ width: 120, height: 120 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: "Low", value: athlete.polarizedZones.low },
+                          { name: "Moderate", value: athlete.polarizedZones.moderate },
+                          { name: "High", value: athlete.polarizedZones.high },
+                        ]}
+                        cx="50%" cy="50%" innerRadius={30} outerRadius={50} paddingAngle={2} dataKey="value" strokeWidth={0}
+                      >
+                        <Cell fill="#3b82f6" />
+                        <Cell fill="#f59e0b" />
+                        <Cell fill="#ef4444" />
+                      </Pie>
+                      <Tooltip contentStyle={TS} formatter={(v: number) => [`${v}%`, ""]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex flex-col gap-2 text-sm">
+                  <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-blue-500" /><span className="text-muted">Low</span><span className="font-semibold text-ink ml-auto">{athlete.polarizedZones.low}%</span></div>
+                  <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-amber-500" /><span className="text-muted">Moderate</span><span className="font-semibold text-ink ml-auto">{athlete.polarizedZones.moderate}%</span></div>
+                  <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-red-500" /><span className="text-muted">High</span><span className="font-semibold text-ink ml-auto">{athlete.polarizedZones.high}%</span></div>
+                </div>
+              </div>
+              {athlete.polarizedZones.moderate > 15 && (
+                <p className="text-[11px] text-amber-600 mt-3 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                  High moderate-zone time — consider more polarized distribution
+                </p>
+              )}
+            </div>
+            <div className="border border-line rounded-lg bg-canvas p-4 flex flex-col justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted uppercase tracking-wider mb-2">Power Summary</p>
+                <div className="space-y-2.5">
+                  <div className="flex justify-between"><span className="text-sm text-muted">Peak power</span><span className="text-sm font-semibold text-ink">{athlete.powerMax}w</span></div>
+                  <div className="flex justify-between"><span className="text-sm text-muted">FTP</span><span className="text-sm font-semibold text-ink">{athlete.ftp}w</span></div>
+                  <div className="flex justify-between"><span className="text-sm text-muted">W/kg (FTP)</span><span className="text-sm font-semibold text-ink">{athlete.weightKg ? (athlete.ftp! / athlete.weightKg).toFixed(2) : "–"}</span></div>
+                  <div className="flex justify-between"><span className="text-sm text-muted">5-min power</span><span className="text-sm font-semibold text-ink">{athlete.powerCurve[3]?.value ?? "–"}w</span></div>
+                </div>
+              </div>
+            </div>
           </div>
+          {/* Power trend */}
+          {athlete.powerTrend.length > 0 && (
+            <SectionChart title="Power Trend" data={athlete.powerTrend} color="#e16b2b" sub="peak watts · 30-day trend" tickInterval={4} />
+          )}
         </div>
       )}
 

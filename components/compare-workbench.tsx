@@ -308,6 +308,14 @@ function readinessSeries(historyField: keyof RecoveryHistoryDay, trendKey: keyof
   };
 }
 
+/** Simple trend series — returns the pre-generated trend array for a given key */
+function trendSeries(trendKey: keyof AthleteSummary) {
+  return (athlete: AthleteSummary, _timeframe: string): TrendPoint[] => {
+    const data = athlete[trendKey] as TrendPoint[] | undefined;
+    return data ?? [];
+  };
+}
+
 // ── Metric definitions ────────────────────────────────────────────────────────
 
 const readinessMetrics: CompareMetric[] = [
@@ -318,13 +326,13 @@ const readinessMetrics: CompareMetric[] = [
 ];
 
 const perfSnapshotMetrics: CompareMetric[] = [
-  { key: "power",          label: "Power max",        unit: "w",  baseValue: (a) => a.powerMax ?? 0,         getSeries: () => [], renderCurrent: (a) => a.powerMax != null ? `${a.powerMax}w` : "N/A" },
-  { key: "ftp",            label: "FTP",              unit: "w",  baseValue: (a) => a.ftp ?? 0,              getSeries: () => [], renderCurrent: (a) => a.ftp != null ? `${a.ftp}w` : "N/A" },
-  { key: "vo2",            label: "VO2 max",          unit: "",   baseValue: (a) => a.vo2Max ?? 0,           getSeries: () => [], renderCurrent: (a) => a.vo2Max != null ? `${a.vo2Max}` : "N/A" },
-  { key: "tss",            label: "TSS",              unit: "",   baseValue: (a) => a.tss ?? 0,              getSeries: () => [], renderCurrent: (a) => a.tss != null ? `${a.tss}` : "N/A" },
-  { key: "balance",        label: "TSB",              unit: "",   baseValue: (a) => Math.abs(a.tsb ?? 0)+10, getSeries: () => [], renderCurrent: (a) => a.tsb != null ? formatSignedNumber(a.tsb) : "N/A" },
-  { key: "atl",            label: "ATL",              unit: "",   baseValue: (a) => a.atl ?? 0,              getSeries: () => [], renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
-  { key: "ctl",            label: "CTL",              unit: "",   baseValue: (a) => a.ctl ?? 0,              getSeries: () => [], renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
+  { key: "power",          label: "Power max",        unit: "w",  baseValue: (a) => a.powerMax ?? 0,         getSeries: trendSeries("powerTrend"), renderCurrent: (a) => a.powerMax != null ? `${a.powerMax}w` : "N/A" },
+  { key: "ftp",            label: "FTP",              unit: "w",  baseValue: (a) => a.ftp ?? 0,              getSeries: trendSeries("ftpTrend"), renderCurrent: (a) => a.ftp != null ? `${a.ftp}w` : "N/A" },
+  { key: "vo2",            label: "VO2 max",          unit: "",   baseValue: (a) => a.vo2Max ?? 0,           getSeries: trendSeries("vo2MaxTrend"), renderCurrent: (a) => a.vo2Max != null ? `${a.vo2Max}` : "N/A" },
+  { key: "tss",            label: "TSS",              unit: "",   baseValue: (a) => a.tss ?? 0,              getSeries: trendSeries("tssTrend"), renderCurrent: (a) => a.tss != null ? `${a.tss}` : "N/A" },
+  { key: "balance",        label: "TSB",              unit: "",   baseValue: (a) => Math.abs(a.tsb ?? 0)+10, getSeries: trendSeries("tsbTrend"), renderCurrent: (a) => a.tsb != null ? formatSignedNumber(a.tsb) : "N/A" },
+  { key: "atl",            label: "ATL",              unit: "",   baseValue: (a) => a.atl ?? 0,              getSeries: trendSeries("atlTrend"), renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
+  { key: "ctl",            label: "CTL",              unit: "",   baseValue: (a) => a.ctl ?? 0,              getSeries: trendSeries("ctlTrend"), renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
   { key: "sleepEfficiency",label: "Sleep efficiency", unit: "%",  barDomain: [0, 100], baseValue: (a) => a.sleepEfficiency ?? 0, getSeries: readinessSeries("sleepEfficiency", "sleepEfficiencyTrend"), renderCurrent: (a) => a.sleepEfficiency != null ? `${a.sleepEfficiency}%` : "N/A" },
 ];
 
@@ -338,15 +346,15 @@ const powerCurveMetrics: CompareMetric[] = [
 ];
 
 const fitnessMetrics: CompareMetric[] = [
-  { key: "ftp",     label: "FTP",     unit: "w", baseValue: (a) => a.ftp ?? 0,              getSeries: () => [], renderCurrent: (a) => a.ftp != null ? `${a.ftp}w` : "N/A" },
-  { key: "vo2",     label: "VO2 max", unit: "",  baseValue: (a) => a.vo2Max ?? 0,           getSeries: () => [], renderCurrent: (a) => a.vo2Max != null ? `${a.vo2Max}` : "N/A" },
-  { key: "tss",     label: "TSS",     unit: "",  baseValue: (a) => a.tss ?? 0,              getSeries: () => [], renderCurrent: (a) => a.tss != null ? `${a.tss}` : "N/A" },
-  { key: "balance", label: "TSB",     unit: "",  baseValue: (a) => Math.abs(a.tsb ?? 0)+10, getSeries: () => [], renderCurrent: (a) => a.tsb != null ? formatSignedNumber(a.tsb) : "N/A" },
+  { key: "ftp",     label: "FTP",     unit: "w", baseValue: (a) => a.ftp ?? 0,              getSeries: trendSeries("ftpTrend"), renderCurrent: (a) => a.ftp != null ? `${a.ftp}w` : "N/A" },
+  { key: "vo2",     label: "VO2 max", unit: "",  baseValue: (a) => a.vo2Max ?? 0,           getSeries: trendSeries("vo2MaxTrend"), renderCurrent: (a) => a.vo2Max != null ? `${a.vo2Max}` : "N/A" },
+  { key: "tss",     label: "TSS",     unit: "",  baseValue: (a) => a.tss ?? 0,              getSeries: trendSeries("tssTrend"), renderCurrent: (a) => a.tss != null ? `${a.tss}` : "N/A" },
+  { key: "balance", label: "TSB",     unit: "",  baseValue: (a) => Math.abs(a.tsb ?? 0)+10, getSeries: trendSeries("tsbTrend"), renderCurrent: (a) => a.tsb != null ? formatSignedNumber(a.tsb) : "N/A" },
 ];
 
 const loadMetrics: CompareMetric[] = [
-  { key: "atl",            label: "ATL",              unit: "",  baseValue: (a) => a.atl ?? 0,        getSeries: () => [], renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
-  { key: "ctl",            label: "CTL",              unit: "",  baseValue: (a) => a.ctl ?? 0,        getSeries: () => [], renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
+  { key: "atl",            label: "ATL",              unit: "",  baseValue: (a) => a.atl ?? 0,        getSeries: trendSeries("atlTrend"), renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
+  { key: "ctl",            label: "CTL",              unit: "",  baseValue: (a) => a.ctl ?? 0,        getSeries: trendSeries("ctlTrend"), renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
   { key: "sleepEfficiency",label: "Sleep efficiency", unit: "%", barDomain: [0, 100], baseValue: (a) => a.sleepEfficiency ?? 0, getSeries: readinessSeries("sleepEfficiency", "sleepEfficiencyTrend"), renderCurrent: (a) => a.sleepEfficiency != null ? `${a.sleepEfficiency}%` : "N/A" },
 ];
 

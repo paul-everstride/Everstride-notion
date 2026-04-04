@@ -106,6 +106,11 @@ function mockAthlete(cfg: {
   age: number; weightKg: number; heightCm: number;
   recovery: number; sleep: number; sleepEff: number; hrv: number; rhr: number;
   spo2: number; resp: number; skinTemp: number;
+  ftp: number; vo2Max: number; powerMax: number;
+  tss: number; atl: number; ctl: number; tsb: number;
+  powerCurve5s: number; powerCurve30s: number; powerCurve1m: number;
+  powerCurve5m: number; powerCurve30m: number;
+  polarizedLow: number; polarizedMod: number; polarizedHigh: number;
   seed: number;
 }): AthleteSummary {
   const today = dateStr(0);
@@ -132,14 +137,14 @@ function mockAthlete(cfg: {
     sleepScore: cfg.sleep,
     restHr: cfg.rhr,
     hrv: cfg.hrv,
-    tss: null,
-    atl: null,
-    ctl: null,
-    tsb: null,
-    vo2Max: null,
-    ftp: null,
-    powerMax: null,
-    polarizedZones: { low: 0, moderate: 0, high: 0 },
+    tss: cfg.tss,
+    atl: cfg.atl,
+    ctl: cfg.ctl,
+    tsb: cfg.tsb,
+    vo2Max: cfg.vo2Max,
+    ftp: cfg.ftp,
+    powerMax: cfg.powerMax,
+    polarizedZones: { low: cfg.polarizedLow, moderate: cfg.polarizedMod, high: cfg.polarizedHigh },
     spo2: cfg.spo2,
     sleepConsistency: Math.round(cfg.sleep * 0.95),
     sleepEfficiency: cfg.sleepEff,
@@ -157,15 +162,21 @@ function mockAthlete(cfg: {
     sleepTrend:           genTrend(cfg.sleep, 6, 30, cfg.seed + 2),
     hrvTrend:             genTrend(cfg.hrv, 10, 30, cfg.seed + 3),
     rhrTrend:             genTrend(cfg.rhr, 3, 30, cfg.seed + 4),
-    tssTrend:             [],
+    tssTrend:             genTrend(cfg.tss, 40, 30, cfg.seed + 6),
     sleepEfficiencyTrend: genTrend(cfg.sleepEff, 5, 30, cfg.seed + 5),
-    atlTrend:             [],
-    ctlTrend:             [],
-    tsbTrend:             [],
-    powerTrend:           [],
-    ftpTrend:             [],
-    vo2MaxTrend:          [],
-    powerCurve:           [],
+    atlTrend:             genTrend(cfg.atl, 12, 30, cfg.seed + 7),
+    ctlTrend:             genTrend(cfg.ctl, 6, 30, cfg.seed + 8),
+    tsbTrend:             genTrend(cfg.tsb, 8, 30, cfg.seed + 9),
+    powerTrend:           genTrend(cfg.powerMax, 30, 30, cfg.seed + 10),
+    ftpTrend:             genTrend(cfg.ftp, 8, 30, cfg.seed + 11),
+    vo2MaxTrend:          genTrend(cfg.vo2Max, 2, 30, cfg.seed + 12),
+    powerCurve: [
+      { label: "5 sec", value: cfg.powerCurve5s },
+      { label: "30 sec", value: cfg.powerCurve30s },
+      { label: "1 min", value: cfg.powerCurve1m },
+      { label: "5 min", value: cfg.powerCurve5m },
+      { label: "30 min", value: cfg.powerCurve30m },
+    ],
     recoveryHistory:      history,
   };
 }
@@ -177,36 +188,54 @@ const MOCK_ATHLETES: AthleteSummary[] = [
     id: "demo-1", name: "Lena Berger", email: "lena.berger@mail.com", team: "Endurance Squad",
     age: 27, weightKg: 58, heightCm: 170,
     recovery: 82, sleep: 88, sleepEff: 91, hrv: 78, rhr: 48, spo2: 97.8, resp: 14.2, skinTemp: 0.1,
+    ftp: 245, vo2Max: 58, powerMax: 680, tss: 320, atl: 85, ctl: 72, tsb: -13,
+    powerCurve5s: 680, powerCurve30s: 520, powerCurve1m: 380, powerCurve5m: 310, powerCurve30m: 265,
+    polarizedLow: 78, polarizedMod: 5, polarizedHigh: 17,
     seed: 1001,
   }),
   mockAthlete({
     id: "demo-2", name: "Marco Silva", email: "marco.silva@mail.com", team: "Endurance Squad",
     age: 31, weightKg: 74, heightCm: 182,
     recovery: 45, sleep: 62, sleepEff: 72, hrv: 35, rhr: 58, spo2: 96.1, resp: 16.8, skinTemp: 0.4,
+    ftp: 290, vo2Max: 62, powerMax: 950, tss: 480, atl: 135, ctl: 95, tsb: -40,
+    powerCurve5s: 950, powerCurve30s: 720, powerCurve1m: 530, powerCurve5m: 380, powerCurve30m: 310,
+    polarizedLow: 55, polarizedMod: 25, polarizedHigh: 20,
     seed: 2002,
   }),
   mockAthlete({
     id: "demo-3", name: "Sophie Chen", email: "sophie.chen@mail.com", team: "Sprint Group",
     age: 24, weightKg: 52, heightCm: 164,
     recovery: 91, sleep: 95, sleepEff: 94, hrv: 105, rhr: 42, spo2: 98.2, resp: 13.1, skinTemp: -0.1,
+    ftp: 195, vo2Max: 52, powerMax: 520, tss: 180, atl: 55, ctl: 60, tsb: 5,
+    powerCurve5s: 520, powerCurve30s: 390, powerCurve1m: 290, powerCurve5m: 220, powerCurve30m: 200,
+    polarizedLow: 82, polarizedMod: 4, polarizedHigh: 14,
     seed: 3003,
   }),
   mockAthlete({
     id: "demo-4", name: "Jonas Keller", email: "jonas.keller@mail.com", team: "Endurance Squad",
     age: 29, weightKg: 71, heightCm: 178,
     recovery: 68, sleep: 74, sleepEff: 80, hrv: 62, rhr: 52, spo2: 97.4, resp: 15.0, skinTemp: 0.2,
+    ftp: 265, vo2Max: 55, powerMax: 780, tss: 350, atl: 90, ctl: 78, tsb: -12,
+    powerCurve5s: 780, powerCurve30s: 590, powerCurve1m: 440, powerCurve5m: 330, powerCurve30m: 280,
+    polarizedLow: 72, polarizedMod: 10, polarizedHigh: 18,
     seed: 4004,
   }),
   mockAthlete({
     id: "demo-5", name: "Emma Larsson", email: "emma.larsson@mail.com", team: "Sprint Group",
     age: 22, weightKg: 55, heightCm: 168,
     recovery: 33, sleep: 51, sleepEff: 65, hrv: 28, rhr: 64, spo2: 95.3, resp: 17.5, skinTemp: 0.6,
+    ftp: 210, vo2Max: 49, powerMax: 580, tss: 420, atl: 120, ctl: 70, tsb: -50,
+    powerCurve5s: 580, powerCurve30s: 440, powerCurve1m: 330, powerCurve5m: 250, powerCurve30m: 220,
+    polarizedLow: 50, polarizedMod: 30, polarizedHigh: 20,
     seed: 5005,
   }),
   mockAthlete({
     id: "demo-6", name: "Tom Hartmann", email: "tom.hartmann@mail.com", team: "Sprint Group",
     age: 26, weightKg: 68, heightCm: 175,
     recovery: 75, sleep: 82, sleepEff: 85, hrv: 71, rhr: 50, spo2: 97.6, resp: 14.8, skinTemp: 0.0,
+    ftp: 255, vo2Max: 54, powerMax: 720, tss: 280, atl: 75, ctl: 68, tsb: -7,
+    powerCurve5s: 720, powerCurve30s: 540, powerCurve1m: 400, powerCurve5m: 300, powerCurve30m: 265,
+    polarizedLow: 76, polarizedMod: 7, polarizedHigh: 17,
     seed: 6006,
   }),
 ];
