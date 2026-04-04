@@ -634,28 +634,36 @@ function PowerHexagon({
 }: {
   athletes: AthleteSummary[]; window: SnapshotWindow; colorMap: Map<string, string>;
 }) {
-  const hexData = useMemo(() => {
-    // Use real power curve watts, normalised per axis so the strongest athlete hits 100
-    const rawValues = athletes.map(a =>
-      a.powerCurve.map((pt) => pt.value ?? 0)
-    );
+  const { hexData, wattLookup } = useMemo(() => {
+    // Build raw watt values: 5 power curve points + FTP
+    const rawValues = athletes.map(a => [
+      ...a.powerCurve.map((pt) => pt.value ?? 0),
+      a.ftp ?? 0,
+    ]);
 
-    return POWER_SHORT_LABELS.map((subject, i) => {
+    // Store actual watts for tooltip display
+    const lookup = new Map<string, number>();
+
+    const data = POWER_SHORT_LABELS.map((subject, i) => {
       const vals = rawValues.map(av => av[i] ?? 0);
       const maxVal = Math.max(...vals, 1);
       const row: Record<string, string | number> = { subject };
       athletes.forEach((a, ai) => {
-        row[a.name] = Math.round((rawValues[ai][i] / maxVal) * 100);
+        const watts = rawValues[ai][i] ?? 0;
+        row[a.name] = Math.round((watts / maxVal) * 100); // Normalised for radar shape
+        lookup.set(`${subject}__${a.name}`, watts);        // Real watts for tooltip
       });
       return row;
     });
+
+    return { hexData: data, wattLookup: lookup };
   }, [athletes, win]);
 
   return (
     <div className="border border-line bg-canvas rounded-lg flex flex-col lg:row-span-2 overflow-hidden">
       <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
         <span className="text-sm font-medium text-ink">Power Profile</span>
-        <span className="text-xs text-muted bg-surface rounded-full px-2.5 py-0.5">Peak in period</span>
+        <span className="text-xs text-muted bg-surface rounded-full px-2.5 py-0.5">watts</span>
       </div>
       <div className="flex border-b border-line" style={{ borderBottomColor: "#e9e9e7" }}>
         {athletes.map((athlete) => {
@@ -678,7 +686,14 @@ function PowerHexagon({
             <PolarAngleAxis dataKey="subject"
               tick={{ fill: "#9b9a97", fontSize: 11, fontFamily: "inherit" }} />
             <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-            <Tooltip contentStyle={TS} labelStyle={TL} formatter={(v: number, name: string) => [`${v}%`, name]} />
+            <Tooltip
+              contentStyle={TS} labelStyle={TL}
+              formatter={(v: number, name: string, props: { payload?: { subject?: string } }) => {
+                const subject = props.payload?.subject ?? "";
+                const watts = wattLookup.get(`${subject}__${name}`) ?? 0;
+                return [`${watts}w`, name];
+              }}
+            />
             {athletes.map((athlete) => {
               const color = colorMap.get(athlete.id) ?? athleteColors[0];
               return (
@@ -1568,6 +1583,9 @@ export function CompareWorkbench({
       <div className="bg-canvas pt-4">
         {PERF_SECTIONS.map(sec => {
           const isCollapsed = collapsedSections[sec.key];
+          // Power Curve metrics are static peaks (not daily time-series),
+          // so render them as snapshot-style visuals instead of empty line charts
+          const isPowerCurve = sec.key === "power";
           return (
             <div key={sec.key} className="mb-2">
               <button
@@ -1580,7 +1598,15 @@ export function CompareWorkbench({
                 <span className="text-sm font-semibold text-ink">{sec.label}</span>
                 <span className="ml-auto text-xs text-muted">{isCollapsed ? "▶" : "▼"}</span>
               </button>
-              {!isCollapsed && renderMetricGrid(sec.metrics, sec.accentColor, "grid grid-cols-1 gap-4 lg:grid-cols-2 p-4")}
+              {!isCollapsed && isPowerCurve ? (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 p-4">
+                  <PowerHexagon athletes={selectedAthletes} window={snapshotWindow} colorMap={colorMap} />
+                  {powerCurveMetrics.map(m => (
+                    <SnapshotBarChart key={m.key} title={m.label} athletes={selectedAthletes}
+                      metric={m} window={snapshotWindow} accentColor={sec.accentColor} colorMap={colorMap} />
+                  ))}
+                </div>
+              ) : !isCollapsed ? renderMetricGrid(sec.metrics, sec.accentColor, "grid grid-cols-1 gap-4 lg:grid-cols-2 p-4") : null}
             </div>
           );
         })}
