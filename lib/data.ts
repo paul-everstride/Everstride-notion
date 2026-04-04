@@ -43,7 +43,8 @@ function genTrend(base: number, variance: number, days: number, seed: number): T
   for (let i = days - 1; i >= 0; i--) {
     v += (rng() - 0.5) * variance;
     v = Math.max(base - variance * 3, Math.min(base + variance * 3, v));
-    pts.push({ label: shortLabel(dateStr(i)), value: Math.round(v * 10) / 10 });
+    const ds = dateStr(i);
+    pts.push({ label: shortLabel(ds), value: Math.round(v * 10) / 10, date: ds });
   }
   return pts;
 }

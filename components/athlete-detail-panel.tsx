@@ -322,6 +322,12 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
       return hasAny ? (pts as TrendPoint[]) : null;
     };
 
+    /** Filter a pre-computed trend array by the same date range */
+    const filterPerf = (trend: TrendPoint[]): TrendPoint[] | null => {
+      const pts = trend.filter(p => p.date && p.date >= startStr && p.date <= endStr);
+      return pts.length > 0 ? pts : null;
+    };
+
     return {
       tickInterval,
       recovery: toTrend(d => d.recoveryScore),
@@ -331,13 +337,13 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
       spo2:     toTrend(d => d.spo2),
       resp:     toTrend(d => d.resp),
       sleepEff: toTrend(d => d.sleepEfficiency),
-      ftp:      null,
-      vo2:      null,
-      power:    null,
-      tss:      null,
-      atl:      null,
-      ctl:      null,
-      tsb:      null,
+      ftp:      filterPerf(athlete.ftpTrend),
+      vo2:      filterPerf(athlete.vo2MaxTrend),
+      power:    filterPerf(athlete.powerTrend),
+      tss:      filterPerf(athlete.tssTrend),
+      atl:      filterPerf(athlete.atlTrend),
+      ctl:      filterPerf(athlete.ctlTrend),
+      tsb:      filterPerf(athlete.tsbTrend),
     };
   }, [athlete, timeframe, customStart, customEnd]);
 
@@ -943,17 +949,19 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
             <MetricPill label="VO2 max" value={athlete.vo2Max != null ? `${athlete.vo2Max}` : "–"} sub="ml/kg/min" accent="#2563eb" />
             <MetricPill label="Power max" value={athlete.powerMax != null ? `${athlete.powerMax}w` : "–"} sub="Peak power" accent="#7c3aed" />
           </div>
-          {/* FTP trend */}
-          {athlete.ftpTrend.length > 0 && (
-            <SectionChart title="FTP" data={athlete.ftpTrend} color="#e16b2b" sub="watts · 30-day trend" tickInterval={4} />
-          )}
-          {/* VO2 max trend */}
-          {athlete.vo2MaxTrend.length > 0 && (
-            <SectionChart title="VO2 max" data={athlete.vo2MaxTrend} color="#2563eb" sub="ml/kg/min · 30-day trend" tickInterval={4} />
-          )}
-          {/* Power trend */}
-          {athlete.powerTrend.length > 0 && (
-            <SectionChart title="Power max" data={athlete.powerTrend} color="#7c3aed" sub="watts · 30-day trend" tickInterval={4} />
+          {/* Timeframe selector */}
+          <SectionHeader title="Performance trends" sub="Historical view" controls={<TimeframeBar />} />
+          {(!trendData.ftp && !trendData.vo2 && !trendData.power) ? (
+            <div className="border border-line rounded-lg bg-canvas px-6 py-10 flex flex-col items-center justify-center gap-2 text-center">
+              <p className="text-sm font-medium text-ink">No data for this period</p>
+              <p className="text-xs text-muted max-w-xs">Try a longer timeframe to see performance trends.</p>
+            </div>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {trendData.ftp && <SectionChart title="FTP" data={trendData.ftp} color="#e16b2b" sub="watts" tickInterval={trendData.tickInterval} />}
+              {trendData.vo2 && <SectionChart title="VO2 max" data={trendData.vo2} color="#2563eb" sub="ml/kg/min" tickInterval={trendData.tickInterval} />}
+              {trendData.power && <SectionChart title="Power max" data={trendData.power} color="#7c3aed" sub="watts" tickInterval={trendData.tickInterval} />}
+            </div>
           )}
         </div>
       )}
@@ -971,50 +979,72 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
               sub={athlete.tsb != null ? (athlete.tsb > 5 ? "Fresh — ready to race" : athlete.tsb > -10 ? "Optimal — sharp" : athlete.tsb > -30 ? "Tired — building fitness" : "Overreaching — needs rest") : ""}
               accent={athlete.tsb != null ? (athlete.tsb > 5 ? "#16a34a" : athlete.tsb > -10 ? "#2563eb" : athlete.tsb > -30 ? "#d97706" : "#ef4444") : undefined} />
           </div>
-          {/* PMC Chart — ATL, CTL, TSB overlaid */}
-          {athlete.atlTrend.length > 0 && athlete.ctlTrend.length > 0 && athlete.tsbTrend.length > 0 && (() => {
-            const pmcData = athlete.atlTrend.map((pt, i) => ({
-              label: pt.label,
-              atl: pt.value,
-              ctl: athlete.ctlTrend[i]?.value ?? 0,
-              tsb: athlete.tsbTrend[i]?.value ?? 0,
-            }));
-            const allVals = pmcData.flatMap(d => [d.atl, d.ctl, d.tsb]);
-            const yMin = Math.floor(Math.min(...allVals) - 10);
-            const yMax = Math.ceil(Math.max(...allVals) + 10);
-            return (
-              <div className="border border-line rounded-lg bg-canvas overflow-clip">
-                <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-                  <div>
-                    <span className="text-sm font-medium text-ink">Performance Management Chart</span>
-                    <span className="text-xs text-muted ml-2">30-day view</span>
+          {/* Timeframe selector */}
+          <SectionHeader title="Load trends" sub="Historical view" controls={<TimeframeBar />} />
+          {(!trendData.atl && !trendData.ctl && !trendData.tsb && !trendData.tss) ? (
+            <div className="border border-line rounded-lg bg-canvas px-6 py-10 flex flex-col items-center justify-center gap-2 text-center">
+              <p className="text-sm font-medium text-ink">No data for this period</p>
+              <p className="text-xs text-muted max-w-xs">Try a longer timeframe to see training load trends.</p>
+            </div>
+          ) : (
+            <>
+              {/* PMC Chart — ATL, CTL, TSB overlaid */}
+              {trendData.atl && trendData.ctl && trendData.tsb && (() => {
+                // Join by date for robustness across different timeframes
+                const dateMap = new Map<string, { label: string; atl: number; ctl: number; tsb: number }>();
+                for (const pt of trendData.atl) {
+                  const key = pt.date ?? pt.label;
+                  dateMap.set(key, { label: pt.label, atl: pt.value, ctl: 0, tsb: 0 });
+                }
+                for (const pt of trendData.ctl) {
+                  const key = pt.date ?? pt.label;
+                  if (dateMap.has(key)) dateMap.get(key)!.ctl = pt.value;
+                }
+                for (const pt of trendData.tsb) {
+                  const key = pt.date ?? pt.label;
+                  if (dateMap.has(key)) dateMap.get(key)!.tsb = pt.value;
+                }
+                const pmcData = Array.from(dateMap.entries())
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([, v]) => v);
+                if (!pmcData.length) return null;
+                const allVals = pmcData.flatMap(d => [d.atl, d.ctl, d.tsb]);
+                const yMin = Math.floor(Math.min(...allVals) - 10);
+                const yMax = Math.ceil(Math.max(...allVals) + 10);
+                return (
+                  <div className="border border-line rounded-lg bg-canvas overflow-clip">
+                    <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+                      <div>
+                        <span className="text-sm font-medium text-ink">Performance Management Chart</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center gap-1 text-[10px] text-muted"><span className="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block" /> ATL</span>
+                        <span className="flex items-center gap-1 text-[10px] text-muted"><span className="w-2.5 h-2.5 rounded-sm bg-blue-600 inline-block" /> CTL</span>
+                        <span className="flex items-center gap-1 text-[10px] text-muted"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> TSB</span>
+                      </div>
+                    </div>
+                    <div style={{ height: 240 }} className="px-1 pt-2 pb-1">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={pmcData} margin={{ top: 4, right: 10, left: 0, bottom: 0 }}>
+                          <CartesianGrid vertical={false} stroke="#e9e9e7" />
+                          <XAxis dataKey="label" interval={trendData.tickInterval} tickLine={false} axisLine={false} tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }} />
+                          <YAxis domain={[yMin, yMax]} tickCount={5} tickLine={false} axisLine={false} tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }} width={32} />
+                          <ReferenceLine y={0} stroke="#9b9a97" strokeDasharray="4 3" strokeWidth={1} />
+                          <Tooltip contentStyle={TS} labelStyle={TL} />
+                          <Line type="monotone" dataKey="atl" name="ATL" stroke="#ef4444" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="ctl" name="CTL" stroke="#2563eb" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="tsb" name="TSB" stroke="#16a34a" strokeWidth={2} dot={false} strokeDasharray="6 3" />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1 text-[10px] text-muted"><span className="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block" /> ATL</span>
-                    <span className="flex items-center gap-1 text-[10px] text-muted"><span className="w-2.5 h-2.5 rounded-sm bg-blue-600 inline-block" /> CTL</span>
-                    <span className="flex items-center gap-1 text-[10px] text-muted"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> TSB</span>
-                  </div>
-                </div>
-                <div style={{ height: 240 }} className="px-1 pt-2 pb-1">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={pmcData} margin={{ top: 4, right: 10, left: 0, bottom: 0 }}>
-                      <CartesianGrid vertical={false} stroke="#e9e9e7" />
-                      <XAxis dataKey="label" interval={4} tickLine={false} axisLine={false} tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }} />
-                      <YAxis domain={[yMin, yMax]} tickCount={5} tickLine={false} axisLine={false} tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }} width={32} />
-                      <ReferenceLine y={0} stroke="#9b9a97" strokeDasharray="4 3" strokeWidth={1} />
-                      <Tooltip contentStyle={TS} labelStyle={TL} />
-                      <Line type="monotone" dataKey="atl" name="ATL" stroke="#ef4444" strokeWidth={2} dot={false} />
-                      <Line type="monotone" dataKey="ctl" name="CTL" stroke="#2563eb" strokeWidth={2} dot={false} />
-                      <Line type="monotone" dataKey="tsb" name="TSB" stroke="#16a34a" strokeWidth={2} dot={false} strokeDasharray="6 3" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            );
-          })()}
-          {/* TSS trend */}
-          {athlete.tssTrend.length > 0 && (
-            <SectionChart title="Training Stress Score" data={athlete.tssTrend} color="#e16b2b" sub="daily TSS · 30-day trend" tickInterval={4} />
+                );
+              })()}
+              {/* TSS trend */}
+              {trendData.tss && (
+                <SectionChart title="Training Stress Score" data={trendData.tss} color="#e16b2b" sub="daily TSS" tickInterval={trendData.tickInterval} />
+              )}
+            </>
           )}
         </div>
       )}
@@ -1099,8 +1129,14 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
             </div>
           </div>
           {/* Power trend */}
-          {athlete.powerTrend.length > 0 && (
-            <SectionChart title="Power Trend" data={athlete.powerTrend} color="#e16b2b" sub="peak watts · 30-day trend" tickInterval={4} />
+          <SectionHeader title="Power trend" sub="Historical view" controls={<TimeframeBar />} />
+          {trendData.power ? (
+            <SectionChart title="Power Trend" data={trendData.power} color="#e16b2b" sub="peak watts" tickInterval={trendData.tickInterval} />
+          ) : (
+            <div className="border border-line rounded-lg bg-canvas px-6 py-10 flex flex-col items-center justify-center gap-2 text-center">
+              <p className="text-sm font-medium text-ink">No data for this period</p>
+              <p className="text-xs text-muted max-w-xs">Try a longer timeframe to see power trends.</p>
+            </div>
           )}
         </div>
       )}

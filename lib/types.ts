@@ -3,6 +3,7 @@ export type AppRole = "coach" | "athlete";
 export type TrendPoint = {
   label: string;
   value: number;
+  date?: string;  // YYYY-MM-DD — enables date-based filtering
 };
 
 export type PolarizedZones = {

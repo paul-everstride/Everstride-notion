@@ -308,11 +308,91 @@ function readinessSeries(historyField: keyof RecoveryHistoryDay, trendKey: keyof
   };
 }
 
-/** Simple trend series — returns the pre-generated trend array for a given key */
+/** Date-aware trend series — filters/aggregates trend arrays by timeframe, matching readinessSeries behavior */
 function trendSeries(trendKey: keyof AthleteSummary) {
-  return (athlete: AthleteSummary, _timeframe: string): TrendPoint[] => {
+  return (athlete: AthleteSummary, timeframe: string): TrendPoint[] => {
     const data = athlete[trendKey] as TrendPoint[] | undefined;
-    return data ?? [];
+    if (!data?.length) return [];
+
+    const [type, p2] = timeframe.split(":");
+    const offset = parseInt(p2 || "0");
+    const now = new Date();
+
+    // ── Week: 7 daily points for target Mon–Sun ──
+    if (type === "week") {
+      const dow = now.getDay();
+      const mondayOff = dow === 0 ? 6 : dow - 1;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - mondayOff + offset * 7);
+      monday.setHours(0, 0, 0, 0);
+      const points: TrendPoint[] = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        const ds = d.toISOString().slice(0, 10);
+        const pt = data.find(p => p.date === ds);
+        if (pt) points.push(pt);
+      }
+      return points;
+    }
+
+    // ── Month / monthly: daily points for target calendar month ──
+    if (type === "month" || type === "monthly") {
+      const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+      const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      const startStr = d.toISOString().slice(0, 10);
+      const endD = new Date(d.getFullYear(), d.getMonth(), daysInMonth);
+      const endStr = endD.toISOString().slice(0, 10);
+      return data.filter(p => p.date && p.date >= startStr && p.date <= endStr);
+    }
+
+    // ── Year / yearly: aggregate to monthly averages ──
+    if (type === "year" || type === "yearly") {
+      const year = now.getFullYear() + offset;
+      const yearStr = String(year);
+      const monthBuckets = new Map<number, number[]>();
+      for (const pt of data) {
+        if (!pt.date || pt.date.slice(0, 4) !== yearStr) continue;
+        const m = parseInt(pt.date.slice(5, 7)) - 1;
+        if (!monthBuckets.has(m)) monthBuckets.set(m, []);
+        monthBuckets.get(m)!.push(pt.value);
+      }
+      return Array.from(monthBuckets.entries())
+        .sort(([a], [b]) => a - b)
+        .map(([m, vals]) => ({
+          label: MONTH_SHORT[m],
+          value: Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10,
+          date: `${yearStr}-${String(m + 1).padStart(2, "0")}-01`,
+        }));
+    }
+
+    // ── Biweekly: 14 daily points ──
+    if (type === "biweekly") {
+      const end = new Date(now);
+      end.setDate(now.getDate() + offset * 14);
+      const start = new Date(end);
+      start.setDate(end.getDate() - 13);
+      const startStr = start.toISOString().slice(0, 10);
+      const endStr = end.toISOString().slice(0, 10);
+      return data.filter(p => p.date && p.date >= startStr && p.date <= endStr);
+    }
+
+    // ── Custom month picker: "months:2026-01,2026-03" ──
+    if (type === "months") {
+      const monthStrs = (p2 || "").split(",").filter(Boolean);
+      if (!monthStrs.length) return data;
+      const ranges = monthStrs.map(ms => {
+        const [y, m] = ms.split("-").map(Number);
+        const first = `${String(y)}-${String(m).padStart(2, "0")}-01`;
+        const lastDay = new Date(y, m, 0).getDate();
+        const last = `${String(y)}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+        return { first, last };
+      });
+      return data.filter(p => p.date && ranges.some(r => p.date! >= r.first && p.date! <= r.last));
+    }
+
+    // ── Fallback: return full array ──
+    return data;
   };
 }
 
