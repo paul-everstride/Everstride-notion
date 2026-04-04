@@ -1,6 +1,7 @@
 /**
  * DEMO DATA LAYER — Mock data for marketing / screenshots.
  * No API calls, no Supabase, no OW backend needed.
+ * Generates 365 days of history + full-year trends for all metrics.
  */
 
 import type { AthleteSummary, DashboardData, RecoveryHistoryDay, TrendPoint } from "@/lib/types";
@@ -31,6 +32,9 @@ function seeded(seed: number) {
   return () => { s = (s * 16807 + 0) % 2147483647; return (s - 1) / 2147483646; };
 }
 
+const HISTORY_DAYS = 365;
+const TREND_DAYS = 365;
+
 /** Generate realistic trend with gradual drift and noise */
 function genTrend(base: number, variance: number, days: number, seed: number): TrendPoint[] {
   const rng = seeded(seed);
@@ -38,7 +42,7 @@ function genTrend(base: number, variance: number, days: number, seed: number): T
   let v = base;
   for (let i = days - 1; i >= 0; i--) {
     v += (rng() - 0.5) * variance;
-    v = Math.max(base - variance * 2, Math.min(base + variance * 2, v));
+    v = Math.max(base - variance * 3, Math.min(base + variance * 3, v));
     pts.push({ label: shortLabel(dateStr(i)), value: Math.round(v * 10) / 10 });
   }
   return pts;
@@ -55,9 +59,13 @@ function genHistory(
   let rec = baseRec, hrv = baseHrv, rhr = baseRhr;
 
   for (let i = days - 1; i >= 0; i--) {
-    rec = Math.max(10, Math.min(100, rec + (rng() - 0.48) * 12));
-    hrv = Math.max(15, Math.min(140, hrv + (rng() - 0.5) * 8));
-    rhr = Math.max(38, Math.min(72, rhr + (rng() - 0.5) * 3));
+    // Add slight seasonal drift — better recovery in summer, worse in winter
+    const dayOfYear = new Date(Date.now() - i * 86_400_000).getMonth();
+    const seasonalBoost = Math.sin((dayOfYear / 12) * Math.PI * 2) * 3;
+
+    rec = Math.max(10, Math.min(100, rec + (rng() - 0.48) * 10 + seasonalBoost * 0.1));
+    hrv = Math.max(15, Math.min(140, hrv + (rng() - 0.5) * 7 + seasonalBoost * 0.1));
+    rhr = Math.max(38, Math.min(72, rhr + (rng() - 0.5) * 2.5 - seasonalBoost * 0.05));
     const spo2 = Math.max(93, Math.min(100, baseSpo2 + (rng() - 0.5) * 2));
     const resp = Math.max(11, Math.min(20, baseResp + (rng() - 0.5) * 1.5));
     const skin = Math.round((baseSkin + (rng() - 0.5) * 0.6) * 10) / 10;
@@ -114,7 +122,7 @@ function mockAthlete(cfg: {
   seed: number;
 }): AthleteSummary {
   const today = dateStr(0);
-  const history = genHistory(cfg.recovery, cfg.hrv, cfg.rhr, cfg.spo2, cfg.resp, cfg.skinTemp, cfg.sleepEff, 60, cfg.seed);
+  const history = genHistory(cfg.recovery, cfg.hrv, cfg.rhr, cfg.spo2, cfg.resp, cfg.skinTemp, cfg.sleepEff, HISTORY_DAYS, cfg.seed);
   const todayEntry = history[history.length - 1];
 
   const totalMins = todayEntry.sleepDurationMins ?? 450;
@@ -156,20 +164,20 @@ function mockAthlete(cfg: {
     totalLightMs: lightMins * 60_000,
     totalAwakeMs: awakeMins * 60_000,
     creationDate: today,
-    createdAt: "2026-01-15T00:00:00.000Z",
+    createdAt: dateStr(HISTORY_DAYS) + "T00:00:00.000Z",
     statusNote: statusNote(cfg.recovery),
-    readinessTrend:       genTrend(cfg.recovery, 8, 30, cfg.seed + 1),
-    sleepTrend:           genTrend(cfg.sleep, 6, 30, cfg.seed + 2),
-    hrvTrend:             genTrend(cfg.hrv, 10, 30, cfg.seed + 3),
-    rhrTrend:             genTrend(cfg.rhr, 3, 30, cfg.seed + 4),
-    tssTrend:             genTrend(cfg.tss, 40, 30, cfg.seed + 6),
-    sleepEfficiencyTrend: genTrend(cfg.sleepEff, 5, 30, cfg.seed + 5),
-    atlTrend:             genTrend(cfg.atl, 12, 30, cfg.seed + 7),
-    ctlTrend:             genTrend(cfg.ctl, 6, 30, cfg.seed + 8),
-    tsbTrend:             genTrend(cfg.tsb, 8, 30, cfg.seed + 9),
-    powerTrend:           genTrend(cfg.powerMax, 30, 30, cfg.seed + 10),
-    ftpTrend:             genTrend(cfg.ftp, 8, 30, cfg.seed + 11),
-    vo2MaxTrend:          genTrend(cfg.vo2Max, 2, 30, cfg.seed + 12),
+    readinessTrend:       genTrend(cfg.recovery, 8, TREND_DAYS, cfg.seed + 1),
+    sleepTrend:           genTrend(cfg.sleep, 6, TREND_DAYS, cfg.seed + 2),
+    hrvTrend:             genTrend(cfg.hrv, 10, TREND_DAYS, cfg.seed + 3),
+    rhrTrend:             genTrend(cfg.rhr, 3, TREND_DAYS, cfg.seed + 4),
+    tssTrend:             genTrend(cfg.tss, 40, TREND_DAYS, cfg.seed + 6),
+    sleepEfficiencyTrend: genTrend(cfg.sleepEff, 5, TREND_DAYS, cfg.seed + 5),
+    atlTrend:             genTrend(cfg.atl, 12, TREND_DAYS, cfg.seed + 7),
+    ctlTrend:             genTrend(cfg.ctl, 6, TREND_DAYS, cfg.seed + 8),
+    tsbTrend:             genTrend(cfg.tsb, 8, TREND_DAYS, cfg.seed + 9),
+    powerTrend:           genTrend(cfg.powerMax, 30, TREND_DAYS, cfg.seed + 10),
+    ftpTrend:             genTrend(cfg.ftp, 8, TREND_DAYS, cfg.seed + 11),
+    vo2MaxTrend:          genTrend(cfg.vo2Max, 2, TREND_DAYS, cfg.seed + 12),
     powerCurve: [
       { label: "5 sec", value: cfg.powerCurve5s },
       { label: "30 sec", value: cfg.powerCurve30s },
@@ -177,7 +185,7 @@ function mockAthlete(cfg: {
       { label: "5 min", value: cfg.powerCurve5m },
       { label: "30 min", value: cfg.powerCurve30m },
     ],
-    recoveryHistory:      history,
+    recoveryHistory: history,
   };
 }
 
