@@ -416,13 +416,29 @@ const perfSnapshotMetrics: CompareMetric[] = [
   { key: "sleepEfficiency",label: "Sleep efficiency", unit: "%",  barDomain: [0, 100], baseValue: (a) => a.sleepEfficiency ?? 0, getSeries: readinessSeries("sleepEfficiency", "sleepEfficiencyTrend"), renderCurrent: (a) => a.sleepEfficiency != null ? `${a.sleepEfficiency}%` : "N/A" },
 ];
 
+/** Derive a per-duration power trend from the overall powerTrend, scaled by the
+ *  ratio of that duration's peak to the athlete's powerMax. This gives each
+ *  power curve duration (5s, 30s, 1m, 5m, 30m) a realistic historical series. */
+function scaledPowerSeries(curveIndex: number) {
+  return (athlete: AthleteSummary, timeframe: string): TrendPoint[] => {
+    const baseSeries = trendSeries("powerTrend");
+    const raw = baseSeries(athlete, timeframe);
+    if (!raw.length) return [];
+    const peakWatts = athlete.powerCurve[curveIndex]?.value ?? 0;
+    const maxPower = athlete.powerMax ?? 1;
+    if (maxPower === 0) return [];
+    const ratio = peakWatts / maxPower;
+    return raw.map(pt => ({ ...pt, value: Math.round(pt.value * ratio) }));
+  };
+}
+
 const powerCurveMetrics: CompareMetric[] = [
-  { key: "pc0",   label: "5 sec",     unit: "w", baseValue: (a) => a.powerCurve[0]?.value ?? 0, getSeries: () => [], renderCurrent: (a) => `${a.powerCurve[0]?.value ?? 0}w` },
-  { key: "pc1",   label: "30 sec",    unit: "w", baseValue: (a) => a.powerCurve[1]?.value ?? 0, getSeries: () => [], renderCurrent: (a) => `${a.powerCurve[1]?.value ?? 0}w` },
-  { key: "pc2",   label: "1 min",     unit: "w", baseValue: (a) => a.powerCurve[2]?.value ?? 0, getSeries: () => [], renderCurrent: (a) => `${a.powerCurve[2]?.value ?? 0}w` },
-  { key: "pc3",   label: "5 min",     unit: "w", baseValue: (a) => a.powerCurve[3]?.value ?? 0, getSeries: () => [], renderCurrent: (a) => `${a.powerCurve[3]?.value ?? 0}w` },
-  { key: "pc4",   label: "30 min",    unit: "w", baseValue: (a) => a.powerCurve[4]?.value ?? 0, getSeries: () => [], renderCurrent: (a) => `${a.powerCurve[4]?.value ?? 0}w` },
-  { key: "power", label: "Power max", unit: "w", baseValue: (a) => a.powerMax ?? 0,              getSeries: () => [], renderCurrent: (a) => a.powerMax != null ? `${a.powerMax}w` : "N/A" },
+  { key: "pc0",   label: "5 sec",     unit: "w", baseValue: (a) => a.powerCurve[0]?.value ?? 0, getSeries: scaledPowerSeries(0), renderCurrent: (a) => `${a.powerCurve[0]?.value ?? 0}w` },
+  { key: "pc1",   label: "30 sec",    unit: "w", baseValue: (a) => a.powerCurve[1]?.value ?? 0, getSeries: scaledPowerSeries(1), renderCurrent: (a) => `${a.powerCurve[1]?.value ?? 0}w` },
+  { key: "pc2",   label: "1 min",     unit: "w", baseValue: (a) => a.powerCurve[2]?.value ?? 0, getSeries: scaledPowerSeries(2), renderCurrent: (a) => `${a.powerCurve[2]?.value ?? 0}w` },
+  { key: "pc3",   label: "5 min",     unit: "w", baseValue: (a) => a.powerCurve[3]?.value ?? 0, getSeries: scaledPowerSeries(3), renderCurrent: (a) => `${a.powerCurve[3]?.value ?? 0}w` },
+  { key: "pc4",   label: "30 min",    unit: "w", baseValue: (a) => a.powerCurve[4]?.value ?? 0, getSeries: scaledPowerSeries(4), renderCurrent: (a) => `${a.powerCurve[4]?.value ?? 0}w` },
+  { key: "power", label: "Power max", unit: "w", baseValue: (a) => a.powerMax ?? 0,              getSeries: trendSeries("powerTrend"), renderCurrent: (a) => a.powerMax != null ? `${a.powerMax}w` : "N/A" },
 ];
 
 const fitnessMetrics: CompareMetric[] = [
@@ -660,7 +676,7 @@ function PowerHexagon({
   }, [athletes, win]);
 
   return (
-    <div className="border border-line bg-canvas rounded-lg flex flex-col lg:row-span-2 overflow-hidden">
+    <div className="border border-line bg-canvas rounded-lg flex flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
         <span className="text-sm font-medium text-ink">Power Profile</span>
         <span className="text-xs text-muted bg-surface rounded-full px-2.5 py-0.5">watts</span>
@@ -1581,11 +1597,12 @@ export function CompareWorkbench({
     }
     return (
       <div className="bg-canvas pt-4">
+        {/* Power Profile hexagon — always visible in timeframe view */}
+        <div className="px-4 pb-4">
+          <PowerHexagon athletes={selectedAthletes} window={snapshotWindow} colorMap={colorMap} />
+        </div>
         {PERF_SECTIONS.map(sec => {
           const isCollapsed = collapsedSections[sec.key];
-          // Power Curve metrics are static peaks (not daily time-series),
-          // so render them as snapshot-style visuals instead of empty line charts
-          const isPowerCurve = sec.key === "power";
           return (
             <div key={sec.key} className="mb-2">
               <button
@@ -1598,15 +1615,7 @@ export function CompareWorkbench({
                 <span className="text-sm font-semibold text-ink">{sec.label}</span>
                 <span className="ml-auto text-xs text-muted">{isCollapsed ? "▶" : "▼"}</span>
               </button>
-              {!isCollapsed && isPowerCurve ? (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 p-4">
-                  <PowerHexagon athletes={selectedAthletes} window={snapshotWindow} colorMap={colorMap} />
-                  {powerCurveMetrics.map(m => (
-                    <SnapshotBarChart key={m.key} title={m.label} athletes={selectedAthletes}
-                      metric={m} window={snapshotWindow} accentColor={sec.accentColor} colorMap={colorMap} />
-                  ))}
-                </div>
-              ) : !isCollapsed ? renderMetricGrid(sec.metrics, sec.accentColor, "grid grid-cols-1 gap-4 lg:grid-cols-2 p-4") : null}
+              {!isCollapsed && renderMetricGrid(sec.metrics, sec.accentColor, "grid grid-cols-1 gap-4 lg:grid-cols-2 p-4")}
             </div>
           );
         })}
