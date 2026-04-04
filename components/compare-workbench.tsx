@@ -676,7 +676,7 @@ function PowerHexagon({
   }, [athletes, win]);
 
   return (
-    <div className="border border-line bg-canvas rounded-lg flex flex-col overflow-hidden">
+    <div className="border border-line bg-canvas rounded-lg flex flex-col lg:row-span-2 overflow-hidden">
       <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
         <span className="text-sm font-medium text-ink">Power Profile</span>
         <span className="text-xs text-muted bg-surface rounded-full px-2.5 py-0.5">watts</span>
@@ -695,7 +695,7 @@ function PowerHexagon({
           );
         })}
       </div>
-      <div className="flex-1 min-h-0 px-2 py-3">
+      <div className="px-2 py-3" style={{ height: 340 }}>
         <ResponsiveContainer width="100%" height="100%">
           <RadarChart data={hexData} margin={{ top: 16, right: 36, bottom: 16, left: 36 }}>
             <PolarGrid gridType="polygon" stroke="#e9e9e7" />
