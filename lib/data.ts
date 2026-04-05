@@ -49,6 +49,35 @@ function genTrend(base: number, variance: number, days: number, seed: number): T
   return pts;
 }
 
+/** Generate correlated recovery + HRV trends (HRV drives recovery) */
+function genCorrelatedTrends(
+  baseRec: number, baseHrv: number, recVariance: number, hrvVariance: number,
+  days: number, seed: number
+): { recTrend: TrendPoint[]; hrvTrend: TrendPoint[] } {
+  const rng = seeded(seed);
+  const recPts: TrendPoint[] = [];
+  const hrvPts: TrendPoint[] = [];
+  let hrv = baseHrv;
+
+  for (let i = days - 1; i >= 0; i--) {
+    // HRV drifts with random walk
+    const hrvNoise = (rng() - 0.5) * hrvVariance;
+    hrv += hrvNoise;
+    hrv = Math.max(baseHrv - hrvVariance * 3, Math.min(baseHrv + hrvVariance * 3, hrv));
+
+    // Recovery follows HRV: map HRV to recovery range, add small independent noise
+    const hrvFraction = (hrv - (baseHrv - hrvVariance * 3)) / (hrvVariance * 6);
+    const recFromHrv = 35 + hrvFraction * 55; // maps to ~35–90
+    const recNoise = (rng() - 0.5) * recVariance * 0.4; // small independent noise
+    const rec = Math.max(15, Math.min(96, recFromHrv + recNoise));
+
+    const ds = dateStr(i);
+    hrvPts.push({ label: shortLabel(ds), value: Math.round(hrv * 10) / 10, date: ds });
+    recPts.push({ label: shortLabel(ds), value: Math.round(rec * 10) / 10, date: ds });
+  }
+  return { recTrend: recPts, hrvTrend: hrvPts };
+}
+
 /** Generate recovery history for N days */
 function genHistory(
   baseRec: number, baseHrv: number, baseRhr: number, baseSpo2: number,
@@ -64,9 +93,19 @@ function genHistory(
     const dayOfYear = new Date(Date.now() - i * 86_400_000).getMonth();
     const seasonalBoost = Math.sin((dayOfYear / 12) * Math.PI * 2) * 3;
 
-    rec = Math.max(10, Math.min(100, rec + (rng() - 0.48) * 10 + seasonalBoost * 0.1));
-    hrv = Math.max(15, Math.min(140, hrv + (rng() - 0.5) * 7 + seasonalBoost * 0.1));
+    // HRV drifts with random walk + seasonal influence
+    hrv = Math.max(15, Math.min(130, hrv + (rng() - 0.5) * 7 + seasonalBoost * 0.1));
+    // RHR inversely correlated: lower RHR = better condition
     rhr = Math.max(38, Math.min(72, rhr + (rng() - 0.5) * 2.5 - seasonalBoost * 0.05));
+
+    // Recovery is DERIVED from HRV — correlated, not independent
+    // Map current HRV to recovery: higher HRV → higher recovery
+    const hrvFraction = (hrv - 15) / (130 - 15); // 0..1 across HRV range
+    const recBase = 30 + hrvFraction * 55; // maps to ~30–85 range
+    const recNoise = (rng() - 0.5) * 12; // day-to-day variation
+    // Occasional bad days (roughly 1 in 15 days)
+    const badDay = rng() < 0.07 ? -(15 + rng() * 15) : 0;
+    rec = Math.max(12, Math.min(96, recBase + recNoise + badDay));
     const spo2 = Math.max(93, Math.min(100, baseSpo2 + (rng() - 0.5) * 2));
     const resp = Math.max(11, Math.min(20, baseResp + (rng() - 0.5) * 1.5));
     const skin = Math.round((baseSkin + (rng() - 0.5) * 0.6) * 10) / 10;
@@ -142,10 +181,10 @@ function mockAthlete(cfg: {
     weightKg: cfg.weightKg,
     heightCm: cfg.heightCm,
     team: cfg.team,
-    recoveryScore: cfg.recovery,
-    sleepScore: cfg.sleep,
-    restHr: cfg.rhr,
-    hrv: cfg.hrv,
+    recoveryScore: todayEntry.recoveryScore,
+    sleepScore: todayEntry.sleepScore,
+    restHr: todayEntry.restHr,
+    hrv: todayEntry.hrv,
     tss: cfg.tss,
     atl: cfg.atl,
     ctl: cfg.ctl,
@@ -166,10 +205,12 @@ function mockAthlete(cfg: {
     totalAwakeMs: awakeMins * 60_000,
     creationDate: today,
     createdAt: dateStr(HISTORY_DAYS) + "T00:00:00.000Z",
-    statusNote: statusNote(cfg.recovery),
-    readinessTrend:       genTrend(cfg.recovery, 8, TREND_DAYS, cfg.seed + 1),
+    statusNote: statusNote(todayEntry.recoveryScore),
+    ...(() => {
+      const { recTrend, hrvTrend } = genCorrelatedTrends(cfg.recovery, cfg.hrv, 8, 10, TREND_DAYS, cfg.seed + 1);
+      return { readinessTrend: recTrend, hrvTrend };
+    })(),
     sleepTrend:           genTrend(cfg.sleep, 6, TREND_DAYS, cfg.seed + 2),
-    hrvTrend:             genTrend(cfg.hrv, 10, TREND_DAYS, cfg.seed + 3),
     rhrTrend:             genTrend(cfg.rhr, 3, TREND_DAYS, cfg.seed + 4),
     tssTrend:             genTrend(cfg.tss, 40, TREND_DAYS, cfg.seed + 6),
     sleepEfficiencyTrend: genTrend(cfg.sleepEff, 5, TREND_DAYS, cfg.seed + 5),
