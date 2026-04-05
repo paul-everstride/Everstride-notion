@@ -7,6 +7,8 @@ import { AthleteHeaderClient } from "./athlete-header-client";
 import { getSeasonPlan } from "./season-plan-actions";
 import { requireAuthenticatedUser } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export default async function AthleteDetailPage({ params }: { params: { id: string } }) {
   const [athlete, user] = await Promise.all([getAthleteById(params.id), requireAuthenticatedUser()]);
   if (!athlete) notFound();

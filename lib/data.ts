@@ -192,8 +192,8 @@ function mockAthlete(cfg: {
 
 // ─── The 6 demo athletes ──────────────────────────────────────────────────────
 
-const MOCK_ATHLETES: AthleteSummary[] = [
-  mockAthlete({
+const ATHLETE_CONFIGS = [
+  {
     id: "demo-1", name: "Lena Berger", email: "lena.berger@mail.com", team: "Endurance Squad",
     age: 27, weightKg: 58, heightCm: 170,
     recovery: 82, sleep: 88, sleepEff: 91, hrv: 78, rhr: 48, spo2: 97.8, resp: 14.2, skinTemp: 0.1,
@@ -201,8 +201,8 @@ const MOCK_ATHLETES: AthleteSummary[] = [
     powerCurve5s: 680, powerCurve30s: 480, powerCurve1m: 340, powerCurve5m: 290, powerCurve30m: 260,
     polarizedLow: 78, polarizedMod: 5, polarizedHigh: 17,
     seed: 1001,
-  }),
-  mockAthlete({
+  },
+  {
     id: "demo-2", name: "Marco Silva", email: "marco.silva@mail.com", team: "Endurance Squad",
     age: 31, weightKg: 74, heightCm: 182,
     recovery: 45, sleep: 62, sleepEff: 72, hrv: 35, rhr: 58, spo2: 96.1, resp: 16.8, skinTemp: 0.4,
@@ -210,8 +210,8 @@ const MOCK_ATHLETES: AthleteSummary[] = [
     powerCurve5s: 1120, powerCurve30s: 820, powerCurve1m: 510, powerCurve5m: 330, powerCurve30m: 285,
     polarizedLow: 55, polarizedMod: 25, polarizedHigh: 20,
     seed: 2002,
-  }),
-  mockAthlete({
+  },
+  {
     id: "demo-3", name: "Sophie Chen", email: "sophie.chen@mail.com", team: "Sprint Group",
     age: 24, weightKg: 52, heightCm: 164,
     recovery: 91, sleep: 95, sleepEff: 94, hrv: 105, rhr: 42, spo2: 98.2, resp: 13.1, skinTemp: -0.1,
@@ -219,8 +219,8 @@ const MOCK_ATHLETES: AthleteSummary[] = [
     powerCurve5s: 490, powerCurve30s: 370, powerCurve1m: 310, powerCurve5m: 280, powerCurve30m: 235,
     polarizedLow: 82, polarizedMod: 4, polarizedHigh: 14,
     seed: 3003,
-  }),
-  mockAthlete({
+  },
+  {
     id: "demo-4", name: "Jonas Keller", email: "jonas.keller@mail.com", team: "Endurance Squad",
     age: 29, weightKg: 71, heightCm: 178,
     recovery: 68, sleep: 74, sleepEff: 80, hrv: 62, rhr: 52, spo2: 97.4, resp: 15.0, skinTemp: 0.2,
@@ -228,8 +228,8 @@ const MOCK_ATHLETES: AthleteSummary[] = [
     powerCurve5s: 820, powerCurve30s: 620, powerCurve1m: 460, powerCurve5m: 340, powerCurve30m: 290,
     polarizedLow: 72, polarizedMod: 10, polarizedHigh: 18,
     seed: 4004,
-  }),
-  mockAthlete({
+  },
+  {
     id: "demo-5", name: "Emma Larsson", email: "emma.larsson@mail.com", team: "Sprint Group",
     age: 22, weightKg: 55, heightCm: 168,
     recovery: 33, sleep: 51, sleepEff: 65, hrv: 28, rhr: 64, spo2: 95.3, resp: 17.5, skinTemp: 0.6,
@@ -237,8 +237,8 @@ const MOCK_ATHLETES: AthleteSummary[] = [
     powerCurve5s: 920, powerCurve30s: 710, powerCurve1m: 420, powerCurve5m: 240, powerCurve30m: 190,
     polarizedLow: 50, polarizedMod: 30, polarizedHigh: 20,
     seed: 5005,
-  }),
-  mockAthlete({
+  },
+  {
     id: "demo-6", name: "Tom Hartmann", email: "tom.hartmann@mail.com", team: "Sprint Group",
     age: 26, weightKg: 68, heightCm: 175,
     recovery: 75, sleep: 82, sleepEff: 85, hrv: 71, rhr: 50, spo2: 97.6, resp: 14.8, skinTemp: 0.0,
@@ -246,35 +246,59 @@ const MOCK_ATHLETES: AthleteSummary[] = [
     powerCurve5s: 640, powerCurve30s: 510, powerCurve1m: 410, powerCurve5m: 330, powerCurve30m: 280,
     polarizedLow: 76, polarizedMod: 7, polarizedHigh: 17,
     seed: 6006,
-  }),
-];
+  },
+] as const;
 
-// ─── Dashboard data ───────────────────────────────────────────────────────────
+// ─── Dynamic data generation (regenerates on each request so dates stay current) ──
 
-const withRec = MOCK_ATHLETES.filter(a => a.recoveryScore != null);
-const withSlp = MOCK_ATHLETES.filter(a => a.sleepScore != null);
-const withHrv = MOCK_ATHLETES.filter(a => a.hrv != null);
+let _cachedDate: string | null = null;
+let _cachedAthletes: AthleteSummary[] | null = null;
+let _cachedDashboard: DashboardData | null = null;
 
-const MOCK_DASHBOARD: DashboardData = {
-  athletes: MOCK_ATHLETES,
-  teamAverageRecovery: Math.round(withRec.reduce((s, a) => s + (a.recoveryScore ?? 0), 0) / withRec.length),
-  teamAverageSleep: Math.round(withSlp.reduce((s, a) => s + (a.sleepScore ?? 0), 0) / withSlp.length),
-  teamAverageHrv: Math.round(withHrv.reduce((s, a) => s + (a.hrv ?? 0), 0) / withHrv.length),
-  attentionAthletes: MOCK_ATHLETES.filter(
-    a => (a.recoveryScore != null && a.recoveryScore < 60) || (a.sleepScore != null && a.sleepScore < 65)
-  ),
-};
+function todayStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getAthletes(): AthleteSummary[] {
+  const today = todayStr();
+  if (_cachedDate === today && _cachedAthletes) return _cachedAthletes;
+  _cachedAthletes = ATHLETE_CONFIGS.map(cfg => mockAthlete(cfg));
+  _cachedDate = today;
+  _cachedDashboard = null; // invalidate dashboard cache too
+  return _cachedAthletes;
+}
+
+function getDashboard(): DashboardData {
+  const athletes = getAthletes();
+  const today = todayStr();
+  if (_cachedDate === today && _cachedDashboard) return _cachedDashboard;
+
+  const withRec = athletes.filter(a => a.recoveryScore != null);
+  const withSlp = athletes.filter(a => a.sleepScore != null);
+  const withHrv = athletes.filter(a => a.hrv != null);
+
+  _cachedDashboard = {
+    athletes,
+    teamAverageRecovery: Math.round(withRec.reduce((s, a) => s + (a.recoveryScore ?? 0), 0) / withRec.length),
+    teamAverageSleep: Math.round(withSlp.reduce((s, a) => s + (a.sleepScore ?? 0), 0) / withSlp.length),
+    teamAverageHrv: Math.round(withHrv.reduce((s, a) => s + (a.hrv ?? 0), 0) / withHrv.length),
+    attentionAthletes: athletes.filter(
+      a => (a.recoveryScore != null && a.recoveryScore < 60) || (a.sleepScore != null && a.sleepScore < 65)
+    ),
+  };
+  return _cachedDashboard;
+}
 
 // ─── Public API (same signatures as production) ───────────────────────────────
 
 export async function getDashboardData(): Promise<DashboardData> {
-  return MOCK_DASHBOARD;
+  return getDashboard();
 }
 
 export async function getAthleteById(id: string): Promise<AthleteSummary | null> {
-  return MOCK_ATHLETES.find(a => a.id === id || a.userId === id) ?? null;
+  return getAthletes().find(a => a.id === id || a.userId === id) ?? null;
 }
 
 export async function getAthleteByUserId(userId: string): Promise<AthleteSummary | null> {
-  return MOCK_ATHLETES.find(a => a.userId === userId) ?? null;
+  return getAthletes().find(a => a.userId === userId) ?? null;
 }
