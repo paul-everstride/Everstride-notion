@@ -2,6 +2,13 @@
  * DEMO DATA LAYER — Mock data for marketing / screenshots.
  * No API calls, no Supabase, no OW backend needed.
  * Generates 365 days of history + full-year trends for all metrics.
+ *
+ * Data generation mimics real WHOOP patterns:
+ * - HRV and Recovery are strongly correlated (same shape)
+ * - Day-to-day values are noisy/spiky, NOT smooth random walks
+ * - Each athlete has a distinct profile (elite → struggling)
+ * - Occasional bad days (dips) and rare peak days
+ * - RHR inversely correlates with HRV/Recovery
  */
 
 import type { AthleteSummary, DashboardData, RecoveryHistoryDay, TrendPoint } from "@/lib/types";
@@ -32,11 +39,204 @@ function seeded(seed: number) {
   return () => { s = (s * 16807 + 0) % 2147483647; return (s - 1) / 2147483646; };
 }
 
+/** Box-Muller: generate a normally-distributed random number (mean 0, stddev 1) */
+function gaussianPair(rng: () => number): [number, number] {
+  const u1 = Math.max(1e-10, rng());
+  const u2 = rng();
+  const mag = Math.sqrt(-2 * Math.log(u1));
+  return [mag * Math.cos(2 * Math.PI * u2), mag * Math.sin(2 * Math.PI * u2)];
+}
+
 const HISTORY_DAYS = 365;
 const TREND_DAYS = 365;
 
-/** Generate realistic trend with gradual drift and noise */
-function genTrend(base: number, variance: number, days: number, seed: number): TrendPoint[] {
+// ─── Athlete profile type ─────────────────────────────────────────────────────
+
+type AthleteProfile = {
+  // HRV distribution
+  hrvMean: number;      // typical HRV in ms (e.g. 75 for good athlete)
+  hrvStdDev: number;    // day-to-day spread (e.g. 15 = ±15ms typical)
+  hrvMin: number;       // floor
+  hrvMax: number;       // ceiling
+
+  // Recovery mapping (derived from HRV each day)
+  recNoise: number;     // extra recovery noise on top of HRV correlation (stddev)
+
+  // Bad days: chance of a significant dip (both HRV and recovery tank)
+  badDayChance: number; // e.g. 0.04 = ~4% of days = ~15/year
+  badDayDrop: number;   // how much HRV drops on bad days (subtracted)
+
+  // Peak days: chance of an exceptional recovery (95-100)
+  peakChance: number;   // e.g. 0.015 = ~5 days/year
+
+  // RHR
+  rhrMean: number;
+  rhrStdDev: number;
+
+  // Sleep
+  sleepMean: number;
+  sleepStdDev: number;
+  sleepEffMean: number;
+  sleepEffStdDev: number;
+
+  // Other vitals
+  spo2Mean: number;
+  respMean: number;
+  skinTempMean: number;
+};
+
+// ─── Core data generation (spiky, WHOOP-like) ─────────────────────────────────
+
+/**
+ * Generate recovery history for N days.
+ * HRV is drawn fresh each day (spiky), recovery is derived from HRV.
+ * This matches real WHOOP patterns where graphs look very noisy day-to-day.
+ */
+function genHistory(
+  profile: AthleteProfile,
+  days: number,
+  seed: number
+): RecoveryHistoryDay[] {
+  const rng = seeded(seed);
+  const history: RecoveryHistoryDay[] = [];
+
+  for (let i = days - 1; i >= 0; i--) {
+    // Generate two gaussian pairs (4 random normals) for this day
+    const [g1, g2] = gaussianPair(rng);
+    const [g3, g4] = gaussianPair(rng);
+
+    // ── HRV: drawn independently each day (spiky, not a random walk) ──
+    let hrv = profile.hrvMean + g1 * profile.hrvStdDev;
+
+    // Bad day check (both HRV and recovery tank together)
+    const isBadDay = rng() < profile.badDayChance;
+    if (isBadDay) {
+      hrv -= profile.badDayDrop + rng() * profile.badDayDrop * 0.5;
+    }
+
+    // Peak day check (only for athletes with peakChance > 0)
+    const isPeakDay = !isBadDay && rng() < profile.peakChance;
+    if (isPeakDay) {
+      hrv = profile.hrvMean + profile.hrvStdDev * (1.5 + rng() * 1.0);
+    }
+
+    hrv = Math.max(profile.hrvMin, Math.min(profile.hrvMax, Math.round(hrv)));
+
+    // ── Recovery: strongly correlated with HRV ──
+    // Map HRV to recovery: normalize HRV position within its range → map to recovery
+    const hrvNorm = (hrv - profile.hrvMin) / (profile.hrvMax - profile.hrvMin); // 0..1
+    let rec = 20 + hrvNorm * 75; // base mapping: 20..95
+    rec += g2 * profile.recNoise; // small independent noise
+
+    if (isPeakDay) {
+      rec = Math.max(rec, 95 + rng() * 5); // push to 95-100
+    }
+    if (isBadDay) {
+      rec = Math.min(rec, 35 - rng() * 15); // push below 35
+    }
+
+    rec = Math.max(1, Math.min(100, Math.round(rec)));
+
+    // ── RHR: inversely correlated with HRV (high HRV = low RHR) ──
+    const rhrFromHrv = profile.rhrMean - (hrv - profile.hrvMean) * 0.15;
+    const rhr = Math.max(36, Math.min(75, Math.round(rhrFromHrv + g3 * profile.rhrStdDev)));
+
+    // ── Sleep metrics ──
+    const sleepEff = Math.max(55, Math.min(99, Math.round(profile.sleepEffMean + g4 * profile.sleepEffStdDev)));
+    const [g5, g6] = gaussianPair(rng);
+    const dur = Math.max(300, Math.min(600, Math.round(profile.sleepMean * 60 + g5 * 45)));
+    const durScore = Math.min(100, Math.round((dur / 480) * 100));
+    const sleepScore = Math.round((sleepEff + durScore) / 2);
+
+    // ── Other vitals ──
+    const spo2 = Math.max(93, Math.min(100, Math.round((profile.spo2Mean + g6 * 0.8) * 10) / 10));
+    const [g7, g8] = gaussianPair(rng);
+    const resp = Math.max(11, Math.min(20, Math.round((profile.respMean + g7 * 0.8) * 10) / 10));
+    const skin = Math.round((profile.skinTempMean + g8 * 0.3) * 10) / 10;
+
+    // ── Sleep stages ──
+    const deepPct = Math.max(0.08, Math.min(0.25, 0.16 + rng() * 0.08 - 0.04));
+    const remPct = Math.max(0.15, Math.min(0.30, 0.22 + rng() * 0.06 - 0.03));
+    const awakePct = Math.max(0.01, Math.min(0.08, 0.04 + rng() * 0.04 - 0.02));
+    const lightPct = 1 - deepPct - remPct - awakePct;
+
+    const ds = dateStr(i);
+    history.push({
+      date: ds,
+      label: fullDayLabel(ds),
+      shortLabel: shortLabel(ds),
+      recoveryScore: rec,
+      hrv,
+      restHr: rhr,
+      spo2,
+      skinTempC: skin,
+      resp,
+      sleepScore,
+      sleepEfficiency: sleepEff,
+      sleepDurationMins: dur,
+      sleepDeepMins: Math.round(dur * deepPct),
+      sleepRemMins: Math.round(dur * remPct),
+      sleepLightMins: Math.round(dur * lightPct),
+      sleepAwakeMins: Math.round(dur * awakePct),
+    });
+  }
+  return history;
+}
+
+/**
+ * Generate correlated spiky trends for recovery + HRV (used by trend charts).
+ * Same approach as genHistory: each day is independent, not a random walk.
+ */
+function genCorrelatedTrends(
+  profile: AthleteProfile,
+  days: number,
+  seed: number
+): { recTrend: TrendPoint[]; hrvTrend: TrendPoint[] } {
+  const rng = seeded(seed);
+  const recPts: TrendPoint[] = [];
+  const hrvPts: TrendPoint[] = [];
+
+  for (let i = days - 1; i >= 0; i--) {
+    const [g1, g2] = gaussianPair(rng);
+
+    let hrv = profile.hrvMean + g1 * profile.hrvStdDev;
+    const isBadDay = rng() < profile.badDayChance;
+    const isPeakDay = !isBadDay && rng() < profile.peakChance;
+
+    if (isBadDay) hrv -= profile.badDayDrop + rng() * profile.badDayDrop * 0.5;
+    if (isPeakDay) hrv = profile.hrvMean + profile.hrvStdDev * (1.5 + rng() * 1.0);
+    hrv = Math.max(profile.hrvMin, Math.min(profile.hrvMax, hrv));
+
+    const hrvNorm = (hrv - profile.hrvMin) / (profile.hrvMax - profile.hrvMin);
+    let rec = 20 + hrvNorm * 75;
+    rec += g2 * profile.recNoise;
+    if (isPeakDay) rec = Math.max(rec, 95 + rng() * 5);
+    if (isBadDay) rec = Math.min(rec, 35 - rng() * 15);
+    rec = Math.max(1, Math.min(100, rec));
+
+    const ds = dateStr(i);
+    hrvPts.push({ label: shortLabel(ds), value: Math.round(hrv * 10) / 10, date: ds });
+    recPts.push({ label: shortLabel(ds), value: Math.round(rec * 10) / 10, date: ds });
+  }
+  return { recTrend: recPts, hrvTrend: hrvPts };
+}
+
+/** Generate a spiky trend (not a random walk — each day is independent) */
+function genSpikyTrend(base: number, stdDev: number, min: number, max: number, days: number, seed: number): TrendPoint[] {
+  const rng = seeded(seed);
+  const pts: TrendPoint[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const [g] = gaussianPair(rng);
+    rng(); // consume second gaussian to keep seed in sync
+    const v = Math.max(min, Math.min(max, base + g * stdDev));
+    const ds = dateStr(i);
+    pts.push({ label: shortLabel(ds), value: Math.round(v * 10) / 10, date: ds });
+  }
+  return pts;
+}
+
+/** Generate a slow-drifting trend (for metrics like FTP, VO2max that change gradually) */
+function genDriftTrend(base: number, variance: number, days: number, seed: number): TrendPoint[] {
   const rng = seeded(seed);
   const pts: TrendPoint[] = [];
   let v = base;
@@ -49,97 +249,6 @@ function genTrend(base: number, variance: number, days: number, seed: number): T
   return pts;
 }
 
-/** Generate correlated recovery + HRV trends (HRV drives recovery) */
-function genCorrelatedTrends(
-  baseRec: number, baseHrv: number, recVariance: number, hrvVariance: number,
-  days: number, seed: number
-): { recTrend: TrendPoint[]; hrvTrend: TrendPoint[] } {
-  const rng = seeded(seed);
-  const recPts: TrendPoint[] = [];
-  const hrvPts: TrendPoint[] = [];
-  let hrv = baseHrv;
-
-  for (let i = days - 1; i >= 0; i--) {
-    // HRV drifts with random walk
-    const hrvNoise = (rng() - 0.5) * hrvVariance;
-    hrv += hrvNoise;
-    hrv = Math.max(baseHrv - hrvVariance * 3, Math.min(baseHrv + hrvVariance * 3, hrv));
-
-    // Recovery follows HRV: map HRV to recovery range, add small independent noise
-    const hrvFraction = (hrv - (baseHrv - hrvVariance * 3)) / (hrvVariance * 6);
-    const recFromHrv = 35 + hrvFraction * 55; // maps to ~35–90
-    const recNoise = (rng() - 0.5) * recVariance * 0.4; // small independent noise
-    const rec = Math.max(15, Math.min(96, recFromHrv + recNoise));
-
-    const ds = dateStr(i);
-    hrvPts.push({ label: shortLabel(ds), value: Math.round(hrv * 10) / 10, date: ds });
-    recPts.push({ label: shortLabel(ds), value: Math.round(rec * 10) / 10, date: ds });
-  }
-  return { recTrend: recPts, hrvTrend: hrvPts };
-}
-
-/** Generate recovery history for N days */
-function genHistory(
-  baseRec: number, baseHrv: number, baseRhr: number, baseSpo2: number,
-  baseResp: number, baseSkin: number, baseSleepEff: number,
-  days: number, seed: number
-): RecoveryHistoryDay[] {
-  const rng = seeded(seed);
-  const history: RecoveryHistoryDay[] = [];
-  let rec = baseRec, hrv = baseHrv, rhr = baseRhr;
-
-  for (let i = days - 1; i >= 0; i--) {
-    // Add slight seasonal drift — better recovery in summer, worse in winter
-    const dayOfYear = new Date(Date.now() - i * 86_400_000).getMonth();
-    const seasonalBoost = Math.sin((dayOfYear / 12) * Math.PI * 2) * 3;
-
-    // HRV drifts with random walk + seasonal influence
-    hrv = Math.max(15, Math.min(130, hrv + (rng() - 0.5) * 7 + seasonalBoost * 0.1));
-    // RHR inversely correlated: lower RHR = better condition
-    rhr = Math.max(38, Math.min(72, rhr + (rng() - 0.5) * 2.5 - seasonalBoost * 0.05));
-
-    // Recovery is DERIVED from HRV — correlated, not independent
-    // Map current HRV to recovery: higher HRV → higher recovery
-    const hrvFraction = (hrv - 15) / (130 - 15); // 0..1 across HRV range
-    const recBase = 30 + hrvFraction * 55; // maps to ~30–85 range
-    const recNoise = (rng() - 0.5) * 12; // day-to-day variation
-    // Occasional bad days (roughly 1 in 15 days)
-    const badDay = rng() < 0.07 ? -(15 + rng() * 15) : 0;
-    rec = Math.max(12, Math.min(96, recBase + recNoise + badDay));
-    const spo2 = Math.max(93, Math.min(100, baseSpo2 + (rng() - 0.5) * 2));
-    const resp = Math.max(11, Math.min(20, baseResp + (rng() - 0.5) * 1.5));
-    const skin = Math.round((baseSkin + (rng() - 0.5) * 0.6) * 10) / 10;
-    const eff = Math.max(60, Math.min(98, baseSleepEff + (rng() - 0.5) * 10));
-    const dur = Math.round(360 + rng() * 180);
-    const durScore = Math.min(100, Math.round((dur / 480) * 100));
-    const deepPct = 0.12 + rng() * 0.1;
-    const remPct = 0.18 + rng() * 0.08;
-    const awakePct = 0.03 + rng() * 0.05;
-    const lightPct = 1 - deepPct - remPct - awakePct;
-    const ds = dateStr(i);
-
-    history.push({
-      date: ds,
-      label: fullDayLabel(ds),
-      shortLabel: shortLabel(ds),
-      recoveryScore: Math.round(rec),
-      hrv: Math.round(hrv),
-      restHr: Math.round(rhr),
-      spo2: Math.round(spo2 * 10) / 10,
-      skinTempC: skin,
-      resp: Math.round(resp * 10) / 10,
-      sleepScore: Math.round((eff + durScore) / 2),
-      sleepEfficiency: Math.round(eff),
-      sleepDurationMins: dur,
-      sleepDeepMins: Math.round(dur * deepPct),
-      sleepRemMins: Math.round(dur * remPct),
-      sleepLightMins: Math.round(dur * lightPct),
-      sleepAwakeMins: Math.round(dur * awakePct),
-    });
-  }
-  return history;
-}
-
 function statusNote(rec: number | null): string {
   if (rec == null) return "No recovery data yet.";
   if (rec >= 67) return "Good recovery. Ready for training.";
@@ -147,13 +256,73 @@ function statusNote(rec: number | null): string {
   return "Low recovery. Reduce training load.";
 }
 
+// ─── Athlete profiles ────────────────────────────────────────────────────────
+// Each profile defines how that athlete's data looks across the year.
+// Think of it as their "physiology" — some athletes recover better than others.
+
+const PROFILES: Record<string, AthleteProfile> = {
+  // Sophie Chen — ELITE. The best on the team. High HRV, high recovery.
+  // Hits 100% recovery 4-5 times/year. Rarely has bad days.
+  elite: {
+    hrvMean: 85, hrvStdDev: 18, hrvMin: 30, hrvMax: 135,
+    recNoise: 5, badDayChance: 0.03, badDayDrop: 30, peakChance: 0.014,
+    rhrMean: 44, rhrStdDev: 3,
+    sleepMean: 7.8, sleepStdDev: 0.6, sleepEffMean: 92, sleepEffStdDev: 4,
+    spo2Mean: 98.0, respMean: 13.5, skinTempMean: -0.1,
+  },
+
+  // Lena Berger — VERY GOOD. Solid recovery, mostly green. Occasionally hits 95+.
+  veryGood: {
+    hrvMean: 68, hrvStdDev: 16, hrvMin: 20, hrvMax: 120,
+    recNoise: 6, badDayChance: 0.05, badDayDrop: 25, peakChance: 0.008,
+    rhrMean: 48, rhrStdDev: 3,
+    sleepMean: 7.5, sleepStdDev: 0.7, sleepEffMean: 89, sleepEffStdDev: 5,
+    spo2Mean: 97.8, respMean: 14.2, skinTempMean: 0.1,
+  },
+
+  // Tom Hartmann — GOOD. Above average, decent consistency.
+  good: {
+    hrvMean: 60, hrvStdDev: 15, hrvMin: 18, hrvMax: 110,
+    recNoise: 7, badDayChance: 0.06, badDayDrop: 22, peakChance: 0.005,
+    rhrMean: 50, rhrStdDev: 3.5,
+    sleepMean: 7.3, sleepStdDev: 0.8, sleepEffMean: 85, sleepEffStdDev: 5,
+    spo2Mean: 97.6, respMean: 14.8, skinTempMean: 0.0,
+  },
+
+  // Jonas Keller — AVERAGE. Solid but inconsistent. More yellow days than green.
+  average: {
+    hrvMean: 52, hrvStdDev: 14, hrvMin: 15, hrvMax: 100,
+    recNoise: 8, badDayChance: 0.07, badDayDrop: 20, peakChance: 0.003,
+    rhrMean: 53, rhrStdDev: 4,
+    sleepMean: 7.0, sleepStdDev: 0.9, sleepEffMean: 80, sleepEffStdDev: 6,
+    spo2Mean: 97.4, respMean: 15.0, skinTempMean: 0.2,
+  },
+
+  // Marco Silva — BELOW AVERAGE / OVERTRAINED. Pushing too hard, low recovery.
+  belowAvg: {
+    hrvMean: 42, hrvStdDev: 12, hrvMin: 12, hrvMax: 85,
+    recNoise: 8, badDayChance: 0.10, badDayDrop: 18, peakChance: 0.001,
+    rhrMean: 58, rhrStdDev: 4,
+    sleepMean: 6.5, sleepStdDev: 1.0, sleepEffMean: 73, sleepEffStdDev: 7,
+    spo2Mean: 96.1, respMean: 16.5, skinTempMean: 0.4,
+  },
+
+  // Emma Larsson — STRUGGLING. Poor sleep, low HRV, frequently in the red.
+  struggling: {
+    hrvMean: 35, hrvStdDev: 10, hrvMin: 10, hrvMax: 75,
+    recNoise: 7, badDayChance: 0.12, badDayDrop: 15, peakChance: 0.0,
+    rhrMean: 63, rhrStdDev: 4,
+    sleepMean: 6.0, sleepStdDev: 1.0, sleepEffMean: 66, sleepEffStdDev: 8,
+    spo2Mean: 95.5, respMean: 17.2, skinTempMean: 0.6,
+  },
+};
+
 // ─── Mock athlete builder ─────────────────────────────────────────────────────
 
 function mockAthlete(cfg: {
   id: string; name: string; email: string; team: string;
   age: number; weightKg: number; heightCm: number;
-  recovery: number; sleep: number; sleepEff: number; hrv: number; rhr: number;
-  spo2: number; resp: number; skinTemp: number;
+  profile: AthleteProfile;
   ftp: number; vo2Max: number; powerMax: number;
   tss: number; atl: number; ctl: number; tsb: number;
   powerCurve5s: number; powerCurve30s: number; powerCurve1m: number;
@@ -162,7 +331,8 @@ function mockAthlete(cfg: {
   seed: number;
 }): AthleteSummary {
   const today = dateStr(0);
-  const history = genHistory(cfg.recovery, cfg.hrv, cfg.rhr, cfg.spo2, cfg.resp, cfg.skinTemp, cfg.sleepEff, HISTORY_DAYS, cfg.seed);
+  const p = cfg.profile;
+  const history = genHistory(p, HISTORY_DAYS, cfg.seed);
   const todayEntry = history[history.length - 1];
 
   const totalMins = todayEntry.sleepDurationMins ?? 450;
@@ -193,11 +363,11 @@ function mockAthlete(cfg: {
     ftp: cfg.ftp,
     powerMax: cfg.powerMax,
     polarizedZones: { low: cfg.polarizedLow, moderate: cfg.polarizedMod, high: cfg.polarizedHigh },
-    spo2: cfg.spo2,
-    sleepConsistency: Math.round(cfg.sleep * 0.95),
-    sleepEfficiency: cfg.sleepEff,
-    respirationRate: cfg.resp,
-    skinTemp: cfg.skinTemp,
+    spo2: todayEntry.spo2,
+    sleepConsistency: Math.round(todayEntry.sleepScore * 0.95),
+    sleepEfficiency: todayEntry.sleepEfficiency,
+    respirationRate: todayEntry.resp,
+    skinTemp: todayEntry.skinTempC,
     totalBedMs: (totalMins + 15) * 60_000,
     totalRemMs: remMins * 60_000,
     totalSlowWaveMs: deepMins * 60_000,
@@ -206,20 +376,25 @@ function mockAthlete(cfg: {
     creationDate: today,
     createdAt: dateStr(HISTORY_DAYS) + "T00:00:00.000Z",
     statusNote: statusNote(todayEntry.recoveryScore),
+    // Recovery + HRV trends are generated together (correlated, spiky)
     ...(() => {
-      const { recTrend, hrvTrend } = genCorrelatedTrends(cfg.recovery, cfg.hrv, 8, 10, TREND_DAYS, cfg.seed + 1);
+      const { recTrend, hrvTrend } = genCorrelatedTrends(p, TREND_DAYS, cfg.seed + 1);
       return { readinessTrend: recTrend, hrvTrend };
     })(),
-    sleepTrend:           genTrend(cfg.sleep, 6, TREND_DAYS, cfg.seed + 2),
-    rhrTrend:             genTrend(cfg.rhr, 3, TREND_DAYS, cfg.seed + 4),
-    tssTrend:             genTrend(cfg.tss, 40, TREND_DAYS, cfg.seed + 6),
-    sleepEfficiencyTrend: genTrend(cfg.sleepEff, 5, TREND_DAYS, cfg.seed + 5),
-    atlTrend:             genTrend(cfg.atl, 12, TREND_DAYS, cfg.seed + 7),
-    ctlTrend:             genTrend(cfg.ctl, 6, TREND_DAYS, cfg.seed + 8),
-    tsbTrend:             genTrend(cfg.tsb, 8, TREND_DAYS, cfg.seed + 9),
-    powerTrend:           genTrend(cfg.powerMax, 30, TREND_DAYS, cfg.seed + 10),
-    ftpTrend:             genTrend(cfg.ftp, 8, TREND_DAYS, cfg.seed + 11),
-    vo2MaxTrend:          genTrend(cfg.vo2Max, 2, TREND_DAYS, cfg.seed + 12),
+    // Sleep + efficiency: spiky day-to-day
+    sleepTrend:           genSpikyTrend(p.sleepMean * 12, p.sleepStdDev * 8, 40, 100, TREND_DAYS, cfg.seed + 2),
+    sleepEfficiencyTrend: genSpikyTrend(p.sleepEffMean, p.sleepEffStdDev, 55, 99, TREND_DAYS, cfg.seed + 5),
+    // RHR: spiky, inversely related to recovery
+    rhrTrend:             genSpikyTrend(p.rhrMean, p.rhrStdDev, 36, 75, TREND_DAYS, cfg.seed + 4),
+    // Training load metrics: slow drift (these change gradually)
+    tssTrend:             genDriftTrend(cfg.tss, 40, TREND_DAYS, cfg.seed + 6),
+    atlTrend:             genDriftTrend(cfg.atl, 12, TREND_DAYS, cfg.seed + 7),
+    ctlTrend:             genDriftTrend(cfg.ctl, 6, TREND_DAYS, cfg.seed + 8),
+    tsbTrend:             genDriftTrend(cfg.tsb, 8, TREND_DAYS, cfg.seed + 9),
+    // Performance: slow drift (FTP, power, VO2 change over weeks/months)
+    powerTrend:           genDriftTrend(cfg.powerMax, 30, TREND_DAYS, cfg.seed + 10),
+    ftpTrend:             genDriftTrend(cfg.ftp, 8, TREND_DAYS, cfg.seed + 11),
+    vo2MaxTrend:          genDriftTrend(cfg.vo2Max, 2, TREND_DAYS, cfg.seed + 12),
     powerCurve: [
       { label: "5 sec", value: cfg.powerCurve5s },
       { label: "30 sec", value: cfg.powerCurve30s },
@@ -236,8 +411,7 @@ function mockAthlete(cfg: {
 const ATHLETE_CONFIGS = [
   {
     id: "demo-1", name: "Lena Berger", email: "lena.berger@mail.com", team: "Endurance Squad",
-    age: 27, weightKg: 58, heightCm: 170,
-    recovery: 82, sleep: 88, sleepEff: 91, hrv: 78, rhr: 48, spo2: 97.8, resp: 14.2, skinTemp: 0.1,
+    age: 27, weightKg: 58, heightCm: 170, profile: PROFILES.veryGood,
     ftp: 245, vo2Max: 58, powerMax: 680, tss: 320, atl: 85, ctl: 72, tsb: -13,
     powerCurve5s: 680, powerCurve30s: 480, powerCurve1m: 340, powerCurve5m: 290, powerCurve30m: 260,
     polarizedLow: 78, polarizedMod: 5, polarizedHigh: 17,
@@ -245,8 +419,7 @@ const ATHLETE_CONFIGS = [
   },
   {
     id: "demo-2", name: "Marco Silva", email: "marco.silva@mail.com", team: "Endurance Squad",
-    age: 31, weightKg: 74, heightCm: 182,
-    recovery: 45, sleep: 62, sleepEff: 72, hrv: 35, rhr: 58, spo2: 96.1, resp: 16.8, skinTemp: 0.4,
+    age: 31, weightKg: 74, heightCm: 182, profile: PROFILES.belowAvg,
     ftp: 275, vo2Max: 60, powerMax: 1120, tss: 480, atl: 135, ctl: 95, tsb: -40,
     powerCurve5s: 1120, powerCurve30s: 820, powerCurve1m: 510, powerCurve5m: 330, powerCurve30m: 285,
     polarizedLow: 55, polarizedMod: 25, polarizedHigh: 20,
@@ -254,8 +427,7 @@ const ATHLETE_CONFIGS = [
   },
   {
     id: "demo-3", name: "Sophie Chen", email: "sophie.chen@mail.com", team: "Sprint Group",
-    age: 24, weightKg: 52, heightCm: 164,
-    recovery: 91, sleep: 95, sleepEff: 94, hrv: 105, rhr: 42, spo2: 98.2, resp: 13.1, skinTemp: -0.1,
+    age: 24, weightKg: 52, heightCm: 164, profile: PROFILES.elite,
     ftp: 215, vo2Max: 56, powerMax: 490, tss: 180, atl: 55, ctl: 60, tsb: 5,
     powerCurve5s: 490, powerCurve30s: 370, powerCurve1m: 310, powerCurve5m: 280, powerCurve30m: 235,
     polarizedLow: 82, polarizedMod: 4, polarizedHigh: 14,
@@ -263,8 +435,7 @@ const ATHLETE_CONFIGS = [
   },
   {
     id: "demo-4", name: "Jonas Keller", email: "jonas.keller@mail.com", team: "Endurance Squad",
-    age: 29, weightKg: 71, heightCm: 178,
-    recovery: 68, sleep: 74, sleepEff: 80, hrv: 62, rhr: 52, spo2: 97.4, resp: 15.0, skinTemp: 0.2,
+    age: 29, weightKg: 71, heightCm: 178, profile: PROFILES.average,
     ftp: 270, vo2Max: 57, powerMax: 820, tss: 350, atl: 90, ctl: 78, tsb: -12,
     powerCurve5s: 820, powerCurve30s: 620, powerCurve1m: 460, powerCurve5m: 340, powerCurve30m: 290,
     polarizedLow: 72, polarizedMod: 10, polarizedHigh: 18,
@@ -272,8 +443,7 @@ const ATHLETE_CONFIGS = [
   },
   {
     id: "demo-5", name: "Emma Larsson", email: "emma.larsson@mail.com", team: "Sprint Group",
-    age: 22, weightKg: 55, heightCm: 168,
-    recovery: 33, sleep: 51, sleepEff: 65, hrv: 28, rhr: 64, spo2: 95.3, resp: 17.5, skinTemp: 0.6,
+    age: 22, weightKg: 55, heightCm: 168, profile: PROFILES.struggling,
     ftp: 185, vo2Max: 47, powerMax: 920, tss: 420, atl: 120, ctl: 70, tsb: -50,
     powerCurve5s: 920, powerCurve30s: 710, powerCurve1m: 420, powerCurve5m: 240, powerCurve30m: 190,
     polarizedLow: 50, polarizedMod: 30, polarizedHigh: 20,
@@ -281,8 +451,7 @@ const ATHLETE_CONFIGS = [
   },
   {
     id: "demo-6", name: "Tom Hartmann", email: "tom.hartmann@mail.com", team: "Sprint Group",
-    age: 26, weightKg: 68, heightCm: 175,
-    recovery: 75, sleep: 82, sleepEff: 85, hrv: 71, rhr: 50, spo2: 97.6, resp: 14.8, skinTemp: 0.0,
+    age: 26, weightKg: 68, heightCm: 175, profile: PROFILES.good,
     ftp: 260, vo2Max: 54, powerMax: 640, tss: 280, atl: 75, ctl: 68, tsb: -7,
     powerCurve5s: 640, powerCurve30s: 510, powerCurve1m: 410, powerCurve5m: 330, powerCurve30m: 280,
     polarizedLow: 76, polarizedMod: 7, polarizedHigh: 17,
@@ -296,22 +465,22 @@ let _cachedDate: string | null = null;
 let _cachedAthletes: AthleteSummary[] | null = null;
 let _cachedDashboard: DashboardData | null = null;
 
-function todayStr(): string {
+function todayString(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
 function getAthletes(): AthleteSummary[] {
-  const today = todayStr();
+  const today = todayString();
   if (_cachedDate === today && _cachedAthletes) return _cachedAthletes;
   _cachedAthletes = ATHLETE_CONFIGS.map(cfg => mockAthlete(cfg));
   _cachedDate = today;
-  _cachedDashboard = null; // invalidate dashboard cache too
+  _cachedDashboard = null;
   return _cachedAthletes;
 }
 
 function getDashboard(): DashboardData {
   const athletes = getAthletes();
-  const today = todayStr();
+  const today = todayString();
   if (_cachedDate === today && _cachedDashboard) return _cachedDashboard;
 
   const withRec = athletes.filter(a => a.recoveryScore != null);
