@@ -168,7 +168,7 @@ function MetricCard({
   accentColor: string;
 }) {
   return (
-    <div className="border border-line bg-canvas rounded-lg flex flex-col h-full overflow-hidden">
+    <div className="border border-line bg-canvas rounded-lg flex flex-col overflow-hidden">
       <div className="flex items-center justify-between px-3 pt-3 pb-1">
         <span className="text-xs text-muted">{label}</span>
         <span style={{ color: accentColor, opacity: 0.6 }}>{icon}</span>
@@ -1109,7 +1109,7 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
           <div className="relative z-10 grid grid-cols-1 gap-4 lg:grid-cols-4 p-4">
 
           {/* 2×2 metric cards */}
-          <div className="lg:col-span-2 flex flex-col gap-2">
+          <div className="lg:col-span-2 flex flex-col gap-2 self-start">
             <div className="flex items-center justify-between">
               <span className="text-xs text-white">Quick view</span>
               <button type="button" onClick={() => setShowQuickPicker(true)}
@@ -1118,7 +1118,7 @@ export function DashboardWorkspace({ dashboard }: { dashboard: DashboardData }) 
                 Edit
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-3 flex-1">
+            <div className="grid grid-cols-2 gap-3">
               {activeQuickMetrics.map(m => {
                 const athlete = m.pick(dashboard.athletes);
                 return (
