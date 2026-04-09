@@ -57,7 +57,7 @@ export function TrendChart({ data, state = "default", color = "#e16b2b" }: Trend
     );
   }
 
-  const values = data.map((d) => d.value).filter((v): v is number => v != null);
+  const values = data.map((d) => d.value).filter((v): v is number => v != null && !isNaN(v));
   const [yMin, yMax] = computeDomain(values);
   const avg = values.length ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : 0;
   const latest = values[values.length - 1] ?? 0;

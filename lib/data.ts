@@ -121,10 +121,12 @@ function toAthleteSummary(
   // Only use the most recent data point if it is from today.
   // WHOOP logs overnight sleep under the date it *completed* (the morning),
   // so today's date always contains the current night's data.
-  // If no data exists for today all headline metrics are null → "—".
+  // Show headline metrics if the latest data is from today or yesterday.
+  // WHOOP syncs after waking up, so yesterday's data is often the most recent.
   const todayStr     = new Date().toISOString().slice(0, 10);
+  const yesterdayStr = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
   const isRecent = (date: string | undefined): boolean =>
-    date != null && date === todayStr;
+    date != null && (date === todayStr || date === yesterdayStr);
 
   const recoveryScore: number | null =
     isRecent(ts_recovery[0]?.date) && ts_recovery[0]?.value != null
