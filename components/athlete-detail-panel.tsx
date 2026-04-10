@@ -1375,6 +1375,9 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                     {(() => {
                       const nowDate = new Date();
                       nowDate.setHours(0, 0, 0, 0);
+                      // Build sets of main/secondary race names for color coding
+                      const mainRaceNames = new Set((seasonPlan.form_payload?.mainRaces ?? []).map(r => r.name));
+                      const campNames = new Set((seasonPlan.form_payload?.trainingCamps ?? []).map(r => r.name));
                       return seasonPlan.plan_data.map((w) => {
                       const c = w.color?.startsWith("#") ? w.color : `#${w.color || "999"}`;
                       const weekStart = new Date(w.monday + "T00:00:00");
@@ -1419,8 +1422,13 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                         <td className="px-3 py-1.5">
                           {(() => {
                             const events: { name: string; cls: string }[] = [
-                              ...(w.races || []).map(r => ({ name: r, cls: "bg-red-50 text-red-700 border-red-200" })),
-                              ...(w.trainingCamps || []).map(r => ({ name: r, cls: "bg-emerald-50 text-emerald-700 border-emerald-200" })),
+                              ...(w.races || []).map(r => ({
+                                name: r,
+                                cls: mainRaceNames.has(r)
+                                  ? "bg-red-50 text-red-700 border-red-200"       // Main race → red
+                                  : "bg-amber-50 text-amber-700 border-amber-200" // Secondary race → orange
+                              })),
+                              ...(w.trainingCamps || []).map(r => ({ name: r, cls: "bg-gray-100 text-gray-600 border-gray-300" })),   // Camps → gray
                               ...(w.tests || []).map(r => ({ name: r, cls: "bg-violet-50 text-violet-700 border-violet-200" })),
                             ];
                             return events.length > 0 ? (
