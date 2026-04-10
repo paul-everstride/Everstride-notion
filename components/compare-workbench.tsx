@@ -761,7 +761,7 @@ function PowerHexagon({
         {athletes.map((athlete) => {
           const color = colorMap.get(athlete.id) ?? athleteColors[0];
           const maxDisplay = isWkg && athlete.weightKg
-            ? `${((athlete.powerMax ?? 0) / athlete.weightKg).toFixed(2)} w/kg`
+            ? `${((athlete.powerMax ?? 0) / athlete.weightKg).toFixed(2)} w/kg max`
             : `${athlete.powerMax}w max`;
           return (
             <div key={athlete.id} className="flex-1 flex flex-col gap-1 px-3 py-2.5 border-r border-line last:border-r-0">
