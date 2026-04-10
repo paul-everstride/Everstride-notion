@@ -838,7 +838,7 @@ function PowerHexagon({
                     const val = wattLookup.get(`${label}__${a.name}`) ?? 0;
                     return (
                       <td key={label} className="text-center px-2 py-1.5 font-semibold" style={{ color }}>
-                        {isWkg ? val.toFixed(1) : Math.round(val)}{isWkg ? "" : "w"}
+                        {isWkg ? `${val.toFixed(1)} w/kg` : `${Math.round(val)}w`}
                       </td>
                     );
                   })}
@@ -855,7 +855,7 @@ function PowerHexagon({
                 </td>
                 {selectedBenchmark.values.map((val, i) => (
                   <td key={i} className="text-center px-2 py-1.5 font-semibold text-gray-500">
-                    {val.toFixed(1)}
+                    {val.toFixed(1)} w/kg
                   </td>
                 ))}
               </tr>
