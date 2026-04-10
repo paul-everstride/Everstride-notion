@@ -783,39 +783,12 @@ function PowerHexagon({
           </div>
         )}
       </div>
-      <div className="px-2 py-3" style={{ height: 380 }}>
+      <div className="px-2 py-3" style={{ height: 320 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <RadarChart data={hexData} margin={{ top: 30, right: 60, bottom: 30, left: 60 }}>
+          <RadarChart data={hexData} margin={{ top: 16, right: 36, bottom: 16, left: 36 }}>
             <PolarGrid gridType="polygon" stroke="#e9e9e7" />
             <PolarAngleAxis dataKey="subject"
-              tick={({ x, y, payload }: { x: number; y: number; payload: { value: string } }) => {
-                const subject = payload.value;
-                // Build value lines: one per athlete + benchmark
-                const lines: { label: string; value: string; color: string }[] = [];
-                athletes.forEach(a => {
-                  const val = wattLookup.get(`${subject}__${a.name}`) ?? 0;
-                  const color = colorMap.get(a.id) ?? athleteColors[0];
-                  lines.push({
-                    label: a.name.split(" ")[0],
-                    value: isWkg ? `${val.toFixed(1)}` : `${Math.round(val)}`,
-                    color,
-                  });
-                });
-                if (selectedBenchmark) {
-                  const val = wattLookup.get(`${subject}__Benchmark`) ?? 0;
-                  lines.push({ label: "Bench", value: val.toFixed(1), color: "#94a3b8" });
-                }
-                return (
-                  <g transform={`translate(${x},${y})`}>
-                    <text textAnchor="middle" dy={-4} fill="#9b9a97" fontSize={11} fontWeight={600}>{subject}</text>
-                    {lines.map((l, i) => (
-                      <text key={i} textAnchor="middle" dy={9 + i * 11} fill={l.color} fontSize={9} fontFamily="inherit">
-                        {l.value}{isWkg ? "" : "w"}
-                      </text>
-                    ))}
-                  </g>
-                );
-              }} />
+              tick={{ fill: "#9b9a97", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }} />
             <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
             <Tooltip
               contentStyle={TS} labelStyle={TL}
@@ -838,6 +811,57 @@ function PowerHexagon({
             )}
           </RadarChart>
         </ResponsiveContainer>
+      </div>
+      {/* Values table below chart */}
+      <div className="border-t border-line overflow-x-auto">
+        <table className="w-full text-xs tabular">
+          <thead>
+            <tr className="border-b border-line">
+              <th className="text-left px-3 py-1.5 text-muted font-medium w-24" />
+              {POWER_SHORT_LABELS.map(label => (
+                <th key={label} className="text-center px-2 py-1.5 text-muted font-medium">{label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {athletes.map(a => {
+              const color = colorMap.get(a.id) ?? athleteColors[0];
+              return (
+                <tr key={a.id} className="border-b border-line last:border-0">
+                  <td className="px-3 py-1.5">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                      <span className="text-ink font-medium">{a.name.split(" ")[0]}</span>
+                    </span>
+                  </td>
+                  {POWER_SHORT_LABELS.map(label => {
+                    const val = wattLookup.get(`${label}__${a.name}`) ?? 0;
+                    return (
+                      <td key={label} className="text-center px-2 py-1.5 font-semibold" style={{ color }}>
+                        {isWkg ? val.toFixed(1) : Math.round(val)}{isWkg ? "" : "w"}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+            {selectedBenchmark && (
+              <tr className="bg-gray-50/50">
+                <td className="px-3 py-1.5">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full shrink-0 border border-gray-400 border-dashed" />
+                    <span className="text-muted font-medium">{selectedBenchmark.label}</span>
+                  </span>
+                </td>
+                {selectedBenchmark.values.map((val, i) => (
+                  <td key={i} className="text-center px-2 py-1.5 font-semibold text-gray-500">
+                    {val.toFixed(1)}
+                  </td>
+                ))}
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
