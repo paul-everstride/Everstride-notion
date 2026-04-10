@@ -1502,20 +1502,49 @@ export function CompareWorkbench({
 
   // Dynamic power metrics that respond to W vs W/kg toggle
   const wkg = powerUnit === "w/kg";
-  const toWkg = (watts: number, a: AthleteSummary) => a.weightKg ? Math.round((watts / a.weightKg) * 100) / 100 : 0;
-  const fmtWkg = (v: number) => v.toFixed(2);
-  const dynPowerCurveMetrics: CompareMetric[] = useMemo(() => wkg ? [
-    { key: "pc0",   label: "5 sec",     unit: "w/kg", baseValue: (a) => toWkg(a.powerCurve[0]?.value ?? 0, a), getSeries: scaledPowerSeries(0), renderCurrent: (a) => `${fmtWkg(toWkg(a.powerCurve[0]?.value ?? 0, a))} w/kg` },
-    { key: "pc1",   label: "30 sec",    unit: "w/kg", baseValue: (a) => toWkg(a.powerCurve[1]?.value ?? 0, a), getSeries: scaledPowerSeries(1), renderCurrent: (a) => `${fmtWkg(toWkg(a.powerCurve[1]?.value ?? 0, a))} w/kg` },
-    { key: "pc2",   label: "1 min",     unit: "w/kg", baseValue: (a) => toWkg(a.powerCurve[2]?.value ?? 0, a), getSeries: scaledPowerSeries(2), renderCurrent: (a) => `${fmtWkg(toWkg(a.powerCurve[2]?.value ?? 0, a))} w/kg` },
-    { key: "pc3",   label: "5 min",     unit: "w/kg", baseValue: (a) => toWkg(a.powerCurve[3]?.value ?? 0, a), getSeries: scaledPowerSeries(3), renderCurrent: (a) => `${fmtWkg(toWkg(a.powerCurve[3]?.value ?? 0, a))} w/kg` },
-    { key: "pc4",   label: "30 min",    unit: "w/kg", baseValue: (a) => toWkg(a.powerCurve[4]?.value ?? 0, a), getSeries: scaledPowerSeries(4), renderCurrent: (a) => `${fmtWkg(toWkg(a.powerCurve[4]?.value ?? 0, a))} w/kg` },
-    { key: "power", label: "Power max", unit: "w/kg", baseValue: (a) => toWkg(a.powerMax ?? 0, a),              getSeries: trendSeries("powerTrend"), renderCurrent: (a) => a.powerMax != null ? `${fmtWkg(toWkg(a.powerMax, a))} w/kg` : "N/A" },
-  ] : powerCurveMetrics, [wkg]);
-  const dynFitnessMetrics: CompareMetric[] = useMemo(() => wkg ? [
-    { key: "ftp",     label: "FTP",     unit: "w/kg", baseValue: (a) => toWkg(a.ftp ?? 0, a), getSeries: trendSeries("ftpTrend"), renderCurrent: (a) => a.ftp != null ? `${fmtWkg(toWkg(a.ftp, a))} w/kg` : "N/A" },
-    ...fitnessMetrics.slice(1), // VO2, TSS, TSB stay the same
-  ] : fitnessMetrics, [wkg]);
+  const fmtWkg = (v: number) => v.toFixed(1);
+
+  // Wraps a getSeries function to divide all values by athlete weight
+  const wkgSeries = (baseFn: (a: AthleteSummary, tf: string) => TrendPoint[]) =>
+    (a: AthleteSummary, tf: string) => {
+      const wt = a.weightKg || 1;
+      return baseFn(a, tf).map(pt => ({ ...pt, value: Math.round((pt.value / wt) * 10) / 10 }));
+    };
+
+  const dynPowerCurveMetrics: CompareMetric[] = useMemo(() => {
+    if (!wkg) return powerCurveMetrics;
+    return [0, 1, 2, 3, 4].map(i => {
+      const labels = ["5 sec", "30 sec", "1 min", "5 min", "30 min"];
+      return {
+        key: `pc${i}`,
+        label: labels[i],
+        unit: "w/kg",
+        baseValue: (a: AthleteSummary) => { const wt = a.weightKg || 1; return Math.round(((a.powerCurve[i]?.value ?? 0) / wt) * 10) / 10; },
+        getSeries: wkgSeries(scaledPowerSeries(i)),
+        renderCurrent: (a: AthleteSummary) => { const wt = a.weightKg || 1; return `${fmtWkg((a.powerCurve[i]?.value ?? 0) / wt)} w/kg`; },
+      };
+    }).concat([{
+      key: "power",
+      label: "Power max",
+      unit: "w/kg",
+      baseValue: (a: AthleteSummary) => { const wt = a.weightKg || 1; return Math.round(((a.powerMax ?? 0) / wt) * 10) / 10; },
+      getSeries: wkgSeries(trendSeries("powerTrend")),
+      renderCurrent: (a: AthleteSummary) => { const wt = a.weightKg || 1; return a.powerMax != null ? `${fmtWkg(a.powerMax / wt)} w/kg` : "N/A"; },
+    }]);
+  }, [wkg]);
+
+  const dynFitnessMetrics: CompareMetric[] = useMemo(() => {
+    if (!wkg) return fitnessMetrics;
+    return [{
+      key: "ftp",
+      label: "FTP",
+      unit: "w/kg",
+      baseValue: (a: AthleteSummary) => { const wt = a.weightKg || 1; return Math.round(((a.ftp ?? 0) / wt) * 10) / 10; },
+      getSeries: wkgSeries(trendSeries("ftpTrend")),
+      renderCurrent: (a: AthleteSummary) => { const wt = a.weightKg || 1; return a.ftp != null ? `${fmtWkg(a.ftp / wt)} w/kg` : "N/A"; },
+    }, ...fitnessMetrics.slice(1)];
+  }, [wkg]);
+
   const dynPerfSections = useMemo(() => [
     { key: "power",   label: "Power Curve",  accentColor: "#e16b2b", metrics: dynPowerCurveMetrics },
     { key: "fitness", label: "Performance",  accentColor: "#d97706", metrics: dynFitnessMetrics },
