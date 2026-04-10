@@ -212,54 +212,54 @@ const PROFILES: Record<string, AthleteProfile> = {
   // Sophie Chen — ELITE. The best on the team. High HRV, high recovery.
   // Hits 100% recovery 4-5 times/year. Rarely has bad days.
   elite: {
-    hrvMean: 85, hrvStdDev: 18, hrvMin: 30, hrvMax: 135,
-    recNoise: 5, badDayChance: 0.03, badDayDrop: 30, peakChance: 0.014,
-    rhrMean: 44, rhrStdDev: 3,
+    hrvMean: 95, hrvStdDev: 16, hrvMin: 35, hrvMax: 140,
+    recNoise: 5, badDayChance: 0.025, badDayDrop: 28, peakChance: 0.015,
+    rhrMean: 43, rhrStdDev: 3,
     sleepMean: 7.8, sleepStdDev: 0.6, sleepEffMean: 92, sleepEffStdDev: 4,
     spo2Mean: 98.0, respMean: 13.5, skinTempMean: -0.1,
   },
 
   // Lena Berger — VERY GOOD. Solid recovery, mostly green. Occasionally hits 95+.
   veryGood: {
-    hrvMean: 68, hrvStdDev: 16, hrvMin: 20, hrvMax: 120,
-    recNoise: 6, badDayChance: 0.05, badDayDrop: 25, peakChance: 0.008,
-    rhrMean: 48, rhrStdDev: 3,
+    hrvMean: 80, hrvStdDev: 15, hrvMin: 25, hrvMax: 130,
+    recNoise: 5, badDayChance: 0.04, badDayDrop: 24, peakChance: 0.01,
+    rhrMean: 47, rhrStdDev: 3,
     sleepMean: 7.5, sleepStdDev: 0.7, sleepEffMean: 89, sleepEffStdDev: 5,
     spo2Mean: 97.8, respMean: 14.2, skinTempMean: 0.1,
   },
 
   // Tom Hartmann — GOOD. Above average, decent consistency.
   good: {
-    hrvMean: 60, hrvStdDev: 15, hrvMin: 18, hrvMax: 110,
-    recNoise: 7, badDayChance: 0.06, badDayDrop: 22, peakChance: 0.005,
-    rhrMean: 50, rhrStdDev: 3.5,
+    hrvMean: 72, hrvStdDev: 14, hrvMin: 22, hrvMax: 120,
+    recNoise: 6, badDayChance: 0.05, badDayDrop: 22, peakChance: 0.006,
+    rhrMean: 49, rhrStdDev: 3.5,
     sleepMean: 7.3, sleepStdDev: 0.8, sleepEffMean: 85, sleepEffStdDev: 5,
     spo2Mean: 97.6, respMean: 14.8, skinTempMean: 0.0,
   },
 
   // Jonas Keller — AVERAGE. Solid but inconsistent. More yellow days than green.
   average: {
-    hrvMean: 52, hrvStdDev: 14, hrvMin: 15, hrvMax: 100,
-    recNoise: 8, badDayChance: 0.07, badDayDrop: 20, peakChance: 0.003,
-    rhrMean: 53, rhrStdDev: 4,
+    hrvMean: 62, hrvStdDev: 14, hrvMin: 18, hrvMax: 110,
+    recNoise: 7, badDayChance: 0.06, badDayDrop: 20, peakChance: 0.004,
+    rhrMean: 52, rhrStdDev: 4,
     sleepMean: 7.0, sleepStdDev: 0.9, sleepEffMean: 80, sleepEffStdDev: 6,
     spo2Mean: 97.4, respMean: 15.0, skinTempMean: 0.2,
   },
 
-  // Marco Silva — BELOW AVERAGE / OVERTRAINED. Pushing too hard, low recovery.
+  // Marco Silva — BELOW AVERAGE / OVERTRAINED. Pushing too hard, lower recovery.
   belowAvg: {
-    hrvMean: 42, hrvStdDev: 12, hrvMin: 12, hrvMax: 85,
-    recNoise: 8, badDayChance: 0.10, badDayDrop: 18, peakChance: 0.001,
-    rhrMean: 58, rhrStdDev: 4,
+    hrvMean: 52, hrvStdDev: 13, hrvMin: 15, hrvMax: 95,
+    recNoise: 7, badDayChance: 0.08, badDayDrop: 18, peakChance: 0.002,
+    rhrMean: 56, rhrStdDev: 4,
     sleepMean: 6.5, sleepStdDev: 1.0, sleepEffMean: 73, sleepEffStdDev: 7,
     spo2Mean: 96.1, respMean: 16.5, skinTempMean: 0.4,
   },
 
-  // Emma Larsson — STRUGGLING. Poor sleep, low HRV, frequently in the red.
+  // Emma Larsson — STRUGGLING. Poor sleep, low HRV, but still an athlete.
   struggling: {
-    hrvMean: 35, hrvStdDev: 10, hrvMin: 10, hrvMax: 75,
-    recNoise: 7, badDayChance: 0.12, badDayDrop: 15, peakChance: 0.0,
-    rhrMean: 63, rhrStdDev: 4,
+    hrvMean: 45, hrvStdDev: 11, hrvMin: 12, hrvMax: 85,
+    recNoise: 7, badDayChance: 0.09, badDayDrop: 15, peakChance: 0.001,
+    rhrMean: 61, rhrStdDev: 4,
     sleepMean: 6.0, sleepStdDev: 1.0, sleepEffMean: 66, sleepEffStdDev: 8,
     spo2Mean: 95.5, respMean: 17.2, skinTempMean: 0.6,
   },
