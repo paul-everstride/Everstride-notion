@@ -122,19 +122,10 @@ function genHistory(
 
     hrv = Math.max(profile.hrvMin, Math.min(profile.hrvMax, Math.round(hrv)));
 
-    // ── Recovery: strongly correlated with HRV ──
-    // Normal days: HRV maps to recovery ~65–92 (most land 70–90)
-    // Bad days pull below 70, peak days push above 95
+    // ── Recovery: directly derived from HRV (no independent noise) ──
+    // This ensures the recovery and HRV graphs look identical in shape.
     const hrvNorm = (hrv - profile.hrvMin) / (profile.hrvMax - profile.hrvMin); // 0..1
     let rec = 65 + hrvNorm * 27; // base mapping: 65..92
-    rec += g2 * profile.recNoise; // small independent noise (±5-7)
-
-    if (isPeakDay) {
-      rec = Math.max(rec, 96 + rng() * 4); // push to 96-100 (very rare)
-    }
-    if (isBadDay) {
-      rec = Math.min(rec, 45 + rng() * 20); // push to 45-65 range
-    }
 
     rec = Math.max(1, Math.min(100, Math.round(rec)));
 
