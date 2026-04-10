@@ -1336,11 +1336,11 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                       {enriched.map((e, i) => {
                         const colors = colorMap[e.type];
                         return (
-                          <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${e.isPast ? "bg-gray-50 border-gray-200 opacity-50" : `${colors.bg} ${colors.border}`}`}>
-                            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${e.isPast ? "bg-gray-400" : colors.dot}`} />
+                          <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${colors.bg} ${colors.border} ${e.isPast ? "opacity-50" : ""}`}>
+                            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${colors.dot}`} />
                             <div className="flex items-center gap-1.5">
                               <span className="text-sm font-semibold text-ink leading-none">{e.name}</span>
-                              <span className={`text-[9px] uppercase font-bold leading-none px-1 py-0.5 rounded ${e.isPast ? "bg-gray-200 text-gray-500" : `${colors.bg} ${colors.text}`}`}>{labelMap[e.type]}</span>
+                              <span className={`text-[9px] uppercase font-bold leading-none px-1 py-0.5 rounded ${colors.bg} ${colors.text}`}>{labelMap[e.type]}</span>
                             </div>
                             <span className="text-xs text-muted leading-none">
                               {e.dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
