@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart,
   Pie, PieChart, ReferenceLine,
@@ -276,7 +276,18 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
   const todayStr   = new Date().toISOString().slice(0, 10);
   const thirtyAgo  = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 
-  const [tab,          setTab]          = useState<Tab>("readiness");
+  const VALID_TABS: Tab[] = ["readiness", "recovery", "performance", "load", "power", "profile", "season"];
+  const [tab, setTabState] = useState<Tab>(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash.replace("#", "");
+      if (VALID_TABS.includes(hash as Tab)) return hash as Tab;
+    }
+    return "readiness";
+  });
+  const setTab = useCallback((t: Tab) => {
+    setTabState(t);
+    if (typeof window !== "undefined") window.history.replaceState(null, "", `#${t}`);
+  }, []);
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [detailColOrder, setDetailColOrder] = useState<DetailColKey[]>(DEFAULT_DETAIL_COLS);
   const [showDetailColEditor, setShowDetailColEditor] = useState(false);
