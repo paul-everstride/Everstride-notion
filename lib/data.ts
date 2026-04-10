@@ -183,58 +183,6 @@ function genHistory(
   return history;
 }
 
-/**
- * Generate correlated spiky trends for recovery + HRV (used by trend charts).
- * Same approach as genHistory: each day is independent, not a random walk.
- */
-function genCorrelatedTrends(
-  profile: AthleteProfile,
-  days: number,
-  seed: number
-): { recTrend: TrendPoint[]; hrvTrend: TrendPoint[] } {
-  const rng = seeded(seed);
-  const recPts: TrendPoint[] = [];
-  const hrvPts: TrendPoint[] = [];
-
-  for (let i = days - 1; i >= 0; i--) {
-    const [g1, g2] = gaussianPair(rng);
-
-    let hrv = profile.hrvMean + g1 * profile.hrvStdDev;
-    const isBadDay = rng() < profile.badDayChance;
-    const isPeakDay = !isBadDay && rng() < profile.peakChance;
-
-    if (isBadDay) hrv -= profile.badDayDrop + rng() * profile.badDayDrop * 0.5;
-    if (isPeakDay) hrv = profile.hrvMean + profile.hrvStdDev * (1.5 + rng() * 1.0);
-    hrv = Math.max(profile.hrvMin, Math.min(profile.hrvMax, hrv));
-
-    const hrvNorm = (hrv - profile.hrvMin) / (profile.hrvMax - profile.hrvMin);
-    let rec = 20 + hrvNorm * 75;
-    rec += g2 * profile.recNoise;
-    if (isPeakDay) rec = Math.max(rec, 95 + rng() * 5);
-    if (isBadDay) rec = Math.min(rec, 35 - rng() * 15);
-    rec = Math.max(1, Math.min(100, rec));
-
-    const ds = dateStr(i);
-    hrvPts.push({ label: shortLabel(ds), value: Math.round(hrv * 10) / 10, date: ds });
-    recPts.push({ label: shortLabel(ds), value: Math.round(rec * 10) / 10, date: ds });
-  }
-  return { recTrend: recPts, hrvTrend: hrvPts };
-}
-
-/** Generate a spiky trend (not a random walk — each day is independent) */
-function genSpikyTrend(base: number, stdDev: number, min: number, max: number, days: number, seed: number): TrendPoint[] {
-  const rng = seeded(seed);
-  const pts: TrendPoint[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const [g] = gaussianPair(rng);
-    rng(); // consume second gaussian to keep seed in sync
-    const v = Math.max(min, Math.min(max, base + g * stdDev));
-    const ds = dateStr(i);
-    pts.push({ label: shortLabel(ds), value: Math.round(v * 10) / 10, date: ds });
-  }
-  return pts;
-}
-
 /** Generate a slow-drifting trend (for metrics like FTP, VO2max that change gradually) */
 function genDriftTrend(base: number, variance: number, days: number, seed: number): TrendPoint[] {
   const rng = seeded(seed);
@@ -376,16 +324,13 @@ function mockAthlete(cfg: {
     creationDate: today,
     createdAt: dateStr(HISTORY_DAYS) + "T00:00:00.000Z",
     statusNote: statusNote(todayEntry.recoveryScore),
-    // Recovery + HRV trends are generated together (correlated, spiky)
-    ...(() => {
-      const { recTrend, hrvTrend } = genCorrelatedTrends(p, TREND_DAYS, cfg.seed + 1);
-      return { readinessTrend: recTrend, hrvTrend };
-    })(),
-    // Sleep + efficiency: spiky day-to-day
-    sleepTrend:           genSpikyTrend(p.sleepMean * 12, p.sleepStdDev * 8, 40, 100, TREND_DAYS, cfg.seed + 2),
-    sleepEfficiencyTrend: genSpikyTrend(p.sleepEffMean, p.sleepEffStdDev, 55, 99, TREND_DAYS, cfg.seed + 5),
-    // RHR: spiky, inversely related to recovery
-    rhrTrend:             genSpikyTrend(p.rhrMean, p.rhrStdDev, 36, 75, TREND_DAYS, cfg.seed + 4),
+    // All readiness trends are extracted directly from the history
+    // so Recovery, HRV, RHR, sleep, etc. all come from the SAME generated days
+    readinessTrend:       history.map(d => ({ label: d.shortLabel, value: d.recoveryScore, date: d.date })),
+    hrvTrend:             history.map(d => ({ label: d.shortLabel, value: d.hrv, date: d.date })),
+    rhrTrend:             history.map(d => ({ label: d.shortLabel, value: d.restHr, date: d.date })),
+    sleepTrend:           history.map(d => ({ label: d.shortLabel, value: d.sleepScore, date: d.date })),
+    sleepEfficiencyTrend: history.map(d => ({ label: d.shortLabel, value: d.sleepEfficiency, date: d.date })),
     // Training load metrics: slow drift (these change gradually)
     tssTrend:             genDriftTrend(cfg.tss, 40, TREND_DAYS, cfg.seed + 6),
     atlTrend:             genDriftTrend(cfg.atl, 12, TREND_DAYS, cfg.seed + 7),
