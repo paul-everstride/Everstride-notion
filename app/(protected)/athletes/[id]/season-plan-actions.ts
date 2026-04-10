@@ -41,6 +41,24 @@ export interface PlanWeek {
 }
 
 export async function getSeasonPlan(athleteOwId: string): Promise<SeasonPlanData | null> {
+  // Try fetching from the Season Planner API (works for both demo and production)
+  const plannerUrl = process.env.NEXT_PUBLIC_PLANNER_URL;
+  if (plannerUrl) {
+    try {
+      const res = await fetch(
+        `${plannerUrl}/api/load-plan?coach_id=local-demo-user&athlete_id=${encodeURIComponent(athleteOwId)}`,
+        { cache: "no-store" }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.plan_data) return data as SeasonPlanData;
+      }
+    } catch {
+      // Planner unavailable — fall through to other methods
+    }
+  }
+
+  // Try Supabase (production)
   const supabase = createSupabaseServiceClient();
   if (supabase) {
     const { data, error } = await supabase
@@ -54,7 +72,7 @@ export async function getSeasonPlan(athleteOwId: string): Promise<SeasonPlanData
     if (!error && data) return data as SeasonPlanData;
   }
 
-  // Demo fallback — return a mock season plan
+  // Final fallback — return a locally generated demo plan
   return buildDemoSeasonPlan(athleteOwId);
 }
 
