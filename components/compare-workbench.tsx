@@ -641,6 +641,27 @@ function SnapshotBarChart({
   );
 }
 
+// ── Benchmark data (W/kg) — official cycling power profile categories ────────
+// Columns in source: 5 sec, 1 min, 5 min, FTP
+// 30s interpolated between 5s and 1min, 30min interpolated between 5min and FTP
+
+type BenchmarkCategory = {
+  key: string;
+  label: string;
+  description: string;
+  // Values in order: 5s, 30s, 1min, 5min, 30min, FTP
+  values: [number, number, number, number, number, number];
+};
+
+const BENCHMARK_CATEGORIES: BenchmarkCategory[] = [
+  { key: "world",       label: "World Class",  description: "International Pro",  values: [24.00, 17.52, 11.04, 7.19, 6.62, 6.04] },
+  { key: "exceptional", label: "Exceptional",   description: "Domestic Pro",       values: [22.22, 16.29, 10.35, 6.57, 6.04, 5.51] },
+  { key: "excellent",   label: "Excellent",     description: "Cat. I",             values: [20.44, 15.05,  9.66, 5.95, 5.47, 4.98] },
+  { key: "very_good",   label: "Very Good",     description: "Cat. II",            values: [18.66, 13.82,  8.97, 5.33, 4.89, 4.44] },
+  { key: "good",        label: "Good",          description: "Cat. III",           values: [16.59, 12.38,  8.17, 4.60, 4.21, 3.82] },
+  { key: "moderate",    label: "Moderate",      description: "Cat. IV",            values: [14.81, 11.15,  7.48, 3.98, 3.64, 3.29] },
+];
+
 // ── PowerHexagon ──────────────────────────────────────────────────────────────
 
 const POWER_SHORT_LABELS = ["5s", "30s", "1min", "5min", "30min", "FTP"];
@@ -652,6 +673,10 @@ function PowerHexagon({
   powerUnit: "w" | "w/kg"; onToggleUnit: () => void;
 }) {
   const isWkg = powerUnit === "w/kg";
+  const [benchmarkKey, setBenchmarkKey] = useState<string | null>(null);
+  const [showBenchPicker, setShowBenchPicker] = useState(false);
+  const selectedBenchmark = BENCHMARK_CATEGORIES.find(b => b.key === benchmarkKey) ?? null;
+
   const { hexData, wattLookup } = useMemo(() => {
     // Build raw values: 5 power curve points + FTP (in watts or W/kg)
     const rawValues = athletes.map(a => {
@@ -664,32 +689,73 @@ function PowerHexagon({
 
     // Store actual values for tooltip display
     const lookup = new Map<string, number>();
+    const benchName = "Benchmark";
 
     const data = POWER_SHORT_LABELS.map((subject, i) => {
       const vals = rawValues.map(av => av[i] ?? 0);
-      const maxVal = Math.max(...vals, 0.01);
+      // Include benchmark in max calculation so radar scales properly
+      const benchVal = selectedBenchmark ? selectedBenchmark.values[i] : 0;
+      const maxVal = Math.max(...vals, benchVal, 0.01);
       const row: Record<string, string | number> = { subject };
       athletes.forEach((a, ai) => {
         const val = rawValues[ai][i] ?? 0;
-        row[a.name] = Math.round((val / maxVal) * 100); // Normalised for radar shape
+        row[a.name] = Math.round((val / maxVal) * 100);
         lookup.set(`${subject}__${a.name}`, val);
       });
+      // Add benchmark to radar data
+      if (selectedBenchmark) {
+        row[benchName] = Math.round((benchVal / maxVal) * 100);
+        lookup.set(`${subject}__${benchName}`, benchVal);
+      }
       return row;
     });
 
     return { hexData: data, wattLookup: lookup };
-  }, [athletes, win, isWkg]);
+  }, [athletes, win, isWkg, selectedBenchmark]);
 
   return (
     <div className="border border-line bg-canvas rounded-lg flex flex-col lg:row-span-2 overflow-hidden">
       <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
         <span className="text-sm font-medium text-ink">Power Profile</span>
-        <button type="button" onClick={onToggleUnit}
-          className="flex items-center gap-1 text-xs font-medium bg-surface hover:bg-surfaceStrong border border-line rounded-full px-2.5 py-1 transition-colors">
-          <span className={isWkg ? "text-muted" : "text-ink font-semibold"}>W</span>
-          <span className="text-muted">/</span>
-          <span className={isWkg ? "text-ink font-semibold" : "text-muted"}>W/kg</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {isWkg && (
+            <div className="relative">
+              <button type="button" onClick={() => setShowBenchPicker(p => !p)}
+                className={`flex items-center gap-1.5 text-xs font-medium border rounded-full px-2.5 py-1 transition-colors ${
+                  selectedBenchmark
+                    ? "bg-blue/10 border-blue/30 text-blue"
+                    : "bg-surface hover:bg-surfaceStrong border-line text-muted hover:text-ink"
+                }`}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 20h16M4 20V10l4-6h8l4 6v10M8 20v-6h8v6"/></svg>
+                {selectedBenchmark ? selectedBenchmark.label : "Benchmark"}
+              </button>
+              {showBenchPicker && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-canvas border border-line rounded-lg shadow-lg py-1 w-56">
+                  {selectedBenchmark && (
+                    <button type="button" onClick={() => { setBenchmarkKey(null); setShowBenchPicker(false); }}
+                      className="w-full text-left px-3 py-2 text-xs text-danger hover:bg-dangerSoft transition-colors">
+                      Remove benchmark
+                    </button>
+                  )}
+                  {BENCHMARK_CATEGORIES.map(b => (
+                    <button key={b.key} type="button"
+                      onClick={() => { setBenchmarkKey(b.key); setShowBenchPicker(false); }}
+                      className={`w-full text-left px-3 py-2 hover:bg-surface transition-colors ${benchmarkKey === b.key ? "bg-blue/5" : ""}`}>
+                      <span className="text-xs font-semibold text-ink">{b.label}</span>
+                      <span className="text-[10px] text-muted ml-1.5">{b.description}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <button type="button" onClick={onToggleUnit}
+            className="flex items-center gap-1 text-xs font-medium bg-surface hover:bg-surfaceStrong border border-line rounded-full px-2.5 py-1 transition-colors">
+            <span className={isWkg ? "text-muted" : "text-ink font-semibold"}>W</span>
+            <span className="text-muted">/</span>
+            <span className={isWkg ? "text-ink font-semibold" : "text-muted"}>W/kg</span>
+          </button>
+        </div>
       </div>
       <div className="flex border-b border-line" style={{ borderBottomColor: "#e9e9e7" }}>
         {athletes.map((athlete) => {
@@ -707,6 +773,15 @@ function PowerHexagon({
             </div>
           );
         })}
+        {selectedBenchmark && (
+          <div className="flex-1 flex flex-col gap-1 px-3 py-2.5 border-r border-line last:border-r-0" style={{ maxWidth: "25%" }}>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full shrink-0 border border-gray-400" style={{ backgroundColor: "transparent", borderStyle: "dashed" }} />
+              <span className="text-xs text-muted">Benchmark</span>
+            </div>
+            <span className="text-sm font-semibold tabular text-muted">{selectedBenchmark.label}</span>
+          </div>
+        )}
       </div>
       <div className="px-2 py-3" style={{ height: 340 }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -730,6 +805,10 @@ function PowerHexagon({
                   stroke={color} strokeWidth={2.5} fill={color} fillOpacity={0} />
               );
             })}
+            {selectedBenchmark && (
+              <Radar key="benchmark" name="Benchmark" dataKey="Benchmark"
+                stroke="#94a3b8" strokeWidth={2} strokeDasharray="6 3" fill="#94a3b8" fillOpacity={0.06} />
+            )}
           </RadarChart>
         </ResponsiveContainer>
       </div>
