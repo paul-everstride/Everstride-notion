@@ -1428,7 +1428,7 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                                   ? "bg-red-50 text-red-700 border-red-200"       // Main race → red
                                   : "bg-amber-50 text-amber-700 border-amber-200" // Secondary race → orange
                               })),
-                              ...(w.trainingCamps || []).map(r => ({ name: r, cls: "bg-gray-100 text-gray-600 border-gray-300" })),   // Camps → gray
+                              ...(w.trainingCamps || []).map(r => ({ name: r, cls: "bg-emerald-50 text-emerald-700 border-emerald-200" })),  // Camps → green
                               ...(w.tests || []).map(r => ({ name: r, cls: "bg-violet-50 text-violet-700 border-violet-200" })),
                             ];
                             return events.length > 0 ? (
