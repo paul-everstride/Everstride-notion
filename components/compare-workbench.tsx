@@ -783,12 +783,39 @@ function PowerHexagon({
           </div>
         )}
       </div>
-      <div className="px-2 py-3" style={{ height: 340 }}>
+      <div className="px-2 py-3" style={{ height: 380 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <RadarChart data={hexData} margin={{ top: 16, right: 36, bottom: 16, left: 36 }}>
+          <RadarChart data={hexData} margin={{ top: 30, right: 60, bottom: 30, left: 60 }}>
             <PolarGrid gridType="polygon" stroke="#e9e9e7" />
             <PolarAngleAxis dataKey="subject"
-              tick={{ fill: "#9b9a97", fontSize: 11, fontFamily: "inherit" }} />
+              tick={({ x, y, payload }: { x: number; y: number; payload: { value: string } }) => {
+                const subject = payload.value;
+                // Build value lines: one per athlete + benchmark
+                const lines: { label: string; value: string; color: string }[] = [];
+                athletes.forEach(a => {
+                  const val = wattLookup.get(`${subject}__${a.name}`) ?? 0;
+                  const color = colorMap.get(a.id) ?? athleteColors[0];
+                  lines.push({
+                    label: a.name.split(" ")[0],
+                    value: isWkg ? `${val.toFixed(1)}` : `${Math.round(val)}`,
+                    color,
+                  });
+                });
+                if (selectedBenchmark) {
+                  const val = wattLookup.get(`${subject}__Benchmark`) ?? 0;
+                  lines.push({ label: "Bench", value: val.toFixed(1), color: "#94a3b8" });
+                }
+                return (
+                  <g transform={`translate(${x},${y})`}>
+                    <text textAnchor="middle" dy={-4} fill="#9b9a97" fontSize={11} fontWeight={600}>{subject}</text>
+                    {lines.map((l, i) => (
+                      <text key={i} textAnchor="middle" dy={9 + i * 11} fill={l.color} fontSize={9} fontFamily="inherit">
+                        {l.value}{isWkg ? "" : "w"}
+                      </text>
+                    ))}
+                  </g>
+                );
+              }} />
             <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
             <Tooltip
               contentStyle={TS} labelStyle={TL}
