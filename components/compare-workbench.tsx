@@ -646,51 +646,64 @@ function SnapshotBarChart({
 const POWER_SHORT_LABELS = ["5s", "30s", "1min", "5min", "30min", "FTP"];
 
 function PowerHexagon({
-  athletes, window: win, colorMap
+  athletes, window: win, colorMap, powerUnit, onToggleUnit
 }: {
   athletes: AthleteSummary[]; window: SnapshotWindow; colorMap: Map<string, string>;
+  powerUnit: "w" | "w/kg"; onToggleUnit: () => void;
 }) {
+  const isWkg = powerUnit === "w/kg";
   const { hexData, wattLookup } = useMemo(() => {
-    // Build raw watt values: 5 power curve points + FTP
-    const rawValues = athletes.map(a => [
-      ...a.powerCurve.map((pt) => pt.value ?? 0),
-      a.ftp ?? 0,
-    ]);
+    // Build raw values: 5 power curve points + FTP (in watts or W/kg)
+    const rawValues = athletes.map(a => {
+      const wt = a.weightKg || 1;
+      return [
+        ...a.powerCurve.map((pt) => isWkg ? (pt.value ?? 0) / wt : (pt.value ?? 0)),
+        isWkg ? (a.ftp ?? 0) / wt : (a.ftp ?? 0),
+      ];
+    });
 
-    // Store actual watts for tooltip display
+    // Store actual values for tooltip display
     const lookup = new Map<string, number>();
 
     const data = POWER_SHORT_LABELS.map((subject, i) => {
       const vals = rawValues.map(av => av[i] ?? 0);
-      const maxVal = Math.max(...vals, 1);
+      const maxVal = Math.max(...vals, 0.01);
       const row: Record<string, string | number> = { subject };
       athletes.forEach((a, ai) => {
-        const watts = rawValues[ai][i] ?? 0;
-        row[a.name] = Math.round((watts / maxVal) * 100); // Normalised for radar shape
-        lookup.set(`${subject}__${a.name}`, watts);        // Real watts for tooltip
+        const val = rawValues[ai][i] ?? 0;
+        row[a.name] = Math.round((val / maxVal) * 100); // Normalised for radar shape
+        lookup.set(`${subject}__${a.name}`, val);
       });
       return row;
     });
 
     return { hexData: data, wattLookup: lookup };
-  }, [athletes, win]);
+  }, [athletes, win, isWkg]);
 
   return (
     <div className="border border-line bg-canvas rounded-lg flex flex-col lg:row-span-2 overflow-hidden">
       <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
         <span className="text-sm font-medium text-ink">Power Profile</span>
-        <span className="text-xs text-muted bg-surface rounded-full px-2.5 py-0.5">watts</span>
+        <button type="button" onClick={onToggleUnit}
+          className="flex items-center gap-1 text-xs font-medium bg-surface hover:bg-surfaceStrong border border-line rounded-full px-2.5 py-1 transition-colors">
+          <span className={isWkg ? "text-muted" : "text-ink font-semibold"}>W</span>
+          <span className="text-muted">/</span>
+          <span className={isWkg ? "text-ink font-semibold" : "text-muted"}>W/kg</span>
+        </button>
       </div>
       <div className="flex border-b border-line" style={{ borderBottomColor: "#e9e9e7" }}>
         {athletes.map((athlete) => {
           const color = colorMap.get(athlete.id) ?? athleteColors[0];
+          const maxDisplay = isWkg && athlete.weightKg
+            ? `${((athlete.powerMax ?? 0) / athlete.weightKg).toFixed(2)} w/kg`
+            : `${athlete.powerMax}w max`;
           return (
             <div key={athlete.id} className="flex-1 flex flex-col gap-1 px-3 py-2.5 border-r border-line last:border-r-0">
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
                 <span className="text-xs text-muted">{athlete.name.split(" ")[0]}</span>
               </div>
-              <span className="text-sm font-semibold tabular text-ink">{athlete.powerMax}w max</span>
+              <span className="text-sm font-semibold tabular text-ink">{maxDisplay}</span>
             </div>
           );
         })}
@@ -706,8 +719,8 @@ function PowerHexagon({
               contentStyle={TS} labelStyle={TL}
               formatter={(v: number, name: string, props: { payload?: { subject?: string } }) => {
                 const subject = props.payload?.subject ?? "";
-                const watts = wattLookup.get(`${subject}__${name}`) ?? 0;
-                return [`${watts}w`, name];
+                const val = wattLookup.get(`${subject}__${name}`) ?? 0;
+                return [isWkg ? `${val.toFixed(2)} w/kg` : `${Math.round(val)}w`, name];
               }}
             />
             {athletes.map((athlete) => {
@@ -1393,6 +1406,7 @@ export function CompareWorkbench({
   const [showPeriodPicker, setShowPeriodPicker] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [perfPageOffset, setPerfPageOffset] = useState(0);
+  const [powerUnit, setPowerUnit] = useState<"w" | "w/kg">("w");
   // Custom perf month selection
   const _now = new Date();
   const [selectedMonths, setSelectedMonths] = useState<string[]>(() => {
@@ -1486,9 +1500,31 @@ export function CompareWorkbench({
     [availableAthletes]
   );
 
+  // Dynamic power metrics that respond to W vs W/kg toggle
+  const wkg = powerUnit === "w/kg";
+  const toWkg = (watts: number, a: AthleteSummary) => a.weightKg ? Math.round((watts / a.weightKg) * 100) / 100 : 0;
+  const fmtWkg = (v: number) => v.toFixed(2);
+  const dynPowerCurveMetrics: CompareMetric[] = useMemo(() => wkg ? [
+    { key: "pc0",   label: "5 sec",     unit: "w/kg", baseValue: (a) => toWkg(a.powerCurve[0]?.value ?? 0, a), getSeries: scaledPowerSeries(0), renderCurrent: (a) => `${fmtWkg(toWkg(a.powerCurve[0]?.value ?? 0, a))} w/kg` },
+    { key: "pc1",   label: "30 sec",    unit: "w/kg", baseValue: (a) => toWkg(a.powerCurve[1]?.value ?? 0, a), getSeries: scaledPowerSeries(1), renderCurrent: (a) => `${fmtWkg(toWkg(a.powerCurve[1]?.value ?? 0, a))} w/kg` },
+    { key: "pc2",   label: "1 min",     unit: "w/kg", baseValue: (a) => toWkg(a.powerCurve[2]?.value ?? 0, a), getSeries: scaledPowerSeries(2), renderCurrent: (a) => `${fmtWkg(toWkg(a.powerCurve[2]?.value ?? 0, a))} w/kg` },
+    { key: "pc3",   label: "5 min",     unit: "w/kg", baseValue: (a) => toWkg(a.powerCurve[3]?.value ?? 0, a), getSeries: scaledPowerSeries(3), renderCurrent: (a) => `${fmtWkg(toWkg(a.powerCurve[3]?.value ?? 0, a))} w/kg` },
+    { key: "pc4",   label: "30 min",    unit: "w/kg", baseValue: (a) => toWkg(a.powerCurve[4]?.value ?? 0, a), getSeries: scaledPowerSeries(4), renderCurrent: (a) => `${fmtWkg(toWkg(a.powerCurve[4]?.value ?? 0, a))} w/kg` },
+    { key: "power", label: "Power max", unit: "w/kg", baseValue: (a) => toWkg(a.powerMax ?? 0, a),              getSeries: trendSeries("powerTrend"), renderCurrent: (a) => a.powerMax != null ? `${fmtWkg(toWkg(a.powerMax, a))} w/kg` : "N/A" },
+  ] : powerCurveMetrics, [wkg]);
+  const dynFitnessMetrics: CompareMetric[] = useMemo(() => wkg ? [
+    { key: "ftp",     label: "FTP",     unit: "w/kg", baseValue: (a) => toWkg(a.ftp ?? 0, a), getSeries: trendSeries("ftpTrend"), renderCurrent: (a) => a.ftp != null ? `${fmtWkg(toWkg(a.ftp, a))} w/kg` : "N/A" },
+    ...fitnessMetrics.slice(1), // VO2, TSS, TSB stay the same
+  ] : fitnessMetrics, [wkg]);
+  const dynPerfSections = useMemo(() => [
+    { key: "power",   label: "Power Curve",  accentColor: "#e16b2b", metrics: dynPowerCurveMetrics },
+    { key: "fitness", label: "Performance",  accentColor: "#d97706", metrics: dynFitnessMetrics },
+    { key: "load",    label: "Load & Recovery", accentColor: "#2563eb", metrics: loadMetrics },
+  ], [dynPowerCurveMetrics, dynFitnessMetrics]);
+
   const allTimeframeMetrics = section === "readiness"
     ? readinessMetrics
-    : [...powerCurveMetrics, ...fitnessMetrics, ...loadMetrics];
+    : [...dynPowerCurveMetrics, ...dynFitnessMetrics, ...loadMetrics];
   const expandedMetric = allTimeframeMetrics.find(m => m.key === expandedMetricKey) ?? null;
 
   const toggleAthlete = (id: string) =>
@@ -1533,7 +1569,7 @@ export function CompareWorkbench({
       }
       return (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 p-4 bg-canvas">
-          <PowerHexagon athletes={selectedAthletes} window={snapshotWindow} colorMap={colorMap} />
+          <PowerHexagon athletes={selectedAthletes} window={snapshotWindow} colorMap={colorMap} powerUnit={powerUnit} onToggleUnit={() => setPowerUnit(u => u === "w" ? "w/kg" : "w")} />
           {perfSnapshotMetrics.map(m => (
             <SnapshotBarChart key={m.key} title={m.label} athletes={selectedAthletes}
               metric={m} window={snapshotWindow} accentColor={accentColor} colorMap={colorMap} />
@@ -1599,9 +1635,9 @@ export function CompareWorkbench({
       <div className="bg-canvas pt-4">
         {/* Power Profile hexagon — always visible in timeframe view */}
         <div className="px-4 pb-4">
-          <PowerHexagon athletes={selectedAthletes} window={snapshotWindow} colorMap={colorMap} />
+          <PowerHexagon athletes={selectedAthletes} window={snapshotWindow} colorMap={colorMap} powerUnit={powerUnit} onToggleUnit={() => setPowerUnit(u => u === "w" ? "w/kg" : "w")} />
         </div>
-        {PERF_SECTIONS.map(sec => {
+        {dynPerfSections.map(sec => {
           const isCollapsed = collapsedSections[sec.key];
           return (
             <div key={sec.key} className="mb-2">
