@@ -1995,12 +1995,28 @@ export function CompareWorkbench({
                 </button>
               </div>
             )}
-            {mode === "timeframe" && section === "performance" && (timeframeType === "biweekly" || timeframeType === "monthly") && (
+            {mode === "timeframe" && section === "performance" && timeframeType === "biweekly" && (
               <DateNavCell
                 label={perfPageInfo?.periodLabel ?? ""}
                 onPrev={() => setPerfPageOffset(o => o - 1)}
                 onNext={() => setPerfPageOffset(o => Math.min(0, o + 1))}
                 disableNext={perfPageOffset >= 0}
+              />
+            )}
+            {mode === "timeframe" && section === "performance" && timeframeType === "monthly" && (
+              <DateNavCell
+                label={periodInfo?.label ?? ""}
+                onPrev={() => setTimeframeOffset(o => o - 1)}
+                onNext={() => setTimeframeOffset(o => Math.min(0, o + 1))}
+                disableNext={timeframeOffset >= 0}
+              />
+            )}
+            {mode === "timeframe" && section === "performance" && timeframeType === "yearly" && (
+              <DateNavCell
+                label={periodInfo?.label ?? ""}
+                onPrev={() => setTimeframeOffset(o => o - 1)}
+                onNext={() => setTimeframeOffset(o => Math.min(0, o + 1))}
+                disableNext={timeframeOffset >= 0}
               />
             )}
 
