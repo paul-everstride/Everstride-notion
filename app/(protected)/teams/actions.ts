@@ -5,7 +5,7 @@ import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { owCreateTeam, owGetTeams, owCreateUser, owAddTeamMember, owDeleteTeam, owDeleteUser, owUpdateUser, owUpdateTeam } from "@/lib/ow-client";
 import { sendPairingEmail } from "@/lib/email";
 import { revalidatePath, revalidateTag } from "next/cache";
-import { demoCreateTeam, demoRenameTeam, demoDeleteTeam, demoMoveAthlete, getDemoTeams } from "@/lib/data";
+import { demoCreateTeam, demoRenameTeam, demoDeleteTeam, demoMoveAthlete, getDemoTeams, IS_DEMO_DATA } from "@/lib/data";
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -26,13 +26,12 @@ export interface CreateAthleteResult {
 export async function createTeamAction(name: string): Promise<CreateTeamResult> {
   try {
     const user = await requireAuthenticatedUser();
-    const supabase = createSupabaseServiceClient();
-    if (!supabase) {
-      // Demo mode
+    if (IS_DEMO_DATA) {
       const teamId = demoCreateTeam(name);
       revalidatePath("/teams");
       return { success: true, teamId };
     }
+    const supabase = createSupabaseServiceClient();
 
     // Create in OW — pass coach email so it's visible in OW dashboard
     const owTeam = await owCreateTeam(name, user.email ?? undefined);
@@ -112,9 +111,7 @@ export async function createAthleteAction(
 export async function renameTeamAction(supabaseTeamId: string, newName: string): Promise<{ success: boolean; error?: string }> {
   try {
     const user = await requireAuthenticatedUser();
-    const supabase = createSupabaseServiceClient();
-    if (!supabase) {
-      // Demo mode — find team name from ID
+    if (IS_DEMO_DATA) {
       const teams = getDemoTeams();
       const team = teams.find(t => t.id === supabaseTeamId);
       if (team) demoRenameTeam(team.name, newName.trim());
@@ -122,6 +119,7 @@ export async function renameTeamAction(supabaseTeamId: string, newName: string):
       revalidatePath("/", "layout");
       return { success: true };
     }
+    const supabase = createSupabaseServiceClient();
 
     const trimmed = newName.trim();
 
@@ -157,9 +155,7 @@ export async function renameTeamAction(supabaseTeamId: string, newName: string):
 export async function deleteTeamAction(supabaseTeamId: string): Promise<{ success: boolean; error?: string }> {
   try {
     const user = await requireAuthenticatedUser();
-    const supabase = createSupabaseServiceClient();
-    if (!supabase) {
-      // Demo mode
+    if (IS_DEMO_DATA) {
       const teams = getDemoTeams();
       const team = teams.find(t => t.id === supabaseTeamId);
       if (team) {
@@ -169,6 +165,7 @@ export async function deleteTeamAction(supabaseTeamId: string): Promise<{ succes
       revalidatePath("/teams");
       return { success: true };
     }
+    const supabase = createSupabaseServiceClient();
 
     // Get OW team ID and all athletes in this team
     const { data: team } = await supabase
@@ -454,9 +451,7 @@ export async function moveAthleteToTeamAction(
   targetTeamId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabase = createSupabaseServiceClient();
-    if (!supabase) {
-      // Demo mode
+    if (IS_DEMO_DATA) {
       const teams = getDemoTeams();
       const targetTeam = teams.find(t => t.id === targetTeamId);
       if (!targetTeam) return { success: false, error: "Team not found" };

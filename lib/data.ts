@@ -490,6 +490,9 @@ function getDashboard(): DashboardData {
   return _cachedDashboard;
 }
 
+/** Demo mode flag — this data layer is always demo (no real OW/Supabase) */
+export const IS_DEMO_DATA = true;
+
 // ─── Public API (same signatures as production) ───────────────────────────────
 
 export async function getDashboardData(): Promise<DashboardData> {
