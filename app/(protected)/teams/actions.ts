@@ -32,6 +32,7 @@ export async function createTeamAction(name: string): Promise<CreateTeamResult> 
       return { success: true, teamId };
     }
     const supabase = createSupabaseServiceClient();
+    if (!supabase) return { success: false, error: "DB not configured" };
 
     // Create in OW — pass coach email so it's visible in OW dashboard
     const owTeam = await owCreateTeam(name, user.email ?? undefined);
@@ -120,6 +121,7 @@ export async function renameTeamAction(supabaseTeamId: string, newName: string):
       return { success: true };
     }
     const supabase = createSupabaseServiceClient();
+    if (!supabase) return { success: false, error: "DB not configured" };
 
     const trimmed = newName.trim();
 
@@ -166,6 +168,7 @@ export async function deleteTeamAction(supabaseTeamId: string): Promise<{ succes
       return { success: true };
     }
     const supabase = createSupabaseServiceClient();
+    if (!supabase) return { success: false, error: "DB not configured" };
 
     // Get OW team ID and all athletes in this team
     const { data: team } = await supabase
