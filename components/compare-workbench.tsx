@@ -466,8 +466,9 @@ function mergeSeries(athletes: AthleteSummary[], metric: CompareMetric, timefram
   const allSeries = athletes.map(a => metric.getSeries(a, timeframe));
   if (allSeries.every(s => !s.length)) return [];
 
-  // Build label→value maps per athlete for accurate date alignment
+  // Build label→value and label→date maps per athlete for accurate date alignment
   const maps = allSeries.map(s => new Map(s.map(p => [p.label, p.value])));
+  const dateMaps = allSeries.map(s => new Map(s.map(p => [p.label, p.date ?? ""])));
 
   // Use the longest series as the ordered label base, then append any remaining labels
   const baseIdx = allSeries.reduce((bi, s, i) => s.length > allSeries[bi].length ? i : bi, 0);
@@ -481,6 +482,11 @@ function mergeSeries(athletes: AthleteSummary[], metric: CompareMetric, timefram
 
   return labels.map(label => {
     const row: Record<string, number | string> = { label };
+    // Include date from the first athlete that has it (for tooltip year display)
+    for (const dm of dateMaps) {
+      const d = dm.get(label);
+      if (d) { row.date = d; break; }
+    }
     athletes.forEach((a, i) => {
       const val = maps[i].get(label);
       if (val != null) row[a.name] = val;
@@ -554,21 +560,26 @@ function CompareChart({
               } />
             <YAxis domain={domain} tickFormatter={tickFmt} tickCount={5} tickLine={false} axisLine={false} tick={{ fill: "#9b9a97", fontSize: 10, fontFamily: "inherit" }} width={36} />
             <Tooltip contentStyle={TS} labelStyle={TL}
-              labelFormatter={(label: string) => {
+              labelFormatter={(label: string, payload: Array<{ payload?: Record<string, unknown> }>) => {
+                // Try to extract the date from the first data point for year info
+                const firstPt = payload?.[0]?.payload;
+                const dateStr = firstPt?.date as string | undefined;
+                const year = dateStr ? dateStr.slice(0, 4) : "";
+
                 if (timeframe.startsWith("biweekly")) {
                   const parts = (label as string).split(" ");
                   if (parts.length === 2) {
                     const month = parts[0], day = parseInt(parts[1]);
                     const mi = MONTH_SHORT.indexOf(month);
                     if (mi >= 0) {
-                      if (day === 1) return `01 ${month} – 14 ${month}`;
+                      if (day === 1) return `01 ${month} – 14 ${month}${year ? ` ${year}` : ""}`;
                       const lastDay = new Date(new Date().getFullYear(), mi + 1, 0).getDate();
-                      return `15 ${month} – ${lastDay} ${month}`;
+                      return `15 ${month} – ${lastDay} ${month}${year ? ` ${year}` : ""}`;
                     }
                   }
                 }
-                if (isYear) return `${label} (monthly avg)`;
-                return label;
+                if (isYear) return `${label} ${year} (monthly avg)`;
+                return year ? `${label}, ${year}` : label;
               }}
               formatter={(v: number, name: string) => [`${tickFmt(v)}${metric.unit ? ` ${metric.unit}` : ""}`, name]} />
             {athletes.map((athlete) => {
