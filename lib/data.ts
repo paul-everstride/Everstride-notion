@@ -398,14 +398,44 @@ const ATHLETE_CONFIGS = [
 
 // ─── In-memory team management (demo only) ──────────────────────────────────
 
-const _teamAssignments = new Map<string, string>(
+const _defaultAssignments = new Map<string, string>(
   ATHLETE_CONFIGS.map(c => [c.id, c.team])
 );
+const _teamAssignments = new Map<string, string>(_defaultAssignments);
 const _extraTeams = new Set<string>(); // teams created by user (may be empty)
+let _lastTeamJson = "";
 
 function _invalidateAthleteCache() {
   _cachedAthletes = null;
   _cachedDashboard = null;
+}
+
+/** Serialize current team state to a JSON string (for cookie storage) */
+export function serializeTeamState(): string {
+  return JSON.stringify({
+    assignments: Object.fromEntries(_teamAssignments),
+    extraTeams: [..._extraTeams],
+  });
+}
+
+/** Restore team state from a JSON string (from cookie) */
+export function loadTeamState(json: string | undefined) {
+  if (!json || json === _lastTeamJson) return;
+  try {
+    const parsed = JSON.parse(json);
+    if (parsed.assignments) {
+      _teamAssignments.clear();
+      for (const [k, v] of Object.entries(parsed.assignments)) {
+        _teamAssignments.set(k, v as string);
+      }
+    }
+    if (parsed.extraTeams) {
+      _extraTeams.clear();
+      for (const t of parsed.extraTeams) _extraTeams.add(t);
+    }
+    _invalidateAthleteCache();
+    _lastTeamJson = json;
+  } catch { /* ignore malformed cookie */ }
 }
 
 export function getDemoTeams(): { id: string; name: string }[] {

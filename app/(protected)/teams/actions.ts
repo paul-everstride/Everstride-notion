@@ -5,7 +5,19 @@ import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { owCreateTeam, owGetTeams, owCreateUser, owAddTeamMember, owDeleteTeam, owDeleteUser, owUpdateUser, owUpdateTeam } from "@/lib/ow-client";
 import { sendPairingEmail } from "@/lib/email";
 import { revalidatePath, revalidateTag } from "next/cache";
-import { demoCreateTeam, demoRenameTeam, demoDeleteTeam, demoMoveAthlete, getDemoTeams, IS_DEMO_DATA } from "@/lib/data";
+import { demoCreateTeam, demoRenameTeam, demoDeleteTeam, demoMoveAthlete, getDemoTeams, IS_DEMO_DATA, serializeTeamState } from "@/lib/data";
+import { cookies } from "next/headers";
+
+function saveDemoTeamCookie() {
+  try {
+    cookies().set("demo_teams", serializeTeamState(), {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      httpOnly: true,
+      sameSite: "lax",
+    });
+  } catch { /* cookies() may fail in some contexts */ }
+}
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -28,6 +40,7 @@ export async function createTeamAction(name: string): Promise<CreateTeamResult> 
     const user = await requireAuthenticatedUser();
     if (IS_DEMO_DATA) {
       const teamId = demoCreateTeam(name);
+      saveDemoTeamCookie();
       revalidatePath("/teams");
       return { success: true, teamId };
     }
@@ -116,6 +129,7 @@ export async function renameTeamAction(supabaseTeamId: string, newName: string):
       const teams = getDemoTeams();
       const team = teams.find(t => t.id === supabaseTeamId);
       if (team) demoRenameTeam(team.name, newName.trim());
+      saveDemoTeamCookie();
       revalidatePath("/teams");
       revalidatePath("/", "layout");
       return { success: true };
@@ -164,6 +178,7 @@ export async function deleteTeamAction(supabaseTeamId: string): Promise<{ succes
         const ok = demoDeleteTeam(team.name);
         if (!ok) return { success: false, error: "Cannot delete a team that has athletes. Move them first." };
       }
+      saveDemoTeamCookie();
       revalidatePath("/teams");
       return { success: true };
     }
@@ -459,6 +474,7 @@ export async function moveAthleteToTeamAction(
       const targetTeam = teams.find(t => t.id === targetTeamId);
       if (!targetTeam) return { success: false, error: "Team not found" };
       demoMoveAthlete(athleteId, targetTeam.name);
+      saveDemoTeamCookie();
       revalidatePath("/teams");
       revalidatePath("/", "layout");
       return { success: true };

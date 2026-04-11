@@ -1,7 +1,8 @@
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { owUpdateTeam, owGetTeams, owGetTeamMembers, owAddTeamMember, owDeleteTeam } from "@/lib/ow-client";
-import { getDashboardData, getDemoTeams, getDemoTeamAthletes, IS_DEMO_DATA } from "@/lib/data";
+import { getDashboardData, getDemoTeams, getDemoTeamAthletes, IS_DEMO_DATA, loadTeamState } from "@/lib/data";
+import { cookies } from "next/headers";
 import { TeamsClient } from "./teams-client";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,9 @@ export default async function TeamsPage() {
 
   // ── Demo mode: skip all Supabase/OW, use in-memory data ──
   if (IS_DEMO_DATA) {
+    // Restore team state from cookie (survives page refresh)
+    const teamCookie = cookies().get("demo_teams")?.value;
+    loadTeamState(teamCookie);
     return (
       <div>
         <div className="border-b border-line bg-canvas px-6 py-5">
