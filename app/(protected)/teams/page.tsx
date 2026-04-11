@@ -1,8 +1,10 @@
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { owUpdateTeam, owGetTeams, owGetTeamMembers, owAddTeamMember, owDeleteTeam } from "@/lib/ow-client";
-import { getDashboardData } from "@/lib/data";
+import { getDashboardData, getDemoTeams, getDemoTeamAthletes } from "@/lib/data";
 import { TeamsClient } from "./teams-client";
+
+export const dynamic = "force-dynamic";
 
 export default async function TeamsPage() {
   const user = await requireAuthenticatedUser();
@@ -130,6 +132,10 @@ export default async function TeamsPage() {
         }));
       }
     } catch { /* has_data is best-effort — cards still render without it */ }
+  } else {
+    // ── Demo mode: use in-memory team data ──
+    teams = getDemoTeams();
+    initialAthletes = getDemoTeamAthletes();
   }
 
   return (

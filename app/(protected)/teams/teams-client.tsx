@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, UserPlus, ChevronDown, ChevronRight, Loader2, Trash2, X, Pencil, Mail, ExternalLink, Copy, Check, Camera } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { createTeamAction, createAthleteAction, deleteTeamAction, deleteAthleteAction, updateAthleteAction, uploadAvatarAction, saveAvatarUrlAction, renameTeamAction } from "./actions";
+import { createTeamAction, createAthleteAction, deleteTeamAction, deleteAthleteAction, updateAthleteAction, uploadAvatarAction, saveAvatarUrlAction, renameTeamAction, moveAthleteToTeamAction } from "./actions";
 import { getTeamColor } from "@/lib/team-colors";
 
 interface Team { id: string; name: string; ow_team_id?: string | null; }
@@ -216,13 +216,15 @@ function EditAthleteModal({
 
 // ── Athlete card ─────────────────────────────────────────────────────────────
 
-function AthleteCard({ athlete, teamId, onDelete, onUpdate, onRefreshNeeded }: {
-  athlete: TeamAthlete; teamId: string;
+function AthleteCard({ athlete, teamId, allTeams, onDelete, onUpdate, onRefreshNeeded }: {
+  athlete: TeamAthlete; teamId: string; allTeams: Team[];
   onDelete: () => void;
   onUpdate: (name: string, email: string, avatarUrl?: string) => void;
   onRefreshNeeded: () => void;
 }) {
   const [showEdit, setShowEdit] = useState(false);
+  const [showMoveMenu, setShowMoveMenu] = useState(false);
+  const [moving, setMoving] = useState(false);
   // Track avatar and name locally so the card + modal always reflect the latest upload without waiting for a full page refresh
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null | undefined>(athlete.avatar_url);
   const [localName, setLocalName] = useState(athlete.athlete_name ?? "Unknown");
@@ -264,6 +266,32 @@ function AthleteCard({ athlete, teamId, onDelete, onUpdate, onRefreshNeeded }: {
             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium text-muted hover:text-ink hover:bg-surfaceStrong transition">
             <Pencil className="h-3 w-3" /> Edit
           </button>
+          {allTeams.length > 1 && (
+            <div className="relative">
+              <button onClick={() => setShowMoveMenu(m => !m)}
+                className="flex items-center justify-center gap-1 px-3 py-2.5 text-xs font-medium text-muted hover:text-ink hover:bg-surfaceStrong transition">
+                {moving ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronDown className="h-3 w-3" />} Move
+              </button>
+              {showMoveMenu && (
+                <div className="absolute bottom-full mb-1 right-0 z-50 bg-canvas border border-line rounded-lg shadow-lg py-1 w-44">
+                  <p className="px-3 py-1.5 text-[10px] text-muted uppercase tracking-wide font-semibold">Move to</p>
+                  {allTeams.filter(t => t.id !== teamId).map(t => (
+                    <button key={t.id} type="button"
+                      className="w-full text-left px-3 py-2 text-xs font-medium text-ink hover:bg-surface transition"
+                      onClick={async () => {
+                        setMoving(true);
+                        setShowMoveMenu(false);
+                        await moveAthleteToTeamAction(athlete.ow_user_id, t.id);
+                        onRefreshNeeded();
+                        setMoving(false);
+                      }}>
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <button onClick={onDelete}
             className="flex items-center justify-center px-4 py-2.5 text-muted hover:text-red-600 hover:bg-red-50 transition">
             <Trash2 className="h-3.5 w-3.5" />
@@ -545,6 +573,7 @@ export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontend
                           key={a.ow_user_id}
                           athlete={a}
                           teamId={team.id}
+                          allTeams={teams}
                           onDelete={() => setConfirmDeleteAthlete({ teamId: team.id, owUserId: a.ow_user_id, name: a.athlete_name ?? "this athlete" })}
                           onUpdate={(name, email, avatarUrl) => setAthletes(p => ({
                             ...p,

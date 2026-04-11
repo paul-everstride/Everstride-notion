@@ -290,7 +290,7 @@ function mockAthlete(cfg: {
     age: cfg.age,
     weightKg: cfg.weightKg,
     heightCm: cfg.heightCm,
-    team: cfg.team,
+    team: _teamAssignments.get(cfg.id) ?? cfg.team,
     recoveryScore: todayEntry.recoveryScore,
     sleepScore: todayEntry.sleepScore,
     restHr: todayEntry.restHr,
@@ -395,6 +395,60 @@ const ATHLETE_CONFIGS = [
     seed: 6006,
   },
 ] as const;
+
+// ─── In-memory team management (demo only) ──────────────────────────────────
+
+const _teamAssignments = new Map<string, string>(
+  ATHLETE_CONFIGS.map(c => [c.id, c.team])
+);
+const _extraTeams = new Set<string>(); // teams created by user (may be empty)
+
+function _invalidateAthleteCache() {
+  _cachedAthletes = null;
+  _cachedDashboard = null;
+}
+
+export function getDemoTeams(): { id: string; name: string }[] {
+  const teamNames = new Set<string>([..._teamAssignments.values(), ..._extraTeams]);
+  return [...teamNames].map(name => ({ id: `team-${name.toLowerCase().replace(/\s+/g, "-")}`, name }));
+}
+
+export function getDemoTeamAthletes(): Record<string, { ow_user_id: string; athlete_name: string; athlete_email: string; has_data: boolean }[]> {
+  const athletes = getAthletes();
+  const result: Record<string, { ow_user_id: string; athlete_name: string; athlete_email: string; has_data: boolean }[]> = {};
+  for (const team of getDemoTeams()) {
+    result[team.id] = athletes
+      .filter(a => a.team === team.name)
+      .map(a => ({ ow_user_id: a.id, athlete_name: a.name, athlete_email: a.email ?? "", has_data: true }));
+  }
+  return result;
+}
+
+export function demoMoveAthlete(athleteId: string, newTeamName: string) {
+  _teamAssignments.set(athleteId, newTeamName);
+  _invalidateAthleteCache();
+}
+
+export function demoRenameTeam(oldName: string, newName: string) {
+  for (const [id, team] of _teamAssignments) {
+    if (team === oldName) _teamAssignments.set(id, newName);
+  }
+  if (_extraTeams.has(oldName)) { _extraTeams.delete(oldName); _extraTeams.add(newName); }
+  _invalidateAthleteCache();
+}
+
+export function demoCreateTeam(name: string): string {
+  _extraTeams.add(name);
+  return `team-${name.toLowerCase().replace(/\s+/g, "-")}`;
+}
+
+export function demoDeleteTeam(name: string): boolean {
+  // Only allow deleting empty teams
+  const hasAthletes = [..._teamAssignments.values()].some(t => t === name);
+  if (hasAthletes) return false;
+  _extraTeams.delete(name);
+  return true;
+}
 
 // ─── Dynamic data generation (regenerates on each request so dates stay current) ──
 

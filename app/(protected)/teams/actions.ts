@@ -5,6 +5,7 @@ import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { owCreateTeam, owGetTeams, owCreateUser, owAddTeamMember, owDeleteTeam, owDeleteUser, owUpdateUser, owUpdateTeam } from "@/lib/ow-client";
 import { sendPairingEmail } from "@/lib/email";
 import { revalidatePath, revalidateTag } from "next/cache";
+import { demoCreateTeam, demoRenameTeam, demoDeleteTeam, demoMoveAthlete, getDemoTeams } from "@/lib/data";
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -26,7 +27,12 @@ export async function createTeamAction(name: string): Promise<CreateTeamResult> 
   try {
     const user = await requireAuthenticatedUser();
     const supabase = createSupabaseServiceClient();
-    if (!supabase) return { success: false, error: "DB not configured" };
+    if (!supabase) {
+      // Demo mode
+      const teamId = demoCreateTeam(name);
+      revalidatePath("/teams");
+      return { success: true, teamId };
+    }
 
     // Create in OW — pass coach email so it's visible in OW dashboard
     const owTeam = await owCreateTeam(name, user.email ?? undefined);
@@ -107,7 +113,15 @@ export async function renameTeamAction(supabaseTeamId: string, newName: string):
   try {
     const user = await requireAuthenticatedUser();
     const supabase = createSupabaseServiceClient();
-    if (!supabase) return { success: false, error: "DB not configured" };
+    if (!supabase) {
+      // Demo mode — find team name from ID
+      const teams = getDemoTeams();
+      const team = teams.find(t => t.id === supabaseTeamId);
+      if (team) demoRenameTeam(team.name, newName.trim());
+      revalidatePath("/teams");
+      revalidatePath("/", "layout");
+      return { success: true };
+    }
 
     const trimmed = newName.trim();
 
@@ -144,7 +158,17 @@ export async function deleteTeamAction(supabaseTeamId: string): Promise<{ succes
   try {
     const user = await requireAuthenticatedUser();
     const supabase = createSupabaseServiceClient();
-    if (!supabase) return { success: false, error: "DB not configured" };
+    if (!supabase) {
+      // Demo mode
+      const teams = getDemoTeams();
+      const team = teams.find(t => t.id === supabaseTeamId);
+      if (team) {
+        const ok = demoDeleteTeam(team.name);
+        if (!ok) return { success: false, error: "Cannot delete a team that has athletes. Move them first." };
+      }
+      revalidatePath("/teams");
+      return { success: true };
+    }
 
     // Get OW team ID and all athletes in this team
     const { data: team } = await supabase
@@ -420,6 +444,28 @@ export async function updateAthleteProfileAction(
     revalidatePath(`/athletes/${owUserId}`);
     revalidateTag("dashboard-athletes");
     return { success: true };
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+}
+
+export async function moveAthleteToTeamAction(
+  athleteId: string,
+  targetTeamId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = createSupabaseServiceClient();
+    if (!supabase) {
+      // Demo mode
+      const teams = getDemoTeams();
+      const targetTeam = teams.find(t => t.id === targetTeamId);
+      if (!targetTeam) return { success: false, error: "Team not found" };
+      demoMoveAthlete(athleteId, targetTeam.name);
+      revalidatePath("/teams");
+      revalidatePath("/", "layout");
+      return { success: true };
+    }
+    return { success: false, error: "Not implemented for production" };
   } catch (e) {
     return { success: false, error: String(e) };
   }
