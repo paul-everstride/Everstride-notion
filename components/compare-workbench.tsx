@@ -13,7 +13,7 @@ import { cn, formatSignedNumber, formatWeight } from "@/lib/utils";
 import { BarChart2, Table, Calendar } from "lucide-react";
 import { ComparePhotoStrip } from "@/components/photo-accents";
 
-const athleteColors = ["#e16b2b", "#3b82f6", "#059669", "#d97706", "#dc2626", "#8b5cf6"];
+const athleteColors = ["#e16b2b", "#3b82f6", "#059669", "#8b5cf6", "#dc2626", "#0891b2"];
 
 // ── Labels ────────────────────────────────────────────────────────────────────
 
