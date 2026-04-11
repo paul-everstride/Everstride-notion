@@ -451,7 +451,6 @@ const fitnessMetrics: CompareMetric[] = [
 const loadMetrics: CompareMetric[] = [
   { key: "atl",            label: "ATL",              unit: "",  baseValue: (a) => a.atl ?? 0,        getSeries: trendSeries("atlTrend"), renderCurrent: (a) => a.atl != null ? `${a.atl}` : "N/A" },
   { key: "ctl",            label: "CTL",              unit: "",  baseValue: (a) => a.ctl ?? 0,        getSeries: trendSeries("ctlTrend"), renderCurrent: (a) => a.ctl != null ? `${a.ctl}` : "N/A" },
-  { key: "sleepEfficiency",label: "Sleep efficiency", unit: "%", barDomain: [0, 100], baseValue: (a) => a.sleepEfficiency ?? 0, getSeries: readinessSeries("sleepEfficiency", "sleepEfficiencyTrend"), renderCurrent: (a) => a.sleepEfficiency != null ? `${a.sleepEfficiency}%` : "N/A" },
 ];
 
 const PERF_SECTIONS = [
