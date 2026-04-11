@@ -267,30 +267,42 @@ function AthleteCard({ athlete, teamId, allTeams, onDelete, onUpdate, onRefreshN
             <Pencil className="h-3 w-3" /> Edit
           </button>
           {allTeams.length > 1 && (
-            <div className="relative">
+            <>
               <button onClick={() => setShowMoveMenu(m => !m)}
                 className="flex items-center justify-center gap-1 px-3 py-2.5 text-xs font-medium text-muted hover:text-ink hover:bg-surfaceStrong transition">
                 {moving ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronDown className="h-3 w-3" />} Move
               </button>
               {showMoveMenu && (
-                <div className="absolute bottom-full mb-1 right-0 z-50 bg-canvas border border-line rounded-lg shadow-lg py-1 w-44">
-                  <p className="px-3 py-1.5 text-[10px] text-muted uppercase tracking-wide font-semibold">Move to</p>
-                  {allTeams.filter(t => t.id !== teamId).map(t => (
-                    <button key={t.id} type="button"
-                      className="w-full text-left px-3 py-2 text-xs font-medium text-ink hover:bg-surface transition"
-                      onClick={async () => {
-                        setMoving(true);
-                        setShowMoveMenu(false);
-                        await moveAthleteToTeamAction(athlete.ow_user_id, t.id);
-                        onRefreshNeeded();
-                        setMoving(false);
-                      }}>
-                      {t.name}
-                    </button>
-                  ))}
-                </div>
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMoveMenu(false)} />
+                  <div className="fixed z-50 bg-canvas border border-line rounded-xl shadow-xl py-2 w-52"
+                    style={{ top: "50%", left: "50%", transform: "translate(-50%, -50%)" }}>
+                    <p className="px-4 py-2 text-xs text-muted font-semibold uppercase tracking-wide border-b border-line mb-1">
+                      Move {athlete.athlete_name?.split(" ")[0] ?? "athlete"} to
+                    </p>
+                    {allTeams.filter(t => t.id !== teamId).map(t => (
+                      <button key={t.id} type="button"
+                        className="w-full text-left px-4 py-2.5 text-sm font-medium text-ink hover:bg-surface transition-colors"
+                        onClick={async () => {
+                          setMoving(true);
+                          setShowMoveMenu(false);
+                          await moveAthleteToTeamAction(athlete.ow_user_id, t.id);
+                          onRefreshNeeded();
+                          setMoving(false);
+                        }}>
+                        {t.name}
+                      </button>
+                    ))}
+                    <div className="border-t border-line mt-1 pt-1">
+                      <button onClick={() => setShowMoveMenu(false)}
+                        className="w-full text-left px-4 py-2 text-xs text-muted hover:text-ink transition-colors">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
-            </div>
+            </>
           )}
           <button onClick={onDelete}
             className="flex items-center justify-center px-4 py-2.5 text-muted hover:text-red-600 hover:bg-red-50 transition">
