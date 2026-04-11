@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar, BarChart, CartesianGrid, Cell,
   Line, LineChart,
@@ -1512,8 +1512,22 @@ export function CompareWorkbench({
   athletes: AthleteSummary[];
   section: "readiness" | "performance";
 }) {
+  // ── Persist/restore key settings via sessionStorage ──
+  const storageKey = `compare-${section}`;
+  function loadSaved<T>(key: string, fallback: T): T {
+    if (typeof window === "undefined") return fallback;
+    try { const v = sessionStorage.getItem(`${storageKey}-${key}`); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+  }
+  function save(key: string, value: unknown) {
+    if (typeof window === "undefined") return;
+    try { sessionStorage.setItem(`${storageKey}-${key}`, JSON.stringify(value)); } catch {}
+  }
+
   const [flaggedOnly, setFlaggedOnly]     = useState(false);
-  const [selectedIds, setSelectedIds]     = useState<string[]>(athletes.slice(0, 4).map(a => a.id));
+  const [selectedIds, setSelectedIdsRaw]  = useState<string[]>(() => loadSaved("selectedIds", athletes.slice(0, 4).map(a => a.id)));
+  const setSelectedIds = useCallback((v: string[] | ((prev: string[]) => string[])) => {
+    setSelectedIdsRaw(prev => { const next = typeof v === "function" ? v(prev) : v; save("selectedIds", next); return next; });
+  }, []);
   const [expandedMetricKey, setExpanded]  = useState<string | null>(null);
   const expandedPanelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1523,14 +1537,15 @@ export function CompareWorkbench({
   }, [expandedMetricKey]);
 
   // Mode
-  const [mode, setMode]                   = useState<"snapshot" | "timeframe">("timeframe");
+  const [mode, setModeRaw] = useState<"snapshot" | "timeframe">(() => loadSaved("mode", "timeframe"));
+  const setMode = useCallback((v: "snapshot" | "timeframe") => { setModeRaw(v); save("mode", v); }, []);
   const [snapshotView, setSnapshotView]   = useState<"bar" | "table">("bar");
 
   // Snapshot range state
-  const [snapDayOffset, setSnapDayOffset]   = useState(0);           // for readiness day mode
+  const [snapDayOffset, setSnapDayOffset]   = useState(0);
   const [snapPeriod, setSnapPeriod]         = useState<SnapshotPeriod>("2weeks");
-  const [snapPeriodOffset, setSnapPeriodOffset] = useState(0);      // for 2weeks / monthly
-  const [snapCustomStart, setSnapCustomStart]   = useState(-13);    // day offset from today
+  const [snapPeriodOffset, setSnapPeriodOffset] = useState(0);
+  const [snapCustomStart, setSnapCustomStart]   = useState(-13);
   const [snapCustomEnd,   setSnapCustomEnd]     = useState(0);
 
   // Snapshot readiness aggregation mode
@@ -1541,8 +1556,12 @@ export function CompareWorkbench({
   const [showSnapPeriodPicker, setShowSnapPeriodPicker] = useState(false);
 
   // Timeframe state
-  const [timeframeType, setTimeframeType] = useState(() => section === "readiness" ? "week" : "biweekly");
-  const [timeframeOffset, setTimeframeOffset] = useState(0);
+  const [timeframeType, setTimeframeTypeRaw] = useState(() => loadSaved("timeframeType", section === "readiness" ? "week" : "biweekly"));
+  const setTimeframeType = useCallback((v: string) => { setTimeframeTypeRaw(v); save("timeframeType", v); }, []);
+  const [timeframeOffset, setTimeframeOffsetRaw] = useState(() => loadSaved("timeframeOffset", 0));
+  const setTimeframeOffset = useCallback((v: number | ((prev: number) => number)) => {
+    setTimeframeOffsetRaw(prev => { const next = typeof v === "function" ? v(prev) : v; save("timeframeOffset", next); return next; });
+  }, []);
   const [showPeriodPicker, setShowPeriodPicker] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [perfPageOffset, setPerfPageOffset] = useState(0);
