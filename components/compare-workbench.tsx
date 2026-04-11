@@ -1553,7 +1553,7 @@ export function CompareWorkbench({
 
   const activeTimeframe = useMemo(() => {
     if (timeframeType === "custom") return `months:${selectedMonths.join(",")}`;
-    if (section === "performance" && (timeframeType === "biweekly" || timeframeType === "monthly")) return `${timeframeType}:${perfPageOffset}`;
+    if (section === "performance" && timeframeType === "biweekly") return `biweekly:${perfPageOffset}`;
     return `${timeframeType}:${timeframeOffset}`;
   }, [timeframeType, timeframeOffset, perfPageOffset, selectedMonths, section]);
 
