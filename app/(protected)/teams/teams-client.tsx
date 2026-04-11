@@ -216,11 +216,12 @@ function EditAthleteModal({
 
 // ── Athlete card ─────────────────────────────────────────────────────────────
 
-function AthleteCard({ athlete, teamId, allTeams, onDelete, onUpdate, onRefreshNeeded }: {
+function AthleteCard({ athlete, teamId, allTeams, onDelete, onUpdate, onRefreshNeeded, onMove }: {
   athlete: TeamAthlete; teamId: string; allTeams: Team[];
   onDelete: () => void;
   onUpdate: (name: string, email: string, avatarUrl?: string) => void;
   onRefreshNeeded: () => void;
+  onMove: (targetTeamId: string) => void;
 }) {
   const [showEdit, setShowEdit] = useState(false);
   const [showMoveMenu, setShowMoveMenu] = useState(false);
@@ -287,7 +288,7 @@ function AthleteCard({ athlete, teamId, allTeams, onDelete, onUpdate, onRefreshN
                           setMoving(true);
                           setShowMoveMenu(false);
                           await moveAthleteToTeamAction(athlete.ow_user_id, t.id);
-                          onRefreshNeeded();
+                          onMove(t.id);
                           setMoving(false);
                         }}>
                         {t.name}
@@ -587,6 +588,11 @@ export function TeamsClient({ coachId, initialTeams, initialAthletes, owFrontend
                           teamId={team.id}
                           allTeams={teams}
                           onDelete={() => setConfirmDeleteAthlete({ teamId: team.id, owUserId: a.ow_user_id, name: a.athlete_name ?? "this athlete" })}
+                          onMove={(targetTeamId) => setAthletes(prev => {
+                            const fromList = (prev[team.id] ?? []).filter(x => x.ow_user_id !== a.ow_user_id);
+                            const toList = [...(prev[targetTeamId] ?? []), a];
+                            return { ...prev, [team.id]: fromList, [targetTeamId]: toList };
+                          })}
                           onUpdate={(name, email, avatarUrl) => setAthletes(p => ({
                             ...p,
                             [team.id]: (p[team.id] ?? []).map(x => x.ow_user_id === a.ow_user_id ? { ...x, athlete_name: name, athlete_email: email, ...(avatarUrl !== undefined ? { avatar_url: avatarUrl } : {}) } : x),
