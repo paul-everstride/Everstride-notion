@@ -2,12 +2,52 @@
 
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
-import { owCreateTeam, owGetTeams, owCreateUser, owAddTeamMember, owDeleteTeam, owDeleteUser, owUpdateUser, owUpdateTeam } from "@/lib/ow-client";
+import { owCreateTeam, owGetTeams, owCreateUser, owAddTeamMember, owDeleteTeam, owDeleteUser, owUpdateUser, owUpdateTeam, owGetTeamMembers } from "@/lib/ow-client";
 import { sendPairingEmail } from "@/lib/email";
 import { revalidatePath, revalidateTag } from "next/cache";
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+
+type ServiceClient = NonNullable<ReturnType<typeof createSupabaseServiceClient>>;
+
+/**
+ * Verify the authenticated coach owns the given team.
+ * Because we use the Supabase service-role client (which bypasses row-level
+ * security), every action that mutates or reads team_athletes MUST call this
+ * first — otherwise any logged-in coach could touch another coach's data.
+ */
+async function coachOwnsTeam(supabase: ServiceClient, supabaseTeamId: string): Promise<boolean> {
+  const user = await requireAuthenticatedUser();
+  const { data: team } = await supabase
+    .from("teams")
+    .select("id")
+    .eq("id", supabaseTeamId)
+    .eq("coach_id", user.id)
+    .maybeSingle();
+  return Boolean(team);
+}
+
+/**
+ * Verify the authenticated coach owns at least one team the given athlete
+ * (ow_user_id) belongs to. Used by actions that only receive an athlete id.
+ */
+async function coachOwnsAthlete(supabase: ServiceClient, owUserId: string): Promise<boolean> {
+  const user = await requireAuthenticatedUser();
+  const { data: teams } = await supabase
+    .from("teams")
+    .select("id")
+    .eq("coach_id", user.id);
+  const teamIds = (teams ?? []).map((t: { id: string }) => t.id);
+  if (teamIds.length === 0) return false;
+  const { data: row } = await supabase
+    .from("team_athletes")
+    .select("ow_user_id")
+    .eq("ow_user_id", owUserId)
+    .in("team_id", teamIds)
+    .maybeSingle();
+  return Boolean(row);
+}
 
 export interface CreateTeamResult {
   success: boolean;
@@ -229,6 +269,8 @@ export async function saveAvatarUrlAction(
   try {
     const supabase = createSupabaseServiceClient();
     if (!supabase) return { success: false, error: "DB not configured" };
+    if (!(await coachOwnsTeam(supabase, supabaseTeamId)))
+      return { success: false, error: "Not authorized for this team." };
 
     // Check if a row already exists
     const { data: existing } = await supabase
@@ -273,6 +315,8 @@ export async function updateAthleteAction(
   try {
     const supabase = createSupabaseServiceClient();
     if (!supabase) return { success: false, error: "DB not configured" };
+    if (!(await coachOwnsTeam(supabase, supabaseTeamId)))
+      return { success: false, error: "Not authorized for this team." };
     const updateData: Record<string, string> = {
       athlete_name: data.athlete_name,
       athlete_email: data.athlete_email,
@@ -329,6 +373,8 @@ export async function deleteAthleteAction(
   try {
     const supabase = createSupabaseServiceClient();
     if (!supabase) return { success: false, error: "DB not configured" };
+    if (!(await coachOwnsTeam(supabase, supabaseTeamId)))
+      return { success: false, error: "Not authorized for this team." };
 
     // Delete from OW
     await owDeleteUser(owUserId);
@@ -352,6 +398,7 @@ export async function getTeamAthletesAction(supabaseTeamId: string) {
   try {
     const supabase = createSupabaseServiceClient();
     if (!supabase) return [];
+    if (!(await coachOwnsTeam(supabase, supabaseTeamId))) return [];
 
     const { data } = await supabase
       .from("team_athletes")
@@ -381,7 +428,7 @@ export async function updateAthleteProfileAction(
     // Find all teams belonging to this coach
     const { data: teams } = await supabase
       .from("teams")
-      .select("id")
+      .select("id, ow_team_id")
       .eq("coach_id", user.id);
     if (!teams?.length) return { success: false, error: "No teams found" };
 
@@ -396,7 +443,22 @@ export async function updateAthleteProfileAction(
       .limit(1)
       .maybeSingle();
 
-    const teamId = existing?.team_id ?? teams[0].id;
+    let teamId = existing?.team_id as string | undefined;
+
+    // No Supabase row yet (OW-only athlete). Only allow if the athlete is
+    // genuinely a member of one of THIS coach's OW teams — otherwise a coach
+    // could hijack another coach's athlete by passing an arbitrary owUserId.
+    if (!teamId) {
+      let isMember = false;
+      for (const t of teams as { id: string; ow_team_id?: string | null }[]) {
+        if (!t.ow_team_id) continue;
+        try {
+          const members = await owGetTeamMembers(t.ow_team_id);
+          if (members.some((m) => m.id === owUserId)) { teamId = t.id; isMember = true; break; }
+        } catch { /* ignore per-team lookup failure */ }
+      }
+      if (!isMember) return { success: false, error: "Not authorized for this athlete." };
+    }
 
     const { error } = await supabase
       .from("team_athletes")

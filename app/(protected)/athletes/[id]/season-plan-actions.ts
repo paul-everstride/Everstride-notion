@@ -1,6 +1,7 @@
 "use server";
 
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
+import { requireAuthenticatedUser } from "@/lib/auth";
 
 export interface SeasonPlanData {
   id: string;
@@ -41,6 +42,8 @@ export interface PlanWeek {
 }
 
 export async function getSeasonPlan(athleteOwId: string): Promise<SeasonPlanData | null> {
+  // Scope to the authenticated coach so one coach can never read another's plans.
+  const user = await requireAuthenticatedUser();
   const supabase = createSupabaseServiceClient();
   if (!supabase) return null;
 
@@ -48,6 +51,7 @@ export async function getSeasonPlan(athleteOwId: string): Promise<SeasonPlanData
     .from("season_plans")
     .select("*")
     .eq("athlete_ow_id", athleteOwId)
+    .eq("coach_id", user.id)
     .order("season_year", { ascending: false })
     .limit(1)
     .single();
