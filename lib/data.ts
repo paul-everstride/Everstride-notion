@@ -8,12 +8,10 @@ import { unstable_cache } from "next/cache";
 import type { AthleteSummary, DashboardData, RecoveryHistoryDay, TrendPoint } from "@/lib/types";
 import {
   owGetUsers,
-  owGetRecovery,
   owGetSleep,
   owGetBody,
   owGetTimeseries,
   owGetTeamMembers,
-  type OWRecoverySummary,
   type OWSleepSummary,
   type OWBodySummary,
   type OWTimeseriesPoint,
@@ -96,7 +94,6 @@ function toAthleteSummary(
   lastName: string | null,
   email: string | null,
   createdAt: string,
-  recovery: OWRecoverySummary[],
   sleep: OWSleepSummary[],
   body: OWBodySummary | null,
   timeseries: Record<string, OWTimeseriesPoint[]>,
@@ -160,9 +157,6 @@ function toAthleteSummary(
       skinTemp = 0;
     }
   }
-
-  // suppress unused-variable warning — todayStr used below in recoveryHistory
-  void todayStr;
 
   // ── Full recovery + sleep history (all days, oldest → newest) ────────────
   const recMap  = Object.fromEntries(ts_recovery.map(p => [p.date, p.value]));
@@ -232,9 +226,6 @@ function toAthleteSummary(
       ? Math.round(latestSleep!.efficiency_percent!)
       : null;
   const durationMinutes = isSleepRecent ? (latestSleep?.duration_minutes ?? 0) : 0;
-  const sleepDurationScore = durationMinutes > 0
-    ? Math.min(100, Math.round((durationMinutes / 480) * 100))
-    : null;
   const sleepScore: number | null = (() => {
     if (!isSleepRecent) return null;
     const eff = latestSleep?.efficiency_percent ?? 0;
@@ -465,8 +456,7 @@ async function fetchAthletesFromOW(userIds: string[]): Promise<DashboardData> {
     await Promise.all(
       filtered.map(async (user) => {
         try {
-          const [recovery, sleep, body, timeseries] = await Promise.all([
-            owGetRecovery(user.id),
+          const [sleep, body, timeseries] = await Promise.all([
             owGetSleep(user.id),
             owGetBody(user.id),
             owGetTimeseries(user.id),
@@ -475,7 +465,7 @@ async function fetchAthletesFromOW(userIds: string[]): Promise<DashboardData> {
           return toAthleteSummary(
             user.id, user.first_name, user.last_name,
             user.email, user.created_at,
-            recovery, sleep, body, timeseries,
+            sleep, body, timeseries,
             avatarMap.get(user.id) ?? null,
             teamNameMap.get(user.id) ?? null
           );
