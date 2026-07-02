@@ -6,11 +6,13 @@ import Link from "next/link";
 import { AthleteHeaderClient } from "./athlete-header-client";
 import { getSeasonPlan } from "./season-plan-actions";
 import { requireAuthenticatedUser } from "@/lib/auth";
+import { signPlannerToken } from "@/lib/planner-token";
 
 export default async function AthleteDetailPage({ params }: { params: { id: string } }) {
   const [athlete, user] = await Promise.all([getAthleteById(params.id), requireAuthenticatedUser()]);
   if (!athlete) notFound();
   const seasonPlan = await getSeasonPlan(athlete.userId);
+  const plannerToken = signPlannerToken(user.id);
 
   return (
     <div>
@@ -40,7 +42,7 @@ export default async function AthleteDetailPage({ params }: { params: { id: stri
         </div>
       </div>
 
-      <AthleteDetailPanel athlete={athlete} seasonPlan={seasonPlan} coachId={user.id} />
+      <AthleteDetailPanel athlete={athlete} seasonPlan={seasonPlan} coachId={user.id} plannerToken={plannerToken} />
     </div>
   );
 }

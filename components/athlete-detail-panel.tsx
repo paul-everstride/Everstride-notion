@@ -271,7 +271,7 @@ type Tab   = "readiness" | "recovery" | "performance" | "load" | "power" | "prof
 type TF    = "7d" | "30d" | "3m" | "6m" | "1y" | "custom";
 type RecTF = "7d" | "30d" | "90d" | "365d" | "all";
 
-export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: AthleteSummary; seasonPlan?: SeasonPlanData | null; coachId?: string }) {
+export function AthleteDetailPanel({ athlete, seasonPlan, coachId, plannerToken }: { athlete: AthleteSummary; seasonPlan?: SeasonPlanData | null; coachId?: string; plannerToken?: string }) {
   const todayStr   = new Date().toISOString().slice(0, 10);
   const thirtyAgo  = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 
@@ -1048,7 +1048,7 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                   </p>
                 </div>
                 <a
-                  href={`${process.env.NEXT_PUBLIC_PLANNER_URL ?? "https://planner.everstride.fit"}?coach_id=${coachId ?? ""}&athlete_id=${athlete.userId}`}
+                  href={`${process.env.NEXT_PUBLIC_PLANNER_URL ?? "https://planner.everstride.fit"}?coach_id=${coachId ?? ""}&athlete_id=${athlete.userId}${plannerToken ? `&token=${encodeURIComponent(plannerToken)}` : ""}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm font-medium text-brand border border-brand/30 rounded-md px-3 py-1.5 hover:bg-brandSoft transition-colors duration-100"
@@ -1281,7 +1281,7 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId }: { athlete: 
                 Create a periodized training plan for this athlete using the Season Planner.
               </p>
               <a
-                href={`${process.env.NEXT_PUBLIC_PLANNER_URL ?? "https://planner.everstride.fit"}?coach_id=${coachId ?? ""}&athlete_id=${athlete.userId}`}
+                href={`${process.env.NEXT_PUBLIC_PLANNER_URL ?? "https://planner.everstride.fit"}?coach_id=${coachId ?? ""}&athlete_id=${athlete.userId}${plannerToken ? `&token=${encodeURIComponent(plannerToken)}` : ""}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-sm font-medium text-brand border border-brand/30 rounded-md px-3 py-1.5 hover:bg-brandSoft transition-colors duration-100"

@@ -29,9 +29,9 @@ type NavItem = { href: string; label: string; icon: React.ReactNode; children?: 
 
 const PLANNER_BASE = process.env.NEXT_PUBLIC_PLANNER_URL ?? "https://planner.everstride.fit";
 
-function buildCoachItems(coachId?: string, coachName?: string): NavItem[] {
+function buildCoachItems(coachId?: string, coachName?: string, plannerToken?: string): NavItem[] {
   const plannerUrl = coachId
-    ? `${PLANNER_BASE}?coach_id=${encodeURIComponent(coachId)}&coach_name=${encodeURIComponent(coachName ?? "")}`
+    ? `${PLANNER_BASE}?coach_id=${encodeURIComponent(coachId)}&coach_name=${encodeURIComponent(coachName ?? "")}${plannerToken ? `&token=${encodeURIComponent(plannerToken)}` : ""}`
     : PLANNER_BASE;
   return [
     { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={15} /> },
@@ -55,9 +55,9 @@ const athleteItems: NavItem[] = [
   { href: "/dashboard", label: "Coach View", icon: <Eye size={15} /> }
 ];
 
-export function Sidebar({ role, coachId, coachName }: { role: AppRole; coachId?: string; coachName?: string }) {
+export function Sidebar({ role, coachId, coachName, plannerToken }: { role: AppRole; coachId?: string; coachName?: string; plannerToken?: string }) {
   const pathname = usePathname();
-  const items = role === "athlete" ? athleteItems : buildCoachItems(coachId, coachName);
+  const items = role === "athlete" ? athleteItems : buildCoachItems(coachId, coachName, plannerToken);
 
   return (
     <aside className="fixed inset-y-0 left-0 z-20 hidden w-56 border-r border-line bg-surface lg:flex flex-col">
