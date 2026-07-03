@@ -41,6 +41,9 @@ const columnOptions: Array<{ key: AthleteColumnKey; label: string }> = [
   { key: "spo2",            label: "SpO₂"             },
   { key: "resp",            label: "Resp Rate"        },
   { key: "skinTemp",        label: "Skin Temp"        },
+  { key: "lastActivity",    label: "Last Activity"    },
+  { key: "dist7d",          label: "7d Distance (km)" },
+  { key: "time7d",          label: "7d Time (min)"    },
   { key: "atl",             label: "ATL"              },
   { key: "ctl",             label: "CTL"              },
   { key: "tsb",             label: "TSB"              },
@@ -708,12 +711,13 @@ function AiSummaryCard({ data, summaryMetrics }: { data: DashboardData; summaryM
 
 // ── Column editor panel ───────────────────────────────────────────────────────
 
-type ColGroup = "Athlete" | "Readiness" | "Performance";
+type ColGroup = "Athlete" | "Readiness" | "Activity" | "Performance";
 
 const EDITOR_GROUPS: { key: ColGroup; label: string; textClass: string }[] = [
-  { key: "Athlete",     label: "Athlete",     textClass: "text-muted"  },
-  { key: "Readiness",   label: "Readiness",   textClass: "text-blue"   },
-  { key: "Performance", label: "Performance", textClass: "text-brand"  },
+  { key: "Athlete",     label: "Athlete",     textClass: "text-muted"       },
+  { key: "Readiness",   label: "Readiness",   textClass: "text-blue"        },
+  { key: "Activity",    label: "Activity",    textClass: "text-emerald-600" },
+  { key: "Performance", label: "Performance", textClass: "text-brand"       },
 ];
 
 function EditorPanel({
@@ -737,6 +741,7 @@ function EditorPanel({
       name: "Athlete", age: "Athlete", weight: "Athlete", team: "Athlete",
       recovery: "Readiness", sleep: "Readiness", sleepEfficiency: "Readiness",
       rhr: "Readiness", hrv: "Readiness", spo2: "Readiness", resp: "Readiness", skinTemp: "Readiness",
+      lastActivity: "Activity", dist7d: "Activity", time7d: "Activity",
       atl: "Performance", ctl: "Performance", tsb: "Performance",
       vo2: "Performance", ftp: "Performance", polarized: "Performance", powerMax: "Performance",
     };

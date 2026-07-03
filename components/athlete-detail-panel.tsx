@@ -183,6 +183,7 @@ const na = (v: number | null | undefined, fmt: (n: number) => string = (n) => St
 // ── Label helpers ────────────────────────────────────────────────────────────
 
 const MN = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+const DA = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
 // ── Chart helpers ────────────────────────────────────────────────────────────
 
@@ -267,9 +268,34 @@ function SectionChart({ title, data, color, height = 200, sub, tickInterval = 0,
 
 // ── Main export ──────────────────────────────────────────────────────────────
 
-type Tab   = "readiness" | "recovery" | "performance" | "load" | "power" | "profile" | "season";
+type Tab   = "readiness" | "recovery" | "performance" | "load" | "power" | "activities" | "profile" | "season";
 type TF    = "7d" | "30d" | "3m" | "6m" | "1y" | "custom";
 type RecTF = "7d" | "30d" | "90d" | "365d" | "all";
+
+// ── Activity formatters ────────────────────────────────────────────────────────
+function fmtDuration(sec: number | null): string {
+  if (sec == null) return "—";
+  const h = Math.floor(sec / 3600);
+  const m = Math.round((sec % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+function fmtDistance(m: number | null): string {
+  if (m == null) return "—";
+  return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
+}
+function fmtPace(secPerKm: number | null): string {
+  if (secPerKm == null || secPerKm <= 0) return "—";
+  const m = Math.floor(secPerKm / 60);
+  const s = Math.round(secPerKm % 60);
+  return `${m}:${String(s).padStart(2, "0")} /km`;
+}
+function fmtActivityType(t: string): string {
+  return t ? t.charAt(0).toUpperCase() + t.slice(1).replace(/_/g, " ") : "Activity";
+}
+function fmtActivityDate(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00Z");
+  return `${DA[d.getUTCDay()]}, ${MN[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
 
 export function AthleteDetailPanel({ athlete, seasonPlan, coachId, plannerToken }: { athlete: AthleteSummary; seasonPlan?: SeasonPlanData | null; coachId?: string; plannerToken?: string }) {
   const todayStr   = new Date().toISOString().slice(0, 10);
@@ -394,6 +420,7 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId, plannerToken 
     { key: "performance", label: "Performance" },
     { key: "load",        label: "Training Load" },
     { key: "power",       label: "Power" },
+    { key: "activities",  label: "Activities" },
     { key: "profile",     label: "Profile" },
     { key: "season",      label: "Season Plan" },
   ];
@@ -1028,6 +1055,69 @@ export function AthleteDetailPanel({ athlete, seasonPlan, coachId, plannerToken 
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── Activities tab ───────────────────────────────────────── */}
+      {tab === "activities" && (
+        <div className="px-6 py-5 space-y-5">
+          {athlete.workouts.length > 0 ? (
+            <>
+              {/* Summary strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: "Activities (7d)", value: `${athlete.activities7d}` },
+                  { label: "Distance (7d)", value: athlete.distance7dKm > 0 ? `${athlete.distance7dKm} km` : "—" },
+                  { label: "Time (7d)", value: athlete.duration7dMin > 0 ? fmtDuration(athlete.duration7dMin * 60) : "—" },
+                  { label: "Total logged", value: `${athlete.workouts.length}` },
+                ].map((c) => (
+                  <div key={c.label} className="rounded-xl border border-line bg-surface p-4">
+                    <p className="text-xs text-muted">{c.label}</p>
+                    <p className="mt-1 text-2xl font-semibold text-ink tabular">{c.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Activity table */}
+              <div className="rounded-xl border border-line bg-surface overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-line bg-surfaceStrong/50 text-left">
+                      {["Date","Type","Name","Duration","Distance","Avg HR","Max HR","Pace","Elev","kcal","Source"].map((h) => (
+                        <th key={h} className="px-3 py-2 font-medium text-muted whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {athlete.workouts.map((w) => (
+                      <tr key={w.id} className="border-b border-line last:border-0 hover:bg-surfaceStrong/30 transition-colors">
+                        <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{fmtActivityDate(w.date)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <span className="inline-flex items-center rounded-full bg-brandSoft text-brand text-xs font-medium px-2 py-0.5">{fmtActivityType(w.type)}</span>
+                        </td>
+                        <td className="px-3 py-2 text-ink truncate max-w-[180px]">{w.name ?? "—"}</td>
+                        <td className="px-3 py-2 tabular whitespace-nowrap">{fmtDuration(w.durationSec)}</td>
+                        <td className="px-3 py-2 tabular whitespace-nowrap">{fmtDistance(w.distanceMeters)}</td>
+                        <td className="px-3 py-2 tabular">{w.avgHr ?? "—"}</td>
+                        <td className="px-3 py-2 tabular">{w.maxHr ?? "—"}</td>
+                        <td className="px-3 py-2 tabular whitespace-nowrap">{fmtPace(w.avgPaceSecPerKm)}</td>
+                        <td className="px-3 py-2 tabular whitespace-nowrap">{w.elevationGainM != null ? `${Math.round(w.elevationGainM)} m` : "—"}</td>
+                        <td className="px-3 py-2 tabular">{w.calories != null ? Math.round(w.calories) : "—"}</td>
+                        <td className="px-3 py-2 text-xs text-muted capitalize">{w.provider ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <h3 className="text-sm font-medium text-ink mb-1">No activities yet</h3>
+              <p className="text-xs text-muted max-w-xs">
+                Connect Strava (or another activity source) on the athlete&apos;s pairing page — their rides, runs and workouts will appear here.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

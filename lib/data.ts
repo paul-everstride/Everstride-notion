@@ -5,16 +5,18 @@
  */
 
 import { unstable_cache } from "next/cache";
-import type { AthleteSummary, DashboardData, RecoveryHistoryDay, TrendPoint } from "@/lib/types";
+import type { AthleteSummary, DashboardData, RecoveryHistoryDay, TrendPoint, Workout } from "@/lib/types";
 import {
   owGetUsers,
   owGetSleep,
   owGetBody,
   owGetTimeseries,
   owGetTeamMembers,
+  owGetWorkouts,
   type OWSleepSummary,
   type OWBodySummary,
   type OWTimeseriesPoint,
+  type OWWorkout,
 } from "@/lib/ow-client";
 import { getCurrentUser } from "@/lib/auth";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
@@ -97,6 +99,7 @@ function toAthleteSummary(
   sleep: OWSleepSummary[],
   body: OWBodySummary | null,
   timeseries: Record<string, OWTimeseriesPoint[]>,
+  workoutsRaw: OWWorkout[],
   avatarUrl: string | null = null,
   teamName: string | null = null
 ): AthleteSummary {
@@ -280,8 +283,32 @@ function toAthleteSummary(
   const ftpTrend: TrendPoint[]    = [];
   const vo2MaxTrend: TrendPoint[] = [];
 
+  // ── Activities / workouts (e.g. Strava) ──────────────────────────────────
+  const workouts: Workout[] = workoutsRaw.map((w) => ({
+    id: w.id,
+    type: w.type,
+    name: w.name,
+    date: w.start_time.slice(0, 10),
+    startTime: w.start_time,
+    durationSec: w.duration_seconds,
+    distanceMeters: w.distance_meters,
+    avgHr: w.avg_heart_rate_bpm,
+    maxHr: w.max_heart_rate_bpm,
+    avgPaceSecPerKm: w.avg_pace_sec_per_km,
+    elevationGainM: w.elevation_gain_meters,
+    calories: w.calories_kcal,
+    provider: w.source?.provider ?? null,
+  }));
+
+  const lastActivityDate = workouts[0]?.date ?? null;
+  const cutoff7d = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+  const recent7d = workouts.filter((w) => w.date >= cutoff7d);
+  const activities7d = recent7d.length;
+  const distance7dKm = Math.round(recent7d.reduce((s, w) => s + (w.distanceMeters ?? 0), 0) / 100) / 10;
+  const duration7dMin = Math.round(recent7d.reduce((s, w) => s + (w.durationSec ?? 0), 0) / 60);
+
   const creationDate =
-    ts_recovery[0]?.date ?? latestSleep?.date ?? createdAt.split("T")[0];
+    ts_recovery[0]?.date ?? latestSleep?.date ?? workouts[0]?.date ?? createdAt.split("T")[0];
 
   const statusNote =
     recoveryScore == null
@@ -341,6 +368,11 @@ function toAthleteSummary(
     vo2MaxTrend,
     powerCurve: [],
     recoveryHistory,
+    workouts,
+    lastActivityDate,
+    activities7d,
+    distance7dKm,
+    duration7dMin,
   };
 }
 
@@ -456,16 +488,18 @@ async function fetchAthletesFromOW(userIds: string[]): Promise<DashboardData> {
     await Promise.all(
       filtered.map(async (user) => {
         try {
-          const [sleep, body, timeseries] = await Promise.all([
+          const [sleep, body, timeseries, workouts] = await Promise.all([
             owGetSleep(user.id),
             owGetBody(user.id),
             owGetTimeseries(user.id),
+            owGetWorkouts(user.id),
           ]);
-          if (!sleep.length && !Object.keys(timeseries).length) return null;
+          // Keep the athlete if they have ANY data — recovery, sleep, or activities.
+          if (!sleep.length && !Object.keys(timeseries).length && !workouts.length) return null;
           return toAthleteSummary(
             user.id, user.first_name, user.last_name,
             user.email, user.created_at,
-            sleep, body, timeseries,
+            sleep, body, timeseries, workouts,
             avatarMap.get(user.id) ?? null,
             teamNameMap.get(user.id) ?? null
           );

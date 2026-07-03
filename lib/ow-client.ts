@@ -189,6 +189,59 @@ export async function owGetSleep(userId: string, days = 730): Promise<OWSleepSum
   return allRecords.sort((a, b) => b.date.localeCompare(a.date));
 }
 
+/** A single workout/activity as normalized by Open Wearables (e.g. from Strava). */
+export interface OWWorkout {
+  id: string;
+  type: string;                       // "cycling", "running", …
+  name: string | null;                // e.g. "Morning Ride"
+  start_time: string;                 // ISO datetime
+  end_time: string;                   // ISO datetime
+  duration_seconds: number | null;
+  source: { provider: string; device?: string | null } | null;
+  calories_kcal: number | null;
+  distance_meters: number | null;
+  avg_heart_rate_bpm: number | null;
+  max_heart_rate_bpm: number | null;
+  avg_pace_sec_per_km: number | null;
+  elevation_gain_meters: number | null;
+}
+
+/**
+ * Fetch ALL workouts/activities for a user over the last N days.
+ * Paginates through every page. Returns items sorted newest-first.
+ */
+export async function owGetWorkouts(userId: string, days = 730): Promise<OWWorkout[]> {
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() + 1);
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+
+  const allRecords: OWWorkout[] = [];
+  let cursor: string | null = null;
+
+  try {
+    do {
+      const params: Record<string, string | string[]> = {
+        start_date: startDate.toISOString().split("T")[0],
+        end_date:   endDate.toISOString().split("T")[0],
+        limit:      "100",
+      };
+      if (cursor) params.cursor = cursor;
+
+      const data = await owFetch<PaginatedOWResponse<OWWorkout>>(
+        `/api/v1/users/${userId}/events/workouts`,
+        params
+      );
+      allRecords.push(...(data.data ?? []));
+      cursor = data.pagination.has_more ? data.pagination.next_cursor : null;
+    } while (cursor);
+  } catch {
+    return allRecords; // partial data on error is fine
+  }
+
+  return allRecords.sort((a, b) => b.start_time.localeCompare(a.start_time));
+}
+
 /** Fetch body summary for a user (most recent values). */
 export async function owGetBody(userId: string): Promise<OWBodySummary | null> {
   try {

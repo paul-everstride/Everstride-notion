@@ -112,6 +112,30 @@ export type AthleteSummary = {
   powerCurve: PowerCurvePoint[];
   /** Full daily recovery history (all available data, oldest → newest). */
   recoveryHistory: RecoveryHistoryDay[];
+  /** Activities/workouts (e.g. Strava), newest first. */
+  workouts: Workout[];
+  /** Derived activity summary for dashboard/detail. */
+  lastActivityDate: string | null;   // YYYY-MM-DD of most recent workout
+  activities7d: number;              // count in the last 7 days
+  distance7dKm: number;              // total distance (km) in the last 7 days
+  duration7dMin: number;             // total moving time (min) in the last 7 days
+};
+
+/** A single activity/workout surfaced from Open Wearables. */
+export type Workout = {
+  id: string;
+  type: string;                 // "cycling", "running", …
+  name: string | null;
+  date: string;                 // YYYY-MM-DD (local start date)
+  startTime: string;            // ISO datetime
+  durationSec: number | null;
+  distanceMeters: number | null;
+  avgHr: number | null;
+  maxHr: number | null;
+  avgPaceSecPerKm: number | null;
+  elevationGainM: number | null;
+  calories: number | null;
+  provider: string | null;      // "strava", …
 };
 
 export type DashboardData = {

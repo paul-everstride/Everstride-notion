@@ -22,7 +22,10 @@ export type AthleteColumnKey =
   | "vo2"
   | "ftp"
   | "polarized"
-  | "powerMax";
+  | "powerMax"
+  | "lastActivity"
+  | "dist7d"
+  | "time7d";
 
 type AthleteTableProps = {
   athletes: AthleteSummary[];
@@ -33,7 +36,7 @@ type AthleteTableProps = {
 
 type ColumnDefinition = {
   key: AthleteColumnKey;
-  group: "Athlete" | "Readiness" | "Performance";
+  group: "Athlete" | "Readiness" | "Activity" | "Performance";
   label: string;
   render: (athlete: AthleteSummary) => React.ReactNode;
 };
@@ -41,8 +44,19 @@ type ColumnDefinition = {
 export const defaultAthleteColumns: AthleteColumnKey[] = [
   "name", "age", "weight", "team",
   "recovery", "sleep", "sleepEfficiency", "rhr", "hrv", "spo2", "resp", "skinTemp",
+  "lastActivity", "dist7d", "time7d",
   "atl", "ctl", "tsb", "vo2", "ftp", "polarized", "powerMax"
 ];
+
+function relDay(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  const today = new Date().toISOString().slice(0, 10);
+  const yest = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  if (dateStr === today) return "Today";
+  if (dateStr === yest) return "Yesterday";
+  const days = Math.round((Date.parse(today) - Date.parse(dateStr)) / 86_400_000);
+  return `${days}d ago`;
+}
 
 function RecoveryCell({ score }: { score: number | null }) {
   if (score == null) return <span className="text-muted tabular">—</span>;
@@ -112,6 +126,9 @@ const columnDefinitions: ColumnDefinition[] = [
   { key: "spo2",            group: "Readiness",    label: "SpO₂",      render: (a) => <Val v={a.spo2} unit="%" /> },
   { key: "resp",            group: "Readiness",    label: "Resp",      render: (a) => <Val v={a.respirationRate} /> },
   { key: "skinTemp",        group: "Readiness",    label: "Skin °C",   render: (a) => <Val v={a.skinTemp} unit="°" /> },
+  { key: "lastActivity",    group: "Activity",     label: "Last Act.", render: (a) => <span className="text-xs text-muted whitespace-nowrap">{relDay(a.lastActivityDate)}</span> },
+  { key: "dist7d",          group: "Activity",     label: "7d km",     render: (a) => <span className="tabular">{a.distance7dKm > 0 ? a.distance7dKm : "—"}</span> },
+  { key: "time7d",          group: "Activity",     label: "7d min",    render: (a) => <span className="tabular">{a.duration7dMin > 0 ? a.duration7dMin : "—"}</span> },
   { key: "atl",             group: "Performance",  label: "ATL",       render: (a) => <Val v={a.atl} /> },
   { key: "ctl",             group: "Performance",  label: "CTL",       render: (a) => <Val v={a.ctl} /> },
   { key: "tsb",             group: "Performance",  label: "TSB",       render: (a) => <TsbCell value={a.tsb} /> },
@@ -122,9 +139,10 @@ const columnDefinitions: ColumnDefinition[] = [
 ];
 
 const groupMeta = {
-  Athlete:     { textClass: "text-muted",  bgClass: "" },
-  Readiness:   { textClass: "text-blue",   bgClass: "bg-blue-50/50" },
-  Performance: { textClass: "text-brand",  bgClass: "bg-orange-50/50" },
+  Athlete:     { textClass: "text-muted",     bgClass: "" },
+  Readiness:   { textClass: "text-blue",      bgClass: "bg-blue-50/50" },
+  Activity:    { textClass: "text-emerald-600", bgClass: "bg-emerald-50/50" },
+  Performance: { textClass: "text-brand",     bgClass: "bg-orange-50/50" },
 } as const;
 
 export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns, columnOrder, state = "default" }: AthleteTableProps) {
@@ -163,7 +181,7 @@ export function AthleteTable({ athletes, visibleColumns = defaultAthleteColumns,
   const orderedKeys = columnOrder ?? visibleColumns ?? defaultAthleteColumns;
   const keyToCol = new Map(columnDefinitions.map(c => [c.key, c]));
   const activeColumns = orderedKeys.map(key => keyToCol.get(key)).filter((c): c is ColumnDefinition => c !== undefined);
-  const groups = ["Athlete", "Readiness", "Performance"] as const;
+  const groups = ["Athlete", "Readiness", "Activity", "Performance"] as const;
 
   return (
     <div className="overflow-x-auto border border-line rounded-lg">
